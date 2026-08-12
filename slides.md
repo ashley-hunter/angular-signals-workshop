@@ -27,32 +27,22 @@ months in it. This is what it is, how it differs from what you know, and what it
 layout: content
 eyebrow: Orientation
 heading: What a Signal Form actually is
+split: 1.15fr 0.85fr
 ---
 
-<div class="cards" style="--cols:3">
-  <div class="card" v-click="1">
-    <div class="label">A THIRD API, NOT A REWRITE</div>
-    <p>It lives beside template-driven and reactive forms, in <code>@angular/forms/signals</code>. Nothing you have today changes.</p>
-  </div>
-  <div class="card" v-click="2">
-    <div class="label">THREE PIECES</div>
-    <p>A signal holding your data, a <code>form()</code> wrapping it, and one directive binding a field to an input.</p>
-  </div>
-  <div class="card" v-click="3">
-    <div class="label">STABLE IN v22</div>
-    <p>Experimental in v21, stable now. Everything in this talk assumes v22.</p>
-  </div>
-</div>
+<p class="lead" style="max-width:1560px">
+A third forms API, living beside template-driven and reactive forms in <code>@angular/forms/signals</code>. It went stable in v22, and it is purely additive - nothing you already have changes.
+</p>
 
-<div class="split" style="--split:1.15fr 0.85fr;margin-top:52px" v-click="4">
-
-```ts
-import { form, required, FormField } from '@angular/forms/signals';
+```ts {all|3|5|all}
+import { form, required } from '@angular/forms/signals';
 
 model = signal({ email: '', notify: false });
 
 f = form(this.model, (p) => required(p.email));
 ```
+
+<div v-click="3" style="margin-top:28px">
 
 ```html
 <input [formField]="f.email" />
@@ -60,18 +50,32 @@ f = form(this.model, (p) => required(p.email));
 
 </div>
 
+::right::
+
+<div class="notes-col" style="padding-top:0">
+  <div v-click="1">
+    <div class="label">1 &middot; THE SIGNAL</div>
+    <p>Your data, in a plain writable signal. This is the only copy of it that exists.</p>
+  </div>
+  <div v-click="2">
+    <div class="label">2 &middot; THE FORM</div>
+    <p><code>form()</code> wraps that signal and derives a field tree of the same shape, carrying your rules.</p>
+  </div>
+  <div v-click="3">
+    <div class="label">3 &middot; THE TEMPLATE</div>
+    <p>One directive binds a field to an input. Two-way, and there is no <code>patchValue</code>.</p>
+  </div>
+</div>
+
 <!--
-Three ideas first, then the code that contains all three. Do not put the code up early - they
-will read it instead of listening.
+Read the paragraph, then walk the three pieces. Thirty seconds, no more - this is the map,
+not the tour.
 
-CLICK 1: it is additive. Nobody has to migrate anything. This defuses the "oh no, a third
-forms system" reaction before it forms.
-CLICK 2: name the three pieces out loud - signal, form, directive.
-CLICK 3: the version, so nobody spends the talk wondering if this is real yet.
-CLICK 4: "and here they are." Point at each piece as you name it again. Thirty seconds.
+CLICK 1: the signal lights up. "Your data. That is the whole model."
+CLICK 2: the form() call. "Wrap it. You now have a field tree with the same shape."
+CLICK 3: the template appears. "Bind a leaf. That is the entire API surface."
 
-Do not explain the API here. This is the map, not the tour. Then: "So why did Angular build a
-third one?"
+Then: "So why did Angular build a third one?"
 -->
 
 ---
