@@ -34,7 +34,9 @@ split: 1.15fr 0.85fr
 A third forms API, living beside template-driven and reactive forms in <code>@angular/forms/signals</code>. It went stable in v22, and it is purely additive - nothing you already have changes.
 </p>
 
-````md magic-move
+<div v-click="1">
+
+````md magic-move {at:2}
 ```ts
 model = signal({ email: '', notify: false });
 ```
@@ -46,7 +48,9 @@ f = form(this.model, (p) => required(p.email));
 ```
 ````
 
-<div v-click="2" style="margin-top:28px">
+</div>
+
+<div v-click="3" style="margin-top:28px">
 
 ```html
 <input [formField]="f.email" />
@@ -57,15 +61,15 @@ f = form(this.model, (p) => required(p.email));
 ::right::
 
 <div class="notes-col" style="padding-top:0">
-  <div>
+  <div v-click="1">
     <div class="label">1 &middot; THE SIGNAL</div>
     <p>Your data, in a plain writable signal. This is the only copy of it that exists.</p>
   </div>
-  <div v-click="1">
+  <div v-click="2">
     <div class="label">2 &middot; THE FORM</div>
     <p><code>form()</code> wraps that signal and derives a field tree of the same shape, carrying your rules.</p>
   </div>
-  <div v-click="2">
+  <div v-click="3">
     <div class="label">3 &middot; THE TEMPLATE</div>
     <p>One directive binds a field to an input. Two-way, and there is no <code>patchValue</code>.</p>
   </div>
