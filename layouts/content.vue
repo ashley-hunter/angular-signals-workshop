@@ -2,7 +2,8 @@
 defineProps<{
   eyebrow?: string
   eyebrowColor?: 'teal' | 'purple'
-  title?: string
+  /** `title` is reserved by Slidev for slide metadata, so the prop is `heading`. */
+  heading?: string
   /** Vertically centre and open the spacing up (statement slides). */
   center?: boolean
   /** Lighter background, used by the deck for its emphasis slides. */
@@ -26,7 +27,7 @@ defineProps<{
       :style="`margin-bottom:${center ? 44 : 28}px`"
       v-html="eyebrow"
     />
-    <h2 v-if="title" :style="`margin-bottom:${center ? 40 : 20}px`" v-html="title" />
+    <h2 v-if="heading" :style="`margin-bottom:${center ? 40 : 20}px`" v-html="heading" />
 
     <div v-if="$slots.right" class="split" :style="split ? `--split:${split}` : ''">
       <div><slot /></div>

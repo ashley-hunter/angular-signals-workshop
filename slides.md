@@ -1,76 +1,155 @@
 ---
 theme: default
 title: Angular Signal Forms
-info: A talk on Angular's signal-based forms
+info: There is no form object any more. There is your data, and a view of it.
 canvasWidth: 1920
 colorSchema: dark
 highlighter: shiki
 transition: slide-left
 mdc: true
-layout: cover
-eyebrow: '@angular/forms/signals &middot; stable in v22'
-meta: ['Frontend Guild', '20 min']
+layout: content
+eyebrow: ''
 ---
 
-# Angular Signal Forms
+<div style="font-family:var(--font-mono);font-size:24px;color:var(--dim);margin-bottom:36px">Find the bug.</div>
 
-A third forms API, rebuilt on signals - what it looks like, how it compares to what we run today, and what adopting it would cost us.
+```ts
+export class SignupForm {
+  form = this.fb.group({ email: [''], notify: [false] });
+
+  constructor(private fb: FormBuilder) {
+    this.form.controls.notify.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe((notify) => {
+        const email = this.form.controls.email;
+        if (notify) {
+          email.setValidators([Validators.required, Validators.email]);
+        } else {
+          email.clearValidators();
+        }
+        email.updateValueAndValidity();
+      });
+  }
+}
+```
 
 <!--
-Twenty minutes. Goal: you leave knowing the shape of the API, how it differs from what we run
-today, and whether it is worth a pilot.
+Walk to the centre before speaking. Do not introduce yourself yet.
+
+"This does exactly one thing. It makes email required, but only when 'notify me' is ticked.
+Find the bug."
+
+WAIT. Five full seconds. Count them. Do not fill the gap.
 -->
 
 ---
 layout: content
-eyebrow: Starting point
-title: Where reactive forms strain
+center: true
+alt: true
+eyebrow: 'The answer'
 ---
+
+<h2 style="font-size:76px;letter-spacing:-0.03em;line-height:1.1;max-width:1500px">
+There isn't one. That is the correct way to write it.
+</h2>
+
+<p class="lead" style="font-size:34px;max-width:1400px">
+The subscription is right. <code>takeUntilDestroyed</code> is right. And <code>updateValueAndValidity()</code> is right - leave it out and the validator attaches but nothing revalidates, and QA finds it three weeks later.
+</p>
+
+<!--
+"This code passes review. I've written it. Most of you have written it this month.
+
+Eighteen lines. To say: this field is required when that box is ticked.
+
+I'm Ashley. Hold that snippet - we're deleting most of it in about ten minutes."
+-->
+
+---
+layout: content
+eyebrow: The diagnosis
+heading: You are maintaining two copies of your state
+---
+
+<p class="lead">
+Component state lives in signals. Form state lives in a parallel tree of control objects. Every screen you own is a hand-written bridge between the two, and the bridge is where the bugs live.
+</p>
 
 <div class="cards" style="--cols:2">
   <div class="card">
-    <div class="label">TWO MODELS</div>
-    <p>Component state lives in signals. Form state lives in a tree of control objects. Every screen syncs the two by hand.</p>
+    <div class="label">READING OUT</div>
+    <p><code>valueChanges</code> into a signal. A subscription and a teardown per dependency.</p>
   </div>
   <div class="card">
-    <div class="label">SUBSCRIPTIONS</div>
-    <p>Change propagation runs through <code>valueChanges</code>, so each dependency needs a subscription and a teardown.</p>
+    <div class="label">WRITING BACK</div>
+    <p><code>patchValue</code>, and the <code>{{ '{' }} emitEvent: false {{ '}' }}</code> you add after the first infinite loop.</p>
   </div>
   <div class="card">
-    <div class="label">VALIDATION AT CONSTRUCTION</div>
-    <p>Rules attach when the control is built, so conditional rules become imperative setter calls scattered across the component.</p>
+    <div class="label">VALIDATION IS FROZEN</div>
+    <p>Rules attach at construction, so anything conditional becomes imperative setter calls.</p>
   </div>
   <div class="card">
-    <div class="label">BOILERPLATE ON SUBMIT</div>
-    <p>Loading flags, touch-all-on-error, mapping server errors back onto controls - written again in every feature.</p>
+    <div class="label">SUBMIT</div>
+    <p>Touch-all, check validity, loading flag, map server errors back onto controls. Rewritten per feature.</p>
   </div>
 </div>
 
 <!--
-Not a takedown. These are the four places our own codebase pays a tax every sprint.
+Do not attack reactive forms. Date-stamp them. Let the tech lead say the harsh part:
+
+"Neither of these things plug-and-play very well with signals, because they were designed
+obviously before Angular had signals as an option." - Alex Rickabaugh
+
+"These systems are like eight years old at this point. There's a lot of stuff that's happened
+in HTML."
+
+And the war: template-driven vs reactive was never resolvable because each side was right about
+a different thing. One had the logic where the fields are. The other had it where the types are.
 -->
 
 ---
 layout: content
-eyebrow: The core idea
 center: true
 alt: true
+eyebrow: 'The part nobody mentions'
 ---
 
-<p style="font-family:var(--font-display);font-size:72px;font-weight:500;letter-spacing:-0.03em;line-height:1.2;max-width:1500px">
-You give <code>form()</code> a writable signal. You get back a field tree whose value, validation, metadata and submission state are all signals.
+<p style="font-family:var(--font-display);font-size:64px;font-weight:500;letter-spacing:-0.03em;line-height:1.25;max-width:1560px">
+You would assume forms were the last part of Angular to get signals.<br>
+They are the reason Angular <em>has</em> signals.
 </p>
 
-<p class="lead" style="font-size:34px;margin-top:56px;max-width:1300px">
-No second abstraction layer, no subscriptions, no separate change-detection story. Form state joins the signal graph the rest of the component already lives in.
+<p class="lead" style="font-size:30px;margin-top:48px;max-width:1500px;font-style:italic">
+"We were looking at replacing zone.js with something and signals was one option on the table. There were a few others. But forms was actually one of the main drivers of that decision. So we even knew back then that we wanted to do a signal form system if we created a signal reactivity system in the framework."
+</p>
+
+<p style="font-family:var(--font-mono);font-size:24px;color:var(--dim);margin-top:24px">Alex Rickabaugh, tech lead, Angular core framework</p>
+
+<!--
+This is not a library release. It is the payload the last four years of Angular were built to
+deliver. It also retroactively legitimises the previous slide: the pain was real enough to
+change the framework's reactivity strategy.
+-->
+
+---
+layout: content
+center: true
+eyebrow: The one idea
+---
+
+<h2 style="font-size:84px;letter-spacing:-0.035em;line-height:1.1;max-width:1560px">
+Signal Forms delete the second copy of your state.
+</h2>
+
+<p class="lead" style="font-size:36px;margin-top:44px;max-width:1450px">
+Your model signal <em>is</em> the form. Structure, validation, touched, errors and submission are all derived from it.
 </p>
 
 <!--
-This is the whole thesis. Signal Forms are not an evolution of reactive forms; they are a
-from-scratch implementation on the same reactivity primitives we already use.
+State it bare, then admit it's unproven: "That's the claim. Here's the proof."
 
-Worth adding: per Alex Rickabaugh, forms were one of the main drivers of picking signals to
-replace zone.js in the first place.
+If someone genuinely holds this idea they can derive the rest of the API themselves - which is
+the test of a thesis.
 -->
 
 ---
@@ -78,26 +157,23 @@ layout: section
 number: '01'
 ---
 
-## The API
-
-<!-- Seven slides on the API. Snippets are illustrative, not copy-paste ready. -->
+## The model
 
 ---
 layout: content
-eyebrow: 'Api &middot; 1 of 7'
-title: Anatomy of a signal form
+eyebrow: 'Core &middot; anatomy'
+heading: There is no form object
 split: 1.15fr 0.85fr
 ---
 
 ```ts
-import { form, FormField } from '@angular/forms/signals';
+model = signal({ email: '', notify: false });
 
-loginModel = signal({ email: '', password: '' });
-loginForm = form(this.loginModel);
+f = form(this.model);
+```
 
-// template
-// <input [formField]="loginForm.email" />
-// <input [formField]="loginForm.password" />
+```html
+<input [formField]="f.email" />
 ```
 
 ::right::
@@ -105,275 +181,145 @@ loginForm = form(this.loginModel);
 <div class="notes-col">
   <div>
     <div class="label">THE MODEL</div>
-    <p>A writable signal holding plain data. It is yours; the form does not own it.</p>
+    <p>A writable signal of plain data. It is yours. <code>form()</code> does not copy it.</p>
   </div>
   <div>
     <div class="label">THE FIELD TREE</div>
-    <p>Structure mirrors the model, typed end to end. No control classes to declare.</p>
+    <p>Derived from the data's shape, typed end to end. No control classes to declare.</p>
   </div>
   <div>
     <div class="label">THE BINDING</div>
-    <p>One directive wires value, state and validation into the DOM control.</p>
+    <p>One directive: value, state, validation, blur-to-touched.</p>
   </div>
 </div>
 
 <!--
-Model is a plain writable signal of plain data. form() wraps it. The FormField directive binds a
-leaf to an input. That is the minimum viable form.
+LIVE DEMO 1 (~2.5 min). Build this from an empty component.
+
+1. Type in the input - the JSON dump of model() changes. Expected.
+2. Click a button wired to model.set({...}) - THE INPUT CHANGES. No patchValue. This is the
+   moment; a slide can only assert bidirectionality, a demo proves it.
+3. Hover f.email in Monaco. The type came from the data.
+
+Land it on Deborah Kurata's line: "Forms don't maintain their own data. Rather, they use the
+passed signal."
 -->
 
 ---
 layout: content
-eyebrow: 'Api &middot; 2 of 7'
-title: Field state is a signal you read
+eyebrow: 'Core &middot; the tripwire'
+heading: 'Two objects, one letter apart'
 ---
 
-<p class="lead" style="max-width:1250px">
-Every node in the tree carries its own value, validation and interaction state. Templates read it directly; derived UI state is just a <code>computed</code>.
+<div class="split">
+
+```ts
+// p - a SchemaPath. A description of WHERE.
+// Only valid inside the schema function.
+f = form(model, (p) => {
+  required(p.email);
+});
+```
+
+```ts
+// f - a FieldTree. A handle on WHAT.
+// Navigate with dots, call to read state.
+f.email          // FieldTree<string>
+f.email()        // FieldState<string>
+f.email().value() // 'a@b.com'
+```
+
+</div>
+
+<p class="lead" style="margin-top:44px;max-width:1500px">
+<code>p.email</code> is not callable. <code>p.items[0]</code> does not compile. They look identical in every code sample you will ever read, including mine.
 </p>
+
+<!--
+PREDICTION MOMENT - the only show of hands in the talk.
+
+Put [formField]="f.email" and [formField]="f.email()" side by side. "Which one binds?"
+Most vote for the called one, because form.get('email') trained them to expect the call to
+return the thing.
+
+Reveal: uncalled. Binding needs an address, not a snapshot.
+
+This single distinction causes more confusion than the rest of the API combined.
+-->
+
+---
+layout: content
+eyebrow: 'Core &middot; the model that explains everything'
+heading: The schema runs once. The rules inside it are reactive.
+---
+
+<p class="lead" style="max-width:1500px">
+The schema function executes one time, to build a tree of logic. The functions you pass to <code>when</code>, to <code>validate</code>, to <code>min</code> - those re-run like a <code>computed</code>, forever.
+</p>
+
+<div class="cards" style="--cols:2">
+  <div class="card">
+    <div class="label">SO AN <code style="color:var(--purple)">if</code> DOESN'T WORK</div>
+    <p>An <code>if</code> in the schema is evaluated once at construction and frozen. Use <code>applyWhen</code>.</p>
+  </div>
+  <div class="card">
+    <div class="label">SO THERE IS NO <code style="color:var(--purple)">setValidators</code></div>
+    <p>Rules never change. Their <code>when</code> does. Mutation is not an API because it needs none.</p>
+  </div>
+  <div class="card">
+    <div class="label">SO <code style="color:var(--purple)">valueOf</code> EXISTS</div>
+    <p>Inside a rule you are in a reactive context, so reading another field tracks it.</p>
+  </div>
+  <div class="card">
+    <div class="label">SO PATHS ARE SCOPED</div>
+    <p>Using a path outside its own schema throws NG1908. The tree is built, then sealed.</p>
+  </div>
+</div>
+
+<!--
+THIS IS THE SLIDE. Everything after it is a corollary.
+
+Frame it as "the four reasons your form looks broken" if the room is flagging:
+  1. the schema ran once
+  2. you mutated the model instead of replacing it
+  3. you debounced it (value() lags; controlValue() is the un-debounced one)
+  4. NG1908 - a path escaped its schema
+-->
+
+---
+layout: content
+eyebrow: 'Core &middot; field state'
+heading: Everything you read is a signal
+---
 
 <div class="cards tight" style="--cols:4">
   <div class="card">
     <div class="label teal">value()</div>
-    <p>The current value, writable through the same node.</p>
+    <p>Writable, and it writes through to your model.</p>
   </div>
   <div class="card">
     <div class="label teal">errors()</div>
-    <p>Structured errors with kind and message, ready to render.</p>
+    <p>An <em>array</em> of <code>{{ '{' }} kind, message {{ '}' }}</code>. All validators run.</p>
   </div>
   <div class="card">
     <div class="label teal">touched()</div>
-    <p>Interaction tracking, plus dirty and disabled alongside it.</p>
+    <p>Plus <code>dirty</code>, <code>disabled</code>, <code>readonly</code>, <code>hidden</code>.</p>
   </div>
   <div class="card">
     <div class="label teal">pending()</div>
-    <p>In-flight async validation, no manual flag to maintain.</p>
+    <p>Async validation in flight. No flag to maintain.</p>
   </div>
 </div>
 
-<div class="card" style="margin-top:48px;font-family:var(--font-mono);font-size:26px;color:var(--text-strong);padding:36px 44px">
-  &#64;if (loginForm.email().touched() &amp;&amp; !loginForm.email().valid()) { &hellip; }
-</div>
-
-<!--
-Every node exposes state as signals you read in the template. valid/pending/touched are derived,
-not stored.
-
-Tripwire worth calling out: while pending() is true, valid() and invalid() are BOTH false.
--->
-
----
-layout: content
-eyebrow: 'Api &middot; 3 of 7'
-title: Validation lives in a schema
-split: 1.2fr 0.8fr
----
-
-```ts
-loginForm = form(this.loginModel, (path) => {
-  required(path.email, { message: 'Email is required' });
-  email(path.email);
-  minLength(path.password, 12);
-  debounce(path.email, 500);
-});
-```
-
-::right::
-
-<div class="notes-col">
-  <p>Built-ins cover the usual set: <code>required</code>, <code>email</code>, <code>min</code>/<code>max</code>, <code>minLength</code>/<code>maxLength</code>, <code>pattern</code>.</p>
-  <p>Messages are part of the rule, so error copy stops living in the template.</p>
-  <p class="dim">Hidden and disabled fields skip validation until they become interactive again.</p>
-</div>
-
-<!--
-The second argument to form() is the schema function. It runs once at creation and declares the
-logic tree.
--->
-
----
-layout: content
-eyebrow: 'Api &middot; 4 of 7'
-title: Conditional and cross-field rules
----
-
-<p class="lead">
-Rules take reactive logic. A <code>when</code> predicate activates them; <code>valueOf</code> reaches other fields. Both recompute when the signals they read change.
-</p>
-
-<div class="split">
-
-```ts
-// conditional
-required(path.promoCode, {
-  message: 'Promo code required',
-  when: ({ valueOf }) =>
-    valueOf(path.applyDiscount),
-});
-```
-
-```ts
-// cross-field
-validate(path.confirm, ({ value, valueOf }) => {
-  return value() === valueOf(path.password)
-    ? null
-    : { kind: 'mismatch', message: '...' };
-});
-```
-
-</div>
-
-<p class="lead" style="margin-top:44px;max-width:1400px">
-Because a rule takes a field path, the same function can validate one leaf or a whole subtree - which is how the Zod and Valibot bridges work.
+<p class="lead" style="margin-top:44px;max-width:1500px">
+There are about twenty more. That is what autocomplete is for.
 </p>
 
 <!--
-This is the slide that usually sells it to reactive-forms people: conditional and cross-field
-rules stay declarative.
--->
+Do not narrate the full list. Never.
 
----
-layout: content
-eyebrow: 'Api &middot; 5 of 7'
-title: Async validation without the state machine
----
-
-<div class="split">
-
-```ts
-validateHttp(path.username, {
-  debounce: 300,
-  request: ({ value }) =>
-    `/api/users/check?username=${value()}`,
-  onSuccess: (res) => res.available
-    ? null
-    : { kind: 'taken', message: 'Already taken' },
-  onError: () => ({ kind: 'serverError' }),
-});
-```
-
-<div class="notes-col">
-  <div>
-    <div class="label">DEBOUNCE IS DECLARED</div>
-    <p>Either on the field or on the validator. No <code>debounceTime</code> operator to wire up.</p>
-  </div>
-  <div>
-    <div class="label">PENDING IS FREE</div>
-    <p>Bind the spinner to <code>pending()</code> instead of tracking in-flight requests yourself.</p>
-  </div>
-  <div>
-    <div class="label">THE TRADE</div>
-    <p class="dim">Deeply composed observable chains need restructuring - the API is promise and resource shaped.</p>
-  </div>
-</div>
-
-</div>
-
-<!--
-Async rules only run once the synchronous ones pass, so you are not hammering the endpoint on
-every keystroke of an obviously-invalid value. validateAsync() is the lower-level escape hatch,
-backed by resource() or rxResource().
--->
-
----
-layout: content
-eyebrow: 'Api &middot; 6 of 7'
-title: Schemas are values, so they compose
----
-
-<p class="lead" style="margin-bottom:32px">
-Pull a schema out of the <code>form()</code> call and it becomes a reusable, typed unit you can apply to any matching subtree.
-</p>
-
-```ts
-const addressSchema = schema<Address>((path) => {
-  required(path.street);
-  pattern(path.postcode, POSTCODE);
-});
-
-orderForm = form(this.order, (path) => {
-  apply(path.billing, addressSchema);
-  apply(path.shipping, addressSchema);
-  applyEach(path.lineItems, lineItemSchema);
-});
-```
-
-<p class="lead" style="margin-top:36px;max-width:1400px">
-Nested objects, arrays and subforms all go through the same two functions. Our shared validators become shared schemas.
-</p>
-
-<!--
-This is the piece that matters for our codebase: address, contact, money - define once, apply
-everywhere. applyWhenValue() also takes a type guard and narrows the path, which is how you get
-discriminated-union forms with no casts.
--->
-
----
-layout: content
-eyebrow: 'Api &middot; 7 of 7'
-title: Submission is one function call
----
-
-<div class="split">
-
-```ts
-orderForm = form(this.order, orderSchema, {
-  submission: {
-    action: async (f) => {
-      const res = await api.save(f().value());
-      return res.errors ?? null;
-    },
-  },
-});
-// <form [formRoot]="orderForm">
-```
-
-<div class="notes-col">
-  <p style="font-size:32px">Marks fields touched, blocks invalid submits, tracks <code>submitting()</code> for the button state.</p>
-  <p style="font-size:32px">Returned server errors are mapped back onto the fields they belong to, by path, and clear when the user edits.</p>
-  <p style="font-size:32px" class="dim">This is the single largest deletion of code in a migration - every feature has its own version of it today.</p>
-</div>
-
-</div>
-
-<!--
-submit() is the boilerplate eliminator. Server errors map back onto fields by path.
-
-Watch out: ignoreValidators defaults to 'pending', so users CAN submit while async validators are
-still in flight. Set it to 'none' if that matters.
--->
-
----
-layout: content
-eyebrow: 'Api &middot; bonus'
-title: 'Custom controls, without ControlValueAccessor'
----
-
-<p class="lead" style="margin-bottom:64px">
-A component declares the signals it exposes; the <code>formField</code> directive connects it to value, state and validation. Our design-system inputs get simpler, not harder.
-</p>
-
-<div class="cards" style="--cols:3">
-  <div class="card">
-    <div class="label">BEFORE</div>
-    <p>Four callbacks, a provider entry, and manual touched propagation per control.</p>
-  </div>
-  <div class="card">
-    <div class="label">AFTER</div>
-    <p><code>value = model('')</code>. That is the whole required surface of <code>FormValueControl</code>.</p>
-  </div>
-  <div class="card">
-    <div class="label">EFFORT</div>
-    <p>Each shared control needs a rewrite. Roughly a dozen in our library.</p>
-  </div>
-</div>
-
-<!--
-No more ControlValueAccessor. Implement FormValueControl (or FormCheckboxControl) with signals and
-the formField directive connects it. Never implement both interfaces on one component.
-
-The official Angular launch video's running joke: "being in this fight is worse than dealing with
-the control value accessor."
+Worth saying once: errors() is an ARRAY, not reactive forms' {[key]: any} bag, and nothing
+short-circuits - every validator runs every time.
 -->
 
 ---
@@ -381,193 +327,787 @@ layout: section
 number: '02'
 ---
 
-## Adopting it
-
-<!-- Second half: what it would actually mean for us. -->
+## Validation
 
 ---
 layout: content
-eyebrow: Comparison
-title: Side by side
+eyebrow: 'Cashing the cold open'
+heading: Eighteen lines becomes three
 ---
 
-<div class="compare" style="margin-top:52px">
-  <div class="head">&nbsp;</div>
-  <div class="head">REACTIVE FORMS</div>
-  <div class="head teal">SIGNAL FORMS</div>
+<div class="split">
 
-  <div class="row-label">State</div>
-  <div>FormGroup / FormControl tree</div>
-  <div class="new">A writable signal plus a field tree</div>
+```ts
+// before
+notify.valueChanges
+  .pipe(takeUntilDestroyed())
+  .subscribe((notify) => {
+    const email = this.form.controls.email;
+    if (notify) {
+      email.setValidators([
+        Validators.required, Validators.email,
+      ]);
+    } else {
+      email.clearValidators();
+    }
+    email.updateValueAndValidity();
+  });
+```
 
-  <div class="row-label">Reads</div>
-  <div>valueChanges observables</div>
-  <div class="new">Signal reads, no subscriptions</div>
+```ts
+// after
+f = form(this.model, (p) => {
+  required(p.email, {
+    when: ({ valueOf }) => valueOf(p.notify),
+  });
+});
+```
 
-  <div class="row-label">Validation</div>
-  <div>Attached at construction, changed imperatively</div>
-  <div class="new">Declared in a schema, reactive by default</div>
-
-  <div class="row-label">Typing</div>
-  <div>Typed, but lost across get() paths</div>
-  <div class="new">Inferred from the model, end to end</div>
-
-  <div class="row-label">Submit</div>
-  <div>Hand-rolled per feature</div>
-  <div class="new">submit(), with server error mapping</div>
-
-  <div class="row-label last">Maturity</div>
-  <div class="last">Battle-tested, deep ecosystem</div>
-  <div class="new last">Stable since v22, ecosystem still young</div>
 </div>
 
 <!--
-Walk the rows, not the cells. The point is that every row is a place our code shrinks.
+LIVE DEMO 2 (~2 min). THE HIGHEST-VALUE THIRTY SECONDS IN THE DECK.
+
+Bring the cold-open snippet back, then type the replacement in Monaco. Save. The running form's
+validation behaviour changes with no reload.
+
+This is the release of the tension you set up at 0:00. If you only keep one demo, keep this one.
 -->
 
 ---
 layout: content
-eyebrow: Interop
+eyebrow: Validation
+heading: Conditional is not a special case
+---
+
+<p class="lead" style="max-width:1500px">
+Every built-in takes <code>when</code>. Every bound can be a function. The message lives on the rule, so error copy leaves your template.
+</p>
+
+<div class="split">
+
+```ts
+required(p.email, { message: 'We need an email' });
+minLength(p.password, 12);
+min(p.age, ({ valueOf }) => valueOf(p.country) === 'US' ? 21 : 18);
+pattern(p.postcode, UK_POSTCODE);
+```
+
+<div class="notes-col">
+  <p><code>required</code>, <code>email</code>, <code>min</code>/<code>max</code>, <code>minDate</code>/<code>maxDate</code>, <code>minLength</code>/<code>maxLength</code>, <code>pattern</code>. The ones you would expect.</p>
+  <p class="dim">Careful: <code>required()</code> passes on an empty array. Use <code>minLength(p.items, 1)</code>. And every other validator skips entirely when the value is empty, so <code>required</code> and <code>minLength</code> are both needed.</p>
+</div>
+
+</div>
+
+<!--
+Second prediction, rhetorical, two-second beat:
+
+  <input required [formField]="f.email">   - does the browser block submit?
+
+No. FormRoot sets novalidate. Angular mirrors required/min/max/minlength/maxlength/readonly/
+disabled/name onto the element for behaviour and accessibility, and validates entirely in
+signals. Note pattern is NOT mirrored - signal forms supports multiple regexes, the attribute
+takes one.
+-->
+
+---
+layout: content
+eyebrow: Validation
+heading: Rules can see the whole form
+---
+
+<div class="split">
+
+```ts
+// one field, reading another
+validate(p.confirm, ({ value, valueOf, stateOf }) => {
+  if (!stateOf(p.password).touched()) return null;
+  return value() === valueOf(p.password)
+    ? null
+    : { kind: 'mismatch', message: 'Passwords differ' };
+});
+```
+
+```ts
+// one validator, errors aimed at descendants
+validateTree(p, ({ valueOf, fieldTreeOf }) => {
+  return valueOf(p.start) >= valueOf(p.end)
+    ? { kind: 'range',
+        message: 'End must be after start',
+        fieldTree: fieldTreeOf(p.end) }
+    : null;
+});
+```
+
+</div>
+
+<p class="lead" style="margin-top:44px;max-width:1520px">
+<code>validate</code> cannot target another field - that is a compile error, and it is <code>validateTree</code>'s job. The error lands where the user fixes it, not on the group.
+</p>
+
+<!--
+The stateOf().touched() gate is the humane touch: don't shout "passwords differ" at someone
+who is halfway through typing the first one.
+
+validateTree is the thing reactive forms genuinely cannot express cleanly. A row validator can
+return an ARRAY of errors, each carrying its own target field - every duplicate cell flagged at
+once.
+-->
+
+---
+layout: content
+eyebrow: Validation
+heading: Async, without the state machine
+---
+
+<div class="split">
+
+```ts
+validateHttp(p.username, {
+  debounce: 300,
+  request: ({ value }) =>
+    `/api/users/check?username=${value()}`,
+  onSuccess: (res) => res.available
+    ? null
+    : { kind: 'taken', message: 'Already taken' },
+  onError: () => ({ kind: 'offline' }),
+});
+```
+
+<div class="notes-col">
+  <div>
+    <div class="label">PENDING IS FREE</div>
+    <p>Bind the spinner to <code>pending()</code>. Nothing to track.</p>
+  </div>
+  <div>
+    <div class="label">SYNC RUNS FIRST</div>
+    <p>Async only fires once the field's own sync rules pass. You are not hammering the endpoint on every keystroke of an obviously broken value.</p>
+  </div>
+  <div>
+    <div class="label">DEBOUNCE IS DECLARED</div>
+    <p class="dim">Not piped. <code>validateAsync</code> is the lower-level escape hatch, backed by <code>resource()</code>.</p>
+  </div>
+</div>
+
+</div>
+
+<!--
+Do NOT demo this live. You will stand in silence watching a spinner on conference wifi with a
+mock everyone assumes is faked. Screen recording if you want motion.
+-->
+
+---
+layout: content
 center: true
 alt: true
-title: The two systems meet at a compat layer
+eyebrow: 'If you already have schemas'
+heading: Zod drops straight in
 ---
 
-<p style="font-family:var(--font-display);font-size:48px;font-weight:400;line-height:1.35;max-width:1500px;margin-bottom:44px">
-Don't mix imports from <code style="font-size:42px">@angular/forms</code> and <code style="font-size:42px">@angular/forms/signals</code> in the same form - unless you go through <code style="font-size:42px;color:var(--purple)">compatForm</code>.
+```ts
+form(this.model, (p) => validateStandardSchema(p, userSchema));
+```
+
+<p class="lead" style="font-size:34px;margin-top:44px;max-width:1500px">
+Standard Schema, so Zod, Valibot or ArkType. Issues are routed to the exact nested field they came from. Zod is already a dependency of <code>@angular/forms</code>.
 </p>
 
-<p class="lead" style="max-width:1450px">
-The compat layer exists so a signal form can sit inside an existing reactive-forms screen while you convert it. Treat it as a migration tool with a shelf life, not a permanent architecture.
+<p class="lead" style="margin-top:28px;max-width:1500px">
+It validates. It does not transform - so <code>z.coerce</code> and <code>.transform()</code> do not apply. Your model must already be the shape Zod expects.
 </p>
 
 <!--
-compatForm goes top-down (a FormControl inside a signal form); SignalFormControl goes bottom-up (a
-signal-validated leaf inside a FormGroup).
+One line, no demo, move on. First thing to cut for time.
 
-Gotcha: with compatForm, form().value() hands you back the FormControl instance, not its value.
-You flatten it yourself with a computed.
+The transform caveat is inferred from the signature (returns void, nothing written back). The
+docs say nothing about it. Say "test it" rather than asserting it.
+-->
+
+---
+layout: section
+number: '03'
+---
+
+## Composition
+
+---
+layout: content
+eyebrow: Composition
+heading: Schemas are values
+---
+
+```ts
+const addressSchema = schema<Address>((p) => {
+  required(p.street);
+  pattern(p.postcode, UK_POSTCODE);
+});
+
+orderForm = form(this.order, (p) => {
+  apply(p.billing, addressSchema);
+  apply(p.shipping, addressSchema);
+  applyEach(p.lineItems, lineItemSchema);
+});
+```
+
+<p class="lead" style="margin-top:36px;max-width:1500px">
+Nested objects, arrays and sub-forms all go through the same two functions. Your shared validators become shared schemas.
+</p>
+
+<!--
+Do not demo composition live - it is a reading activity and the payoff is seeing two files at
+once, which a slide does better than an editor you have to scroll.
+
+applyEach also works on Record<string, T>, which is the primitive for generic renderers.
 -->
 
 ---
 layout: content
-eyebrow: Proposal
-title: A migration path we could actually run
+eyebrow: 'Composition &middot; the peak'
+heading: The schema path narrows
 ---
 
-<div class="steps" style="margin-top:64px">
-  <div class="step">
-    <div class="n">01</div>
-    <h3>New forms only</h3>
-    <p>Every greenfield form written signal-first. Nothing existing is touched.</p>
-  </div>
-  <div class="step purple">
-    <div class="n">02</div>
-    <h3>Shared controls and schemas</h3>
-    <p>Port the design-system inputs and the validators both systems would share.</p>
-  </div>
-  <div class="step grey">
-    <div class="n">03</div>
-    <h3>Convert on touch</h3>
-    <p>Existing screens move when they are already open for other work. No migration sprint.</p>
-  </div>
+<div class="split">
+
+```ts
+type Payment = CreditCard | BankTransfer;
+
+applyWhenValue(p.payment, isCreditCard, (card) => {
+  required(card.cardNumber);
+  required(card.cvv);
+});
+
+applyWhenValue(p.payment, isBankTransfer, (bank) => {
+  required(bank.accountNumber);
+  required(bank.sortCode);   // card.cardNumber
+});                          // would not compile here
+```
+
+<div class="notes-col">
+  <p>A TypeScript type guard, used as the predicate, narrows the schema path inside the branch.</p>
+  <p>Discriminated-union forms with no casts and no ceremony.</p>
+  <p class="dim">Honest footnote: this narrows the <em>schema path</em>, not the field tree. In the template, a union model still needs a superset model with <code>hidden()</code> per variant - which is what the docs recommend anyway, because switching branches loses user input.</p>
 </div>
 
-<p class="dimmer" style="font-size:30px;line-height:1.45;margin-top:72px;max-width:1400px">
-Deliberately excluded for now: the checkout wizard and the bulk-edit grid. Both lean on FormArray patterns that are still thin on the signal side.
-</p>
+</div>
 
 <!--
-Concrete proposal. Three steps, each one shippable on its own.
+LIVE DEMO 3 (~2 min). The intellectual peak.
 
-Step 2 is cheaper than it looks: FormValueControl components work in reactive and template-driven
-forms as-is, so porting the control library does not break the screens still on the old API.
+Reach for card.cardNumber inside the bank-transfer branch and let the red squiggle land on the
+projector. The payload here lives in the EDITOR, not the app - a screenshot of a type error is
+a screenshot; a live one is proof.
+
+And it is on thesis: the types narrow because the form was derived from your data, and your
+data was a discriminated union all along.
 -->
 
 ---
 layout: content
-eyebrow: 'Demo &middot; 5 min'
-title: The profile form, live
+eyebrow: 'Custom controls'
+heading: 'Nobody has ever written this from memory'
+center: true
+alt: true
+---
+
+<p style="font-family:var(--font-display);font-size:60px;font-weight:500;line-height:1.25;max-width:1520px">
+Every Angular codebase has one component where someone implemented <code style="font-size:54px">ControlValueAccessor</code> correctly, and everyone else copies that file.
+</p>
+
+<!--
+Say it, pause, let the room recognise itself. No punchline needed - the recognition is the joke.
+
+Next slide is the full before-implementation at ~11px. Do not apologise for it, do not say
+"you can't read this". Leave it up three seconds and advance. The unreadability IS the content.
+-->
+
+---
+layout: content
+eyebrow: 'Custom controls'
+heading: Four methods, a provider and a forwardRef
+---
+
+<div class="split">
+
+```ts
+@Component({
+  selector: 'my-input',
+  providers: [{
+    provide: NG_VALUE_ACCESSOR,
+    useExisting: forwardRef(() => MyInput),
+    multi: true,
+  }],
+  template: `<input [value]="value" (input)="onInput($event)" (blur)="onTouched()" />`,
+})
+export class MyInput implements ControlValueAccessor {
+  value = '';
+  onChange: (v: string) => void = () => {};
+  onTouched: () => void = () => {};
+  writeValue(v: string) { this.value = v; }
+  registerOnChange(fn: (v: string) => void) { this.onChange = fn; }
+  registerOnTouched(fn: () => void) { this.onTouched = fn; }
+  setDisabledState(isDisabled: boolean) { this.disabled = isDisabled; }
+}
+```
+
+<div>
+
+```ts
+export class MyInput
+  implements FormValueControl<string> {
+
+  value = model.required<string>();
+}
+```
+
+<p class="lead" style="margin-top:36px">
+That is the whole required contract. Everything else - <code>errors</code>, <code>disabled</code>, <code>touched</code> - is an optional input you take only if you render it.
+</p>
+
+</div>
+
+</div>
+
+<!--
+Static slide. Do NOT type the "before" live - you would spend 90 seconds lovingly reproducing
+code you are about to mock, and kill the punchline.
+
+Two things worth saying:
+- Never implement both interfaces. The CVA silently wins, no warning.
+- FormValueControl components work in reactive AND template-driven forms unmodified. That makes
+  porting your control library a no-regret move.
+-->
+
+---
+layout: content
+eyebrow: 'One more consequence'
+heading: 'Your form is already a machine-readable contract'
 split: 1.1fr 0.9fr
 ---
 
-<<< @/demos/signup.ts ts {monaco-write} { height: '620px' }
+```ts
+f = form(this.model, signupSchema, {
+  experimentalWebMcpTool: {
+    name: 'registerUser',
+    description: 'Registers a new user.',
+  },
+  submission: { action: (f) => api.register(f().value()) },
+});
+```
 
 ::right::
 
-<div class="demo-form">
-  <SignupDemo />
+<div class="notes-col">
+  <p>Angular walks your model and generates a JSON schema from it. Your <code>required()</code> calls become the agent's mandatory arguments.</p>
+  <p>If the submission fails, it hands back <code>errorSummary()</code> per field, so the agent can correct itself and retry.</p>
+  <p class="dim">Experimental - the only such API left in the package. Schema inference rejects <code>null</code>, <code>undefined</code> and empty arrays, which fights the model-design advice you just heard.</p>
 </div>
 
 <!--
-Edit the schema on the left, Cmd+S, and the running form on the right recompiles. Show:
-the validation rules changing live, the pending state, and a server error landing on a field.
+Forty-five seconds, and frame it ON THESIS, not as an AI slide: because the form is derived
+from your data, Angular already has enough information to describe it to something else. You
+did not write a schema for the agent. You wrote your model.
 
-Five minutes, hard stop.
+Do not demo live - it needs an agent and a network. Record it if you want motion.
+
+Needs provideExperimentalWebMcpForms() in your providers.
 -->
+
+---
+layout: section
+number: '04'
+---
+
+## Things people ask
+
+---
+layout: content
+eyebrow: Question
+eyebrowColor: purple
+heading: 'My API returns optional fields. Why can''t I model that?'
+---
+
+<div class="split">
+
+```ts
+// does not compile
+model = signal<{ nickname?: string }>({});
+required(p.nickname);
+// Argument of type 'MaybeSchemaPathTree<string | undefined>'
+// is not assignable to 'SchemaPath<string, 1, Child>'
+
+// compiles, but silently unreachable
+model = signal({ address: null as Address | null });
+p.address.street  // Property 'street' does not exist
+```
+
+<div class="notes-col">
+  <p><code>undefined</code> does not mean "empty". It means <em>this field does not exist</em>, and Angular deletes the node.</p>
+  <p><code>null</code> is allowed and is the sanctioned empty for number and date inputs - but a nullable <em>object</em> makes that whole subtree unnavigable.</p>
+  <p class="dim">And <code>string | null</code> silently costs you <code>email</code>, <code>pattern</code>, <code>minLength</code> and <code>maxLength</code> - they are declared on <code>string</code>.</p>
+</div>
+
+</div>
+
+<p class="lead" style="margin-top:40px;max-width:1560px">
+The rule: <code>''</code> for text, <code>null</code> for numbers and dates, never <code>undefined</code>, never optional. Map to and from your domain model at the edges.
+</p>
+
+<!--
+This is the single most valuable slide in the FAQ section. It is a compile error, not a lint,
+and people hit it in the first hour.
+
+Also: class instances lose their prototype on first write (shallow copy), and Map/Set produce
+EMPTY field trees because children are enumerated with Object.keys. The type system does not
+stop you on either - the failure is silent and at runtime.
+-->
+
+---
+layout: content
+eyebrow: Question
+eyebrowColor: purple
+heading: 'How do I hide a field? And why isn''t hidden just disabled?'
+---
+
+<div class="split">
+
+```ts
+hidden(p.spouseName, {
+  when: ({ valueOf }) => valueOf(p.status) !== 'married',
+});
+```
+
+```html
+@if (!f.spouseName().hidden()) {
+  <input [formField]="f.spouseName" />
+}
+```
+
+</div>
+
+<div class="cards" style="--cols:3;margin-top:44px">
+  <div class="card">
+    <div class="label">IT DOES NOT TOUCH THE DOM</div>
+    <p>You write the <code>&#64;if</code>. Render it anyway and you get a dev-mode warning.</p>
+  </div>
+  <div class="card">
+    <div class="label">IT SKIPS VALIDATION</div>
+    <p>Hidden, disabled <em>and readonly</em> all skip. A hidden <code>required</code> field will not block submit.</p>
+  </div>
+  <div class="card">
+    <div class="label">IT KEEPS THE VALUE</div>
+    <p><code>f().value()</code> still contains it. It still goes to your server.</p>
+  </div>
+</div>
+
+<!--
+LIVE DEMO 4 (~1 min, and it is worth it). This is the demo in demos/signup.ts.
+
+Toggle the dropdown. The input vanishes. spouseName stays in the JSON blob. Eight seconds,
+and it lands the most misunderstood behaviour in the API.
+
+THE MIGRATION BOMB, say it loudly: reactive forms' form.value STRIPPED disabled controls and
+you needed getRawValue(). Signal forms is exactly reversed - the model is the truth, so
+disabled and hidden fields are in the payload by default. Anyone migrating a form that leaned
+on disabled-means-omitted starts silently sending fields they used to drop.
+
+The escape hatch is extractValue(f, { enabled: true }) from @angular/forms/signals/compat.
+
+(Payload behaviour verified from source, not documented - flag it as such if pressed.)
+-->
+
+---
+layout: content
+eyebrow: Question
+eyebrowColor: purple
+heading: 'Where is FormArray? What about forms I don''t know the shape of?'
+---
+
+<p class="lead" style="max-width:1520px">
+There is no <code>FormArray</code> and no <code>FormRecord</code>. The array in your model <em>is</em> the array.
+</p>
+
+<div class="split">
+
+```ts
+@for (item of f.items; track item) {
+  <input [formField]="item.name" />
+}
+
+// add
+f.items().value.update((xs) => [...xs, blank]);
+```
+
+<div class="notes-col">
+  <p>Track by <em>field identity</em>, not <code>$index</code>. Angular stamps a hidden <code>Symbol</code> on each object so state follows a row across a reorder.</p>
+  <p class="dim">Consequences: frozen objects in arrays throw. <code>structuredClone</code> of your model resets every row's touched and dirty state. Arrays of primitives are tracked by index, so removing item 0 shifts all state.</p>
+  <p>Genuinely dynamic shapes have an official pattern - derive model and schema from one config array. You surrender some type safety and cast inside each branch.</p>
+</div>
+
+</div>
+
+<!--
+f.items has NO .map/.filter/.find - only [i], .length and iteration. Compile error if you try.
+
+Two things worth admitting: the docs say "avoid models with dynamic structure" on one page and
+show you how to build them on another. Naming that tension makes you look like you read the
+docs properly.
+-->
+
+---
+layout: content
+eyebrow: Question
+eyebrowColor: purple
+heading: 'How do I test these?'
+---
+
+<div class="split">
+
+```ts
+it('requires email when notify is on', () => {
+  const model = signal({ email: '', notify: false });
+  const f = TestBed.runInInjectionContext(() =>
+    form(model, signupSchema));
+
+  expect(f.email().valid()).toBe(true);
+
+  model.set({ email: '', notify: true });
+  expect(f.email().errors()[0].kind).toBe('required');
+});
+```
+
+<div class="notes-col">
+  <p>No <code>TestBed.createComponent</code>. No fixture. No <code>fakeAsync</code>, no <code>tick()</code>.</p>
+  <p>Most form logic lives in the schema rather than the template, so most of it tests as plain function calls and signal reads.</p>
+  <p class="dim">Render only for what actually needs the DOM: binding, typing, custom controls, focus.</p>
+</div>
+
+</div>
+
+<p class="lead" style="margin-top:36px;max-width:1520px">
+There is no <code>@angular/forms/signals/testing</code> entry point, and that is the good news - there is nothing to learn.
+</p>
+
+<!--
+This is a bigger applause line for a room of maintainers than anything flashy. Testing a
+reactive form's conditional validation meant a fixture and tick(). Here it is a signal read.
+
+form() needs an injection context: runInInjectionContext, or pass { injector }.
+-->
+
+---
+layout: content
+eyebrow: Question
+eyebrowColor: purple
+heading: 'Is it stable? Are reactive forms going away?'
+---
+
+<div class="cards" style="--cols:2">
+  <div class="card">
+    <div class="label">STABLE IN V22</div>
+    <p>Every symbol is <code>&#64;publicApi 22.0</code>. The only <code>&#64;experimental</code> thing left in the package is the WebMCP integration.</p>
+  </div>
+  <div class="card">
+    <div class="label">BUT NOT FROZEN</div>
+    <p>22.1 already deprecated passing a bare function to <code>disabled()</code> and <code>hidden()</code> in favour of <code>{{ '{' }} when {{ '}' }}</code>. One minor after stable.</p>
+  </div>
+  <div class="card">
+    <div class="label">NOTHING IS DEPRECATED</div>
+    <p>Deprecation is driven by usage data and the developer survey. NgModules have been optional since v14 and still are not deprecated.</p>
+  </div>
+  <div class="card">
+    <div class="label">BUT THE INTENT IS CLEAR</div>
+    <p>"We would like to replace the existing systems eventually... the one true form solution."</p>
+  </div>
+</div>
+
+<p class="lead" style="margin-top:40px;max-width:1560px">
+And everything you find online is written against a dead API: <code>Control</code> became <code>Field</code> became <code>FormField</code>. <code>FieldPath</code> became <code>SchemaPath</code>. <code>customError()</code> is gone.
+</p>
+
+<!--
+"No API survives first contact with developers." - and the reason they shipped it experimental
+was to get that contact early, instead of committing to two majors of stability on day one.
+
+The NgModules precedent is the strongest reassurance you have. It is not a promise, it is a
+ten-year track record, and everyone in the room has lived it.
+-->
+
+---
+layout: content
+eyebrow: Question
+eyebrowColor: purple
+heading: 'Will it work with our component library?'
+---
+
+<div class="cards" style="--cols:3">
+  <div class="card">
+    <div class="label teal">NATIVE INPUTS</div>
+    <p>Work directly. Including <code>type=number</code> and <code>type=date</code>, which write <code>null</code> when empty.</p>
+  </div>
+  <div class="card">
+    <div class="label teal">EXISTING CVA COMPONENTS</div>
+    <p>Work with <code>[formField]</code> today. Angular provides a fake <code>NgControl</code> - a <em>subset</em>, so a control reaching deep into it may misbehave.</p>
+  </div>
+  <div class="card">
+    <div class="label teal">NEW CONTROLS</div>
+    <p><code>FormValueControl</code> or <code>FormCheckboxControl</code>. Never both.</p>
+  </div>
+</div>
+
+<p class="lead" style="margin-top:44px;max-width:1560px">
+Check your specific library before promising it to your team - I am not going to assert Material's status from this stage.
+</p>
+
+<!--
+The reassuring half: FormValueControl components work in reactive and template-driven forms
+unmodified. So you can port the control library FIRST, without deciding anything about forms.
+That is what unblocks an incremental migration.
+-->
+
+---
+layout: section
+number: '05'
+---
+
+## What it costs
 
 ---
 layout: content
 eyebrow: Risk
 eyebrowColor: purple
-title: What's left to be careful about
+heading: 'The gaps, named before you find them'
 ---
-
-<p class="lead">
-Signal Forms arrived experimental in v21 and came out of experimental in v22. The API risk is gone; the remaining costs are ours to plan for.
-</p>
 
 <div class="cards" style="--cols:2">
   <div class="card">
-    <div class="label">TEAM RAMP-UP</div>
-    <p>A different mental model, not a renamed API. Reviews will be slower at first.</p>
+    <div class="label">NO ARIA WIRING</div>
+    <p>Zero <code>aria-</code> attributes in the package. <code>aria-invalid</code>, <code>aria-describedby</code>, <code>role="alert"</code> are yours. Angular's own example writes them by hand.</p>
   </div>
   <div class="card">
-    <div class="label">TWO SYSTEMS AT ONCE</div>
-    <p>Until the last screen is converted we maintain both, plus the compat seams between them.</p>
+    <div class="label">SSR IS UNDOCUMENTED</div>
+    <p>Not a single Signal Forms page mentions SSR or hydration - including the async page, where you would most expect it. Test it before you bet on it.</p>
   </div>
   <div class="card">
-    <div class="label">STALE MATERIAL</div>
-    <p>The API was renamed twice before it settled. Most blog posts still show <code>[field]</code> and <code>customError()</code>.</p>
+    <div class="label">NO STATUS CLASSES</div>
+    <p><code>.ng-valid</code> and <code>.ng-dirty</code> do not appear. Your existing CSS silently stops working until you opt in.</p>
   </div>
   <div class="card">
-    <div class="label">OUR HEDGE</div>
-    <p>Keep schemas centralised, so a change lands in one file rather than forty.</p>
+    <div class="label">THE BUNDLE DOES NOT SHRINK</div>
+    <p>Signal Forms import <code>Validators</code>, <code>NgControl</code> and <code>FormGroup</code> from the classic package. You do not get to delete <code>@angular/forms</code>.</p>
   </div>
 </div>
 
-<!--
-Stable as of v22, so the API-churn objection is off the table going forward. But the churn already
-happened: Control became Field became FormField, FieldPath became SchemaPath, customError() was
-removed. Anything you find online predates at least one of those.
+<p class="lead" style="margin-top:40px;max-width:1560px">
+And a genuine footgun: <code>submit()</code> ignores <em>pending</em> validators by default, so a user can submit while your username check is still in flight. Set <code>ignoreValidators: 'none'</code>.
+</p>
 
-"No API survives first contact with developers." - Alex Rickabaugh
+<!--
+Deliver this FASTER and with MORE specificity than the good parts. Vagueness here reads as a
+sales pitch; precision reads as someone who has shipped it.
+
+Third rhetorical prediction, two-second beat: "A field is pending. Is it valid?"
+Neither. Quote the type definition verbatim - quoting the .d.ts lands differently from quoting
+a podcast:
+
+  "invalid() is false because there are no errors. However valid() is also false because of
+   the pending validator."
+
+So [disabled]="f().invalid()" leaves your submit button ENABLED mid-validation. Use !valid().
 -->
 
 ---
 layout: content
-eyebrow: Recommendation
-center: true
-alt: true
+eyebrow: 'We did not cover'
+heading: 'Where to go next'
 ---
 
-<h2 style="font-size:76px;letter-spacing:-0.03em;line-height:1.1;max-width:1500px;margin-bottom:48px">
-Signal-first for every new form, starting now. Existing screens convert on touch.
+<div class="cards" style="--cols:2">
+  <div class="card">
+    <div class="label">FIELD METADATA</div>
+    <p><code>createManagedMetadataKey</code> lets an <code>httpResource</code> live on a field, created in that field's own injector and destroyed with it. Per-row link previews for free.</p>
+  </div>
+  <div class="card">
+    <div class="label">TYPED ERRORS</div>
+    <p><code>NgValidationError</code> is a runtime base class <em>and</em> a discriminated union, so <code>e.min</code> and <code>e.maxLength</code> narrow. Message i18n at the render layer.</p>
+  </div>
+  <div class="card">
+    <div class="label">transformedValue()</div>
+    <p>Parse and format between what the input gives you and what your model wants, with parse errors reported into the field automatically.</p>
+  </div>
+  <div class="card">
+    <div class="label">disabledReasons()</div>
+    <p>Return a string instead of <code>true</code> from <code>disabled</code> and the UI can finally answer "why is this greyed out?"</p>
+  </div>
+</div>
+
+<!--
+This slide exists so you can say "yes, and here's where it lives" to four different questions
+without derailing.
+
+If asked about WebMCP: it is the only experimental API left in the package, and the schema
+inference rejects null, undefined and empty arrays - which fights the model-design advice to
+use null for empty. Fun, not production.
+-->
+
+---
+layout: content
+eyebrow: Monday
+heading: 'Three things, and only the first is a bet'
+---
+
+<div class="steps" style="margin-top:56px">
+  <div class="step">
+    <div class="n">01</div>
+    <h3>Write your next form signal-first</h3>
+    <p>Not a migration. The next one. You will know inside a day whether the model fits your head.</p>
+  </div>
+  <div class="step purple">
+    <div class="n">02</div>
+    <h3>Port one control off ControlValueAccessor</h3>
+    <p>Not a bet at all. <code>FormValueControl</code> works in all three forms systems, so nothing breaks.</p>
+  </div>
+  <div class="step grey">
+    <div class="n">03</div>
+    <h3>Leave the big dynamic form alone</h3>
+    <p>The JSON-schema-driven one, the giant grid. Weakest path today, and no prize for being early.</p>
+  </div>
+</div>
+
+---
+layout: content
+center: true
+alt: true
+eyebrow: 'One more time'
+---
+
+<h2 style="font-size:72px;letter-spacing:-0.03em;line-height:1.15;max-width:1560px">
+Your data stopped being a copy.
 </h2>
 
-<p class="lead" style="font-size:34px;max-width:1400px;margin-bottom:64px">
-The API is stable as of v22, so the only remaining question is sequencing. Porting the shared controls and schemas is the one piece that needs planned time.
+<p class="lead" style="font-size:34px;margin-top:44px;max-width:1500px">
+There is one object now. The model lives in a signal, the form is a view of it, and validation, touched, errors and submission are all derived. When you stop keeping two copies in sync, all the code that kept them in sync goes away.
 </p>
 
-<div style="display:flex;gap:56px;font-family:var(--font-mono);font-size:26px;color:var(--teal)">
+<div style="display:flex;gap:56px;margin-top:64px;font-family:var(--font-mono);font-size:26px;color:var(--teal)">
   <span>angular.dev/guide/forms/signals</span>
   <span>Questions?</span>
 </div>
 
 <!--
-Ask for a decision: signal-first on new forms from now, and planned time for the shared control
-library.
+"That's where we started. Same behaviour. Eighteen lines, then three.
 
-If asked "will reactive forms be deprecated?": no active deprecation, but the team is explicit -
-"we would like to replace the existing systems eventually... the one true form solution."
+The thing that changed isn't that Angular added a `when` option. It's that your data stopped
+being a copy.
+
+Your reactive forms are not going anywhere - the team deprecates when we tell them we're done,
+and NgModules still work in v22. Nobody is taking your code away.
+
+But when Alex Rickabaugh was asked, straight out, whether a third forms system means phasing
+out the other two: 'We would like to replace the existing systems eventually. This is intended
+to eventually become the one true form solution.'
+
+So the question was never whether you learn this. It's which form you learn it on.
+
+Thank you."
 -->
