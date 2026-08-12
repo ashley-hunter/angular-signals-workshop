@@ -78,7 +78,10 @@ third one?"
 layout: content
 eyebrow: 'Where we are today'
 heading: 'Eighteen lines, and every one of them is necessary'
+split: 1.25fr 0.75fr
 ---
+
+<div class="code-sm">
 
 ```ts
 export class SignupForm {
@@ -100,14 +103,26 @@ export class SignupForm {
 }
 ```
 
+</div>
+
+::right::
+
+<div class="demo-panel">
+  <div class="label">RUNNING, RIGHT NOW</div>
+  <ReactiveSignupDemo />
+</div>
+
 <!--
-No trick here, and no animation - let them read it.
+No animation - let them read it, then show them what it does.
 
 "This does one thing. Email is required, but only when 'notify me' is ticked. That's the whole
-feature. Eighteen lines.
+feature. Eighteen lines."
 
-And I want to be clear: this is good code. It passes review. I've written it, most of you have
-written it. There's nothing to fix."
+Then TICK THE BOX on the right. `required` flips to yes, the form flips to invalid. Untick it
+and it goes back. That is everything those eighteen lines buy.
+
+"And I want to be clear: this is good code. It passes review. I've written it, most of you have
+written it. There is nothing to fix here."
 
 Then advance and take it apart.
 -->

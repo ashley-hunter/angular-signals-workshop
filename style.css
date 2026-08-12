@@ -291,6 +291,79 @@
   color: var(--text-strong);
 }
 
+/* Slides where a long snippet has to share the row with something else */
+.slidev-layout .code-sm pre.slidev-code,
+.slidev-layout .code-sm pre.slidev-code code {
+  font-size: 20px !important;
+  line-height: 1.6 !important;
+}
+
+/* A running Angular form sitting beside the code it comes from */
+.demo-panel {
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 40px;
+}
+
+.demo-panel > .label {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  color: var(--purple);
+  margin-bottom: 28px;
+}
+
+.demo-form label {
+  display: block;
+  font-size: 26px;
+  color: var(--text-strong);
+  margin-bottom: 24px;
+}
+
+.demo-form label > span {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.demo-form label.check {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.demo-form label.check > span {
+  margin-bottom: 0;
+}
+
+.demo-form input[type='checkbox'] {
+  width: 26px;
+  height: 26px;
+  accent-color: var(--teal);
+}
+
+/* The two-row status readout: `required` and overall validity */
+.demo-form .state {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px 20px;
+  margin: 32px 0 0;
+  font-family: var(--font-mono);
+  font-size: 24px;
+}
+
+.demo-form .state dt {
+  color: var(--dim);
+}
+
+.demo-form .state dd {
+  margin: 0;
+  color: #ff6b6b;
+}
+
+.demo-form .state dd.on {
+  color: var(--teal);
+}
+
 /* Live demo slide: Monaco editor beside the running Angular form */
 .slidev-layout .slidev-monaco-container {
   font-size: 20px;
