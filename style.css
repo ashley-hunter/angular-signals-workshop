@@ -244,9 +244,27 @@
 
 /* ponytail: !important because Slidev's code.css loads after this file and wins on order */
 .slidev-layout pre.slidev-code,
-.slidev-layout pre.slidev-code code {
+.slidev-layout pre.slidev-code code,
+.slidev-layout .shiki-magic-move-container,
+.slidev-layout .shiki-magic-move-container pre,
+.slidev-layout .shiki-magic-move-container code {
   font-size: 26px !important;
   line-height: 1.7 !important;
+}
+
+/* Slidev dims non-highlighted lines via `.dishonored`; soften it and animate the change */
+.slidev-layout .slidev-code .line.dishonored {
+  opacity: 0.35;
+  transition: opacity 220ms ease;
+}
+
+/* Clicked-in content fades up rather than just appearing */
+.slidev-layout .slidev-vclick-target {
+  transition: opacity 260ms ease, transform 260ms ease;
+}
+
+.slidev-layout .slidev-vclick-hidden {
+  transform: translateY(6px);
 }
 
 /* Two-column code/notes split used on most API slides */
