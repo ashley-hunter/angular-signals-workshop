@@ -27,48 +27,51 @@ months in it. This is what it is, how it differs from what you know, and what it
 layout: content
 eyebrow: Orientation
 heading: What a Signal Form actually is
-split: 1.05fr 0.95fr
 ---
 
+<div class="cards" style="--cols:3">
+  <div class="card" v-click="1">
+    <div class="label">A THIRD API, NOT A REWRITE</div>
+    <p>It lives beside template-driven and reactive forms, in <code>@angular/forms/signals</code>. Nothing you have today changes.</p>
+  </div>
+  <div class="card" v-click="2">
+    <div class="label">THREE PIECES</div>
+    <p>A signal holding your data, a <code>form()</code> wrapping it, and one directive binding a field to an input.</p>
+  </div>
+  <div class="card" v-click="3">
+    <div class="label">STABLE IN v22</div>
+    <p>Experimental in v21, stable now. Everything in this talk assumes v22.</p>
+  </div>
+</div>
+
+<div class="split" style="--split:1.15fr 0.85fr;margin-top:52px" v-click="4">
+
 ```ts
-import { form, required, email, FormField } from '@angular/forms/signals';
+import { form, required, FormField } from '@angular/forms/signals';
 
 model = signal({ email: '', notify: false });
 
-f = form(this.model, (p) => {
-  required(p.email);
-  email(p.email);
-});
+f = form(this.model, (p) => required(p.email));
 ```
 
 ```html
 <input [formField]="f.email" />
 ```
 
-::right::
-
-<div class="notes-col">
-  <div>
-    <div class="label">A THIRD API, NOT A REWRITE</div>
-    <p>It lives beside template-driven and reactive forms in <code>@angular/forms/signals</code>. Nothing you have today changes.</p>
-  </div>
-  <div>
-    <div class="label">THREE PIECES</div>
-    <p>A signal holding your data, a <code>form()</code> wrapping it, and one directive binding a field to an input.</p>
-  </div>
-  <div>
-    <div class="label">STABLE IN v22</div>
-    <p>Experimental in v21, stable now. The rest of this talk assumes v22.</p>
-  </div>
 </div>
 
 <!--
-Deliberately no animation - this is the map, and people need to see all of it at once.
+Three ideas first, then the code that contains all three. Do not put the code up early - they
+will read it instead of listening.
 
-Thirty seconds. Do not explain the API here, just orient. "That is the entire shape of it.
-Signal, form, directive. Everything else in this talk is a consequence of those three lines."
+CLICK 1: it is additive. Nobody has to migrate anything. This defuses the "oh no, a third
+forms system" reaction before it forms.
+CLICK 2: name the three pieces out loud - signal, form, directive.
+CLICK 3: the version, so nobody spends the talk wondering if this is real yet.
+CLICK 4: "and here they are." Point at each piece as you name it again. Thirty seconds.
 
-Then: "So why did Angular build a third one?"
+Do not explain the API here. This is the map, not the tour. Then: "So why did Angular build a
+third one?"
 -->
 
 ---
