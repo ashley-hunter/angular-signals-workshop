@@ -120,7 +120,7 @@ export class SignupForm {
 ::right::
 
 <div class="demo-panel">
-  <div class="label">RUNNING, RIGHT NOW</div>
+  <div class="label">DEMO</div>
   <ReactiveSignupDemo />
 </div>
 
