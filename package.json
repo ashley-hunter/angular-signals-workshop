@@ -1,0 +1,24 @@
+{
+  "name": "signal-forms-talk",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "slidev --open",
+    "build": "slidev build",
+    "export": "slidev export"
+  },
+  "dependencies": {
+    "@angular/common": "^22.1.1",
+    "@angular/compiler": "^22.1.1",
+    "@angular/core": "^22.1.1",
+    "@angular/forms": "^22.1.1",
+    "@angular/platform-browser": "^22.1.1",
+    "@slidev/cli": "^52.0.0",
+    "@slidev/theme-default": "^0.25.0",
+    "rxjs": "^7.8.2",
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "@oxc-angular/vite": "^0.0.35"
+  }
+}

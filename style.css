@@ -1,0 +1,334 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Barlow:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* Design tokens, lifted from Angular Signal Forms.dc.html */
+:root {
+  --bg: #0a0d12;
+  --bg-alt: #12171f;
+  --border: #232b37;
+  --text: #e8ecf2;
+  --text-strong: #c9d4e2;
+  --muted: #8a97a8;
+  --dim: #5e6b7d;
+  --teal: #2fd8b4;
+  --purple: #8b7cf6;
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body: Barlow, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+.slidev-layout {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  padding: 100px;
+  font-size: 32px;
+  line-height: 1.4;
+}
+
+.slidev-layout.alt {
+  background: var(--bg-alt);
+}
+
+.slidev-layout h1,
+.slidev-layout h2,
+.slidev-layout h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin: 0;
+  color: var(--text);
+}
+
+.slidev-layout h2 {
+  font-size: 56px;
+}
+
+.slidev-layout h3 {
+  font-size: 38px;
+}
+
+.slidev-layout p {
+  margin: 0;
+}
+
+.slidev-layout a {
+  color: var(--teal);
+  text-decoration: none;
+}
+
+/* Eyebrow: mono, uppercase, tracked out */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 24px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--teal);
+}
+
+.eyebrow.purple {
+  color: var(--purple);
+}
+
+/* Deck sets the lead paragraph in muted grey under the heading.
+   ponytail: needs .slidev-layout to outrank layouts-base.css's `.slidev-layout p`,
+   which otherwise pins every paragraph to line-height 1.5rem. */
+.slidev-layout p.lead,
+.lead {
+  font-size: 32px;
+  color: var(--muted);
+  line-height: 1.4;
+  max-width: 1350px;
+}
+
+.dim {
+  color: var(--muted);
+}
+
+.dimmer {
+  color: var(--dim);
+}
+
+/* Card grids */
+.cards {
+  display: grid;
+  gap: 36px;
+  grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr));
+}
+
+.cards.tight {
+  gap: 28px;
+}
+
+.card {
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 40px;
+}
+
+.cards.tight .card {
+  padding: 36px;
+}
+
+.card > .label {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  color: var(--purple);
+  margin-bottom: 18px;
+}
+
+.card > .label.teal {
+  color: var(--teal);
+  font-size: 26px;
+  margin-bottom: 16px;
+}
+
+.card p {
+  font-size: 30px;
+  line-height: 1.4;
+  color: var(--text-strong);
+}
+
+.cards.tight .card p {
+  font-size: 28px;
+}
+
+/* Numbered steps (migration path) */
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 44px;
+}
+
+.step {
+  border-top: 4px solid var(--teal);
+  padding-top: 32px;
+}
+
+.step.purple {
+  border-color: var(--purple);
+}
+
+.step.grey {
+  border-color: #3a4553;
+}
+
+.step .n {
+  font-family: var(--font-mono);
+  font-size: 64px;
+  font-weight: 600;
+  color: var(--teal);
+  line-height: 1;
+  margin-bottom: 24px;
+}
+
+.step.purple .n {
+  color: var(--purple);
+}
+
+.step.grey .n {
+  color: var(--dim);
+}
+
+.step h3 {
+  margin-bottom: 20px;
+}
+
+.step p {
+  font-size: 30px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* Side-by-side comparison table */
+.compare {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr 1.15fr;
+  font-size: 30px;
+}
+
+.compare > div {
+  padding: 26px 28px;
+  border-top: 1px solid var(--border);
+  color: var(--text-strong);
+}
+
+.compare > .head {
+  border-top: none;
+  padding: 22px 28px;
+  font-family: var(--font-mono);
+  font-size: 22px;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.compare > .head.teal {
+  color: var(--teal);
+}
+
+.compare > .row-label {
+  color: var(--muted);
+}
+
+.compare > .new {
+  background: var(--bg-alt);
+  color: var(--text);
+}
+
+.compare > .last {
+  border-bottom: 1px solid var(--border);
+}
+
+/* Inline code in prose */
+.slidev-layout :not(pre) > code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  color: var(--teal);
+  background: none;
+  padding: 0;
+}
+
+/* Code blocks: shiki output, restyled to match the deck's card treatment */
+.slidev-layout pre.shiki {
+  background: var(--bg-alt) !important;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 40px 44px;
+  font-family: var(--font-mono);
+  font-size: 26px;
+  line-height: 1.7;
+  margin: 0;
+  overflow: visible;
+}
+
+/* ponytail: !important because Slidev's code.css loads after this file and wins on order */
+.slidev-layout pre.slidev-code,
+.slidev-layout pre.slidev-code code {
+  font-size: 26px !important;
+  line-height: 1.7 !important;
+}
+
+/* Two-column code/notes split used on most API slides */
+.split {
+  display: grid;
+  gap: 56px;
+  align-items: start;
+  grid-template-columns: var(--split, 1fr 1fr);
+}
+
+.notes-col {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  padding-top: 8px;
+}
+
+.notes-col .label {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  color: var(--purple);
+  margin-bottom: 12px;
+}
+
+.notes-col p {
+  font-size: 30px;
+  line-height: 1.4;
+  color: var(--text-strong);
+}
+
+/* Live demo slide: Monaco editor beside the running Angular form */
+.slidev-layout .slidev-monaco-container {
+  font-size: 20px;
+}
+
+/* Monaco keeps its own background from the theme's `colors`, which Slidev's
+   styles win over - pin it to the same card colour as the static code blocks. */
+.slidev-layout .monaco-editor,
+.slidev-layout .monaco-editor .monaco-editor-background,
+.slidev-layout .monaco-editor .margin {
+  background: var(--bg-alt) !important;
+}
+
+/* Monaco's bracket-pair colouring is theme-independent and paints a rainbow;
+   the deck sets braces in the same muted grey as the static code blocks. */
+.slidev-layout .monaco-editor [class*='bracket-highlighting-'] {
+  color: var(--muted) !important;
+}
+
+.demo-form {
+  font-size: 26px;
+}
+
+.demo-form input {
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 12px 16px;
+  width: 100%;
+}
+
+.demo-form button {
+  background: var(--teal);
+  border-radius: 8px;
+  color: var(--bg);
+  font-weight: 600;
+  padding: 12px 16px;
+}
+
+.demo-form button:disabled {
+  background: var(--border);
+  color: var(--dim);
+}
+
+.demo-form small {
+  color: #ff6b6b;
+  font-size: 22px;
+}
+
+.demo-form pre {
+  color: var(--dim);
+  font-family: var(--font-mono);
+  font-size: 20px;
+}

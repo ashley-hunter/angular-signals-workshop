@@ -1,0 +1,144 @@
+MARK: Oh, yeah,
+definitely sketchy.
+And it's dark in here,
+and I can't see a thing.
+Finally, I can see something.
+What?
+Oh, no!
+This is one of those
+fighting games!
+Is that a mummy?
+Hold on.
+That lady had
+torches in her hands.
+I don't even think
+that was a human!
+No, no, no, no,
+no, no, no, no, no.
+Not you again.
+Is there some sort of form I
+can fill out to get out of this?
+Because honestly,
+being in this fight
+is worse than dealing with
+the control value accessor.
+At least I got my muscles right.
+I wish I could bring my
+own backup to this match,
+the same way developers
+want to bring their own data
+model to forms.
+Oh, well.
+I guess we're doing this.
+SPEAKER 1: Begin!
+Presentation.
+SPEAKER 2: Hey, Mark.
+This is me, the
+mighty [? Kiril. ?]
+If you don't want
+to fight, you have
+to fill out the opt-out form.
+Unfortunately, our old
+form is deprecated,
+but we will build
+a new one right now
+using the new Signal Forms.
+Yes, we heard developers
+needed a reactive, composable,
+and declarative form solution.
+And we've been working on one.
+But before we start,
+prove you're not a robot.
+Tell me how to use the
+control value accessor.
+Exactly.
+Thank you.
+Now let's build the form.
+A signal form starts with a
+signal containing your data
+model.
+We will need your name,
+an opt-out checkbox,
+and five-star rating.
+We'll also need your
+email so that you can
+subscribe to our newsletter.
+To make a form out
+of this signal,
+let's pass it to
+the form function.
+The form preserves the shape
+of your data and enhanced
+superpowers.
+For example, now you can
+reactively read and set values
+on the form and its subfields.
+You can also get the state,
+such as valid or disabled,
+by calling appropriate
+signals on fields.
+Now let's add some validation.
+To do this, you pass a
+callback to the form,
+which takes a path argument.
+Path mirrors the
+shape of your form
+but has no access
+to state or values.
+You can use it to apply
+rules to your fields.
+Let's use built-in validators to
+make sure the name is required
+and the email is correct.
+You can also create
+custom validators.
+For example, let's make sure
+that the rating property
+is five stars by using
+a validation rule.
+If the rating is too low,
+let's return an error,
+otherwise return undefined.
+Yeah, no more nulls.
+I'm very happy about that.
+Now, the form model
+is ready, and it's
+time to see what
+happens in the template.
+But bind each field to
+the appropriate input
+using the new field directive.
+You can also use
+the field directive
+to bind a filter
+custom component.
+Let's use a rating component,
+which we'll create in a second.
+Wow.
+Inside the rating
+component, there is no more
+control value accessor.
+Instead, all you have to do
+is to implement form control
+interface and set up
+appropriate inputs and models.
+And the field directive
+will bind them
+all to the appropriate
+field states.
+Now the form is ready to go.
+While Mark is
+filling it out, I'm
+very excited to share that
+we're launching Signal Forms
+as experimental in Angular V21.
+And when I say "experimental,"
+I actually mean it.
+Things might still change a lot.
+You can try all new Signal
+Forms on your local machine,
+or go to
+angular.dev/signal/forms and try
+them in an interactive
+playground.
+Now, Mark, here is your key.

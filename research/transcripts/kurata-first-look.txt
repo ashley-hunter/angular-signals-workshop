@@ -1,0 +1,364 @@
+Hey, Angular signals are great for
+managing state and reactivity since
+version 16, but forms that's where
+things always felt a little uh
+unfinished.
+Not anymore. With Angular version 21,
+signal forms are here. Signal forms make
+form handling easier, cleaner, and way
+more fun. In this video, we take a first
+look at building signal-based forms,
+including validation. Let's jump in. The
+first step to using signal forms is to
+create a signal for our form. The signal
+holds the data for each field on the
+form. That signal becomes the sole
+source of truth for all form values,
+making the form predictable and
+reactive. Here's my Star Wars vehicle
+sales sample application. We want a form
+for the user to subscribe to our
+newsletter. What data fields does our
+form need? Our subscription form
+includes first and last name, email
+address, and number of years as a Star
+Wars fan. So, our signal should include
+each of these fields. Going back to the
+code for full type safety, we define an
+interface describing each field. I'll
+create a TypeScript file. Since we're
+working with subscription data, I'll
+name the file subscription.ts.
+You could append data or form data to
+this name for added clarity. I'll close
+explorer. In this file, we create the
+interface detailing the fields on the
+form. Export interface subscription. We
+add each of our form fields. Email as
+string, first name as string, last name
+as string, and years as fan is a number.
+Each field in this interface will be
+associated with a control on our form.
+As you create this interface, keep in
+mind that each field's data type must be
+compatible with the HTML control that
+will display it. So fields displayed in
+a text box have a string data type. The
+years as a fan uses a number type text
+box, so it's numeric. Also, we can't
+define fields in the interface as
+optional. And in this example, we can't
+define a type as null because a native
+input element doesn't directly support
+null. Our subscription form fields are
+basically flat, but they don't have to
+be. We could have a nested structure
+like this, and we can include an array
+like this. If there's interest, I can
+cover examples of more complex signal
+structures in later videos. I'll undo
+this and stick with our flat structure.
+This interface details the data
+structure for our forms signal. Now,
+we're ready to declare that signal.
+We'll do that in the component. I've
+already created the component for this
+subscribe form, but it doesn't yet have
+any code. Declare a variable for the
+forms signal. I'll name it subscribe
+model equals signal. We use our
+interface to define its type. A signal
+must always have an initial value. The
+subscription interface defines an
+object. So we need an object with an
+initial value for each field. We could
+define that here. First name is
+initially empty. Last name is initially
+empty. and so on. But for good
+separation, let's instead define our
+initial values in the same file that we
+defined the interface subscription.ts.
+Declare and export a constant. I'll name
+it initial data and set its type to
+subscription. Define a subscription
+object and set the string fields to an
+empty string. Email, first name, and
+last name. We set our numeric field to
+nan or not a number. By using nan
+instead of zero as our default, we can
+tell if the user entered zero as their
+response. Note that Angular excludes any
+field with an initial value of undefined
+when creating the form. Okay, we'll use
+this constant when initializing or
+resetting the form to its initial
+values. Going back to the component, set
+the initial signal value to our constant
+initial data. Think of this signal as
+the form data model. It holds the
+structure and initial data for the form
+to see when the signal value changes.
+Let's add an effect ef.log
+the email field using thissubscribe
+model. Since subscribe model is a
+signal, use parentheses to read the
+value of the signal then email. This
+logs the email field value every time
+the subscribe model signal changes. Now
+that we have the form signal, we're
+ready to declare the form. I'll name it
+subscribe form. Call the form function
+and pass in the form signal. This
+creates a form wrapped around that form
+signal. Forms don't maintain their own
+data. Rather, they use the past signal.
+If the signal changes, the form
+automatically reflects those changes.
+And when the user interacts with the
+form controls, the signal updates
+automatically. Cool. Hovering over
+subscribe form, we see that the form is
+represented as a field tree. Think of
+the field tree as an object structure
+that matches our form signal. It
+contains the form any field group and
+all of the form fields.
+How about a picture? Here is the
+interface for our signal. We create a
+form like this. Then the field tree
+might look something like this. Our form
+is at the top. There is a note for each
+field and each field is itself another
+field tree. Navigate the tree using dot
+notation such as sub form email. As
+another example, if we had a signal with
+a field group like this address, the
+field tree would look like this. We
+access the city using sub form.add
+address city. Let's go back to the code.
+We now have our form signal and a form
+wrapping that signal. Our subscribe form
+is not yet associated with the elements
+in our template. Each HTML form control
+must be associated with one field from
+our form. We do that with the field
+directive. In the component decorator,
+add an import for the field directive.
+Make note of this form name because
+we'll bind our HTML controls to this
+forms fields. Here is the
+subscribe-form.html
+file. I've already created the template
+for each form control. Add the field
+directive and bind the control to a
+field in the subscribe form. Let's start
+with the first name input element.
+Specify the field directive and bind it
+to subscribe form first name. Done.
+Scroll down and do the same with the
+last name field. Scrolling down further
+for the email field we have the required
+and minlength attributes on the input
+element. Add the field directive and
+bind it to subscribe form.mmail.
+Notice that we see syntax errors.
+Setting the required attribute is not
+allowed on nodes using the field
+directive. So let's remove those
+attributes. Moving on to the years as a
+fan. Set the field directive to
+subscribe form.years years as fan.
+Notice that the min and max attributes
+now have a similar error. Let's delete
+those attributes. With that, each of our
+form controls are bound to an
+appropriate field in the subscribe form.
+That means that as a user types into any
+of these controls, the entered value is
+automatically assigned to the form
+model. Since the form model is a signal,
+we can react to those changes.
+I already have this application running.
+So to try it out, I'll bring up the
+browser. Open the console to view our
+logging. Display the form. Type in an
+email address. And we see the value of
+the form model signal in the console. We
+can react to those changes as needed.
+Excellent.
+But what about validation? Most forms
+require some type of validation. In our
+example, we've marked email as a
+required field. Plus, it must be a valid
+email address and longer than six
+characters. We'll also validate that the
+years as a fan is greater than or equal
+to zero and less than 100. Going back to
+the code, let's declare our validation
+rules in the same file as our form model
+interface subscription.ts.
+With signal forms, we add logic to our
+form using a schema that includes
+validation rules. To see what I mean,
+declare and export a constant. I'll name
+it subscription schema. Then call the
+schema function. Use the generic
+argument to identify the form signal
+interface. In our case, subscription.
+Then pass in a function that returns an
+object with our desired logic. I'll
+scroll down for more space.
+The arrow function takes in the schema
+root path. This is an object that
+represents the root location in the
+form's field tree. From this route, we
+can use dot notation to access the
+location of a form field. We can then
+bind logic to a specific part of the
+field tree before the creation of the
+form. Note that these path objects don't
+hold values. They are addresses for
+locating a field in the field tree. The
+schema function returns an object with a
+set of functions defining the logic for
+our fields. That logic can include
+validators.
+Angular provides several validators.
+Let's use the required validator for the
+email address. In the required function,
+we pass in the schema path to the email
+field root path.
+and optionally define our validation
+error message. I'll paste that in. Next,
+we validate that the email address is a
+valid email. So, use the email
+validator. Again, pass in the schema
+path to the email field and add a
+validator error message. Let's also
+define a minlength validator root path
+email. Then we specify the minimum
+length, let's say six, and our
+validation message. For the years as a
+fan, we'll call the min validator. We
+pass in the schema path root path doy
+years as a fan and the minimum value.
+Then to find that validation error
+message. Lastly, we use the max
+validator. We pass in the path
+and the maximum value. I'll again paste
+the error message. So we declaratively
+bind validation rules to fields using
+the schema path. That way our form knows
+which validation rules go with which
+fields and where to attach errors in the
+field tree. But these logic rules can be
+more than validation. We can define
+rules for disabling or hiding a control
+for example. There is so much more to
+the signal forms validation features
+including cross field validation, custom
+validators and async validation. Plus,
+we can add a when clause for a
+conditional validator. And we can use
+value of and state of functions to
+access field values or state. If these
+features are of interest, I'll cover
+these topics in later videos. With
+signal forms, we can have our form
+signal interface, initial field values,
+and our schema with the validation rules
+and logic all in one place. Or we can
+divide it into separate logical units or
+add it all to the component, whatever
+makes sense for our application.
+Sweet. Now, let's add the schema to our
+form. In the subscribe form component,
+pass the schema in as the second
+argument to the form function. Now our
+field tree includes our schema logic.
+Before we can try this out, we need the
+HTML elements to display validation
+errors. For that, we need to check the
+interaction state of the field and read
+any error values. How do we do that?
+Recall that our subscribe form is
+represented as a field tree. Each
+control is a node in that tree and is
+also a field tree. This field tree
+structure matches our form signal. To
+access realtime information about the
+form or its controls, call the field
+tree node as a function. Calling a field
+tree node as a function returns a field
+state object for that node. The field
+state object provides the interaction
+state, validation errors, visibility,
+and current field values as signals.
+This is a signal form, so I guess that
+shouldn't be a surprise. We use the
+field tree to navigate the form
+hierarchy and to bind our input
+elements. We use the field state to read
+the signals containing the real-time
+state. Let's look at a few examples. If
+we want all of the form field values, we
+call the form's field tree as a function
+to access the field state and read the
+value signal. To disable the submit
+button if the form is invalid, we call
+the form's field tree and read the
+invalid signal. In the template, we bind
+an input element to a field in the field
+tree using the path to that field.
+Notice that there are no parentheses
+here. Conditionally display elements
+based on a field's validation state by
+referencing the path to the field.
+Calling the fields field tree as a
+function to access the field state and
+reading the invalid signal. Display the
+errors for a field by referencing the
+path to the field, calling the fields
+field tree and reading the errors
+signal. Now let's add validation
+messages to our template. In the
+template, we'll add messages for the two
+fields we are validating, email and
+years as a fan. Let's start with the
+email. I'll paste the code and we'll
+talk through it. We first use an if
+block to determine whether we need to
+display the validation message. We
+access the subscribe form which points
+to the root of the field tree. Then
+access the email field tree. We call
+this field tree as a function to get the
+field state. From that we access the
+interaction state. The state is a
+signal. So we use parentheses to read
+that signal. Notice that we are checking
+invalid and touched. That way when the
+user first brings up the form, the error
+messages won't appear until the user
+touches the text box. Then we loop
+through the array of validation errors.
+Because we can have multiple validation
+rules for a single field, we could have
+multiple error messages. To be complete,
+we add similar code to the years as fan.
+Want to see this in action? Bring up the
+form, enter an invalid email, and we see
+our messages.
+Enter a number over 100, and we see that
+validation message. It works. Yay. If
+you are using signals, signal forms is
+the way to go. But note that as of this
+recording, signal forms is experimental
+and could change before it becomes a
+stable part of Angular. What do you
+think of signal forms? Would you like
+more videos on signal form features?
+Drop a comment below with your thoughts
+or questions. Thanks for watching. If
+this video was useful, please like and
+subscribe.

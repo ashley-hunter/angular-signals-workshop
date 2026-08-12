@@ -1,0 +1,566 @@
+Solid.JS has really made signals come
+back into the mainstream. We've seen
+signals get introduced into just about
+every popular framework. Now,
+>> we're very open about the fact that we
+would like to replace the existing
+systems eventually. No API survives
+first contact with developers. Really,
+>> what's up friends? Welcome to the WebDev
+podcast. I'm your host Jason Langdorf
+and today we are going to be digging
+into a new release from the Angular
+team. We are going to be learning about
+Angular Signal Forms. Now, this is
+something that I've heard a lot of
+people asking about. And so, to help us
+dive into this, get our heads around it,
+and learn what it does, I've brought in
+one of the Angular Core team members, a
+good friend, brilliant engineer, Alex
+Ricka. Alex, welcome to the show. How
+you doing?
+>> Thank you very much. Thanks for having
+me. I'm doing great.
+>> You and I have had uh a few short
+opportunities to hang out, and it's
+always been a pleasure. I don't think
+I've ever actually asked you for your
+like your bio. So for me and for folks
+who maybe aren't familiar with you and
+your work, do you want to give us the
+the high level of who you are, what you
+do?
+>> So I'm a software engineer at Google and
+for about 10 years now, uh since 2015,
+I've been working on Angular. I kind of
+started there as really I would call
+myself a junior developer back then and
+worked on a bunch of different projects.
+Ended up working a lot in the compiler
+before kind of transitioning to become
+the technical lead now for the Angular
+core framework. So compiler, runtime,
+forms, router, etc.
+>> You've been doing this for how long now?
+>> Working on Angular about 10 years. Uh at
+Google 15 now. Uh it seems like crazy
+amount of time.
+>> Um
+>> I know the time flies. I somebody asked
+me yesterday like how long have you been
+an engineer? And I was like oh god it's
+like it's been over 20 years now. Oh no.
+[laughter]
+>> Yeah. When you when you start thinking
+of it as as not just a job but a career
+like looking back at a career it's like
+wow. you are now the you said the
+technical lead on angular
+>> on the angular core framework so angular
+divided yeah into we have framework we
+have components uh we have tooling which
+is like CLI we have developer
+infrastructure and so forth
+>> u so I lead the framework team and then
+we have Jeremy Alborne who's over kind
+of the we call him the uber tech lead
+he's the tech lead for Angular as a
+whole
+>> wonderful yeah so I I am very excited to
+learn about this because you just had a
+big release you just launched V21 and I
+saw as some of the leadup to this I saw
+questions from folks like Mark Texon
+who's here in the chat right now. I saw
+the official Angular account asking and
+some of the questions that were being
+asked were like what do you want to see
+like what features do you want going out
+to the dev community and one of the
+loudest answers that I saw and most
+common answers was Angular signal forms.
+So, I've talked to a couple folks on the
+team, Jessica, Janick, I've talked to
+Mark, and we've covered signals. We've
+gone over Angular in different places.
+If you want to see that, you can go back
+to uh previous episodes of Learn with
+Jason on Code TV and find a whole bunch
+of content about Angular. But, we've
+never really dug into forms, and I don't
+actually know what is meant by a signal
+form. So, maybe just get us out of the
+gate. What's the elevator pitch for a
+signal form in in Angular?
+>> The way I've started to think about form
+system in general is it's an kind of an
+interaction pattern that you're offering
+the user. Users have a lot of
+expectations on when they see inputs on
+a screen, how those are going to behave
+as they start typing in them, when
+they're going to get errors, what it's
+going to do if one of the inputs is
+disabled. And so in that sense the form
+system in angular is really a way of
+creating the state to drive a form UI
+and state of course is the domain of
+signals right that's you know why we we
+added signals to angular is to better
+track and and update the UI in response
+to state changes. So you can think of
+the signal form system as a wrapper
+around your data, the data you actually
+want the user to edit that creates all
+of the form state and keeps it updated
+as you know things validate and so
+forth. We actually kind of knew when we
+were making the decision to do signals
+in Angular, we were looking at kind of
+replacing zone.js with something and
+signals was one option on the table.
+There were a few others.
+>> Um but forms was actually one of the
+main drivers of that decision. So we
+even knew back then that we wanted to do
+a signal form system if we created a
+signal reactivity system in the
+framework.
+>> Maybe just a quick recap. A signal is a
+concept that we've been seeing pop up.
+Um I think it was what was it? Knockout
+was the first one to to really was it
+was that right that it kind of was the
+first to popularize it in JS. Yeah.
+>> And then we saw um you know different
+types of signals um things like NGRX was
+one of the things that we saw that had
+signals in it. Right. And then we've
+like SolidJS has really made uh made
+signals come back into the the
+mainstream thought. We've seen signals
+get introduced into just about every
+popular framework now. And I might be
+getting a couple things a little bit out
+of order there in my in my [laughter]
+my thinking. But um
+>> you're thinking of RxJS which is the
+like observable library which is kind of
+a different way of managing state. even
+that has this thing called behavior
+subject which is actually kind of a
+signal in disguise
+>> and and so the idea of a signal I'm
+going to let you take this because I
+feel like I'm going to put my foot in my
+mouth if I try to highle this.
+>> So a signal is kind of a way to box up a
+value. So if you think about a variable
+in the language, right, it's a
+container. You can put a value inside of
+it, whether it's a boolean or some
+complex object and you can read it from
+a function and get the current value of
+that variable. A signal is kind of
+behaves the same way. It's a box that
+you can put a value in. You can read,
+you know, open that box and look inside
+and read it. What makes a signal special
+is the place where you read it. the kind
+of function you're reading it from or
+that you know the template if you're
+inside of the UI
+>> is able to understand that you've read
+that signal from that context
+>> and so you in addition to getting the
+value you get this extra piece of
+information that you now depend on that
+value
+>> and that's very useful for a UI because
+if you have a text binding somewhere
+where you say I want the value of this
+text binding to match what's in this
+signal then the framework can understand
+oh there's a dependency between these
+things and when the signal updates I
+need to go and resolve the UI and get it
+back in sync with what that value is.
+Practically what that ends up meaning is
+if I have a value that's stored like say
+a number and elsewhere on the page in
+the UI I have things that are derived
+from that number you know like I say I
+want one ticket and then there's a price
+and I can say you know one ticket two
+ticket three ticket if I update the
+number of tickets that I want I can then
+derive a new subtotal based on how many
+tickets and times the current price and
+I don't have to do something like um
+Because historically what you would end
+up doing is you would have like a value
+up here and then every component would
+need that value passed in as a prop and
+then every time you change a value you
+have to rerender the entire component.
+Every component in the tree even if it
+doesn't actually use that value and it's
+just passing it through which you know
+there's a lot of arguments for that's
+super clear. It's really easy to track
+where things go. But it also has a lot
+of waste where you're rerendering a lot
+of things and that can cause a ton of
+complexity when you've got a lot of
+components that depend on different
+things and you don't necessarily want to
+blow away all the state of this
+component just because it passes a value
+through. So signals allow you to
+basically you you get to shortcut it.
+The the signals only cause things to
+update where they are actually used
+without necessarily requiring a full
+rerender. Is that correct?
+>> Exactly. Yeah. Memoization is a kind of
+a key part of how signals work. Um, so
+what you're describing of having a a
+quantity and a price and then like being
+able to compute the cost from that, we
+call computed signals where you say that
+there's a concept called cost which is
+created by just writing a function,
+right? Like quantity times price. But
+because signals track dependencies, we
+now know that oh when either quantity or
+price updates, the cost has to throw
+away the stale value and recomputee. And
+anything that doesn't depend on quantity
+or price doesn't have to recomputee,
+doesn't have to rerender.
+>> Right?
+>> So you can think about signals as as
+kind of optimizing the diffing when
+things change based on specific data
+rather than kind of running the render
+functions and then diffing the you know
+virtual DOM of the output.
+>> Yeah. And I think that what really
+starts to to make this shine as a
+concept is when you start thinking about
+the fact that like even in this this
+ticket scenario, you've got multiple
+different tickets. You've got multiple
+different quantities. You've got whether
+or not they're still in stock. You've
+got things like maybe timers on how long
+we'll hold the tickets for you. Each of
+those things is an independent piece of
+state that needs to affect the things
+around it. And if you don't have
+something like signals, you are either
+manually managing all of this stuff,
+which is definitely doable. I mean,
+we've done it in the past and and we
+could do it today, but it ends up being
+an extremely like finicky process. You
+have to know where all these things are
+connected. you have to manually update
+it every time it changes or you end up
+in um kind of the the classic prop style
+where you have to rerender the entire
+page anytime any piece of data is
+changed to to make sure you're deriving
+correct UI from this tople state. So
+signals are are a great way and I you
+know we've seen them in action elsewhere
+on the show to show that you can you can
+short circuit that part. you don't have
+to rerender everything and it helps us
+avoid a lot of like like use effect and
+react which react has also done some
+work to improve this but I think use
+effect is the classic example of like
+how much this hurts when you're
+rerendering everything every time a
+value changes [laughter]
+so in forms specifically though I feel
+like it's interesting to me that like
+there were signals right and then as a
+completely separate feature signal forms
+what is it about forms that made them
+not just like any other part of of the
+UI where you could just say okay well we
+have signals in Angular let's just use
+them now
+>> I I think I guess there are two things
+one is you know angular has an existing
+form system and depending on your
+perspective it has two existing form
+systems and they really represent kind
+of two different ways of structuring the
+state and values of a form we have both
+template driven where you're kind of
+pushing a lot of the logic putting the
+business logic actually inside the
+template and that has pros and cons. And
+then there were these things called
+reactive forms which was kind of using
+more RxJS model driven forms. Um
+reactive in the sense of observables,
+not necessarily signals. Neither of
+these things plugandplay very well with
+signals because they were designed
+obviously before Angular had signals as
+an option. So either way, we knew we
+needed to kind of upgrade the form
+system and allow you to bring signals
+into the mix. Uh, and there have been,
+you know, these systems are like eight
+years old at this point. There's a lot
+of stuff that's happened in HTML. Plus,
+there's, you know, there's a huge debate
+in the Angular community of like should
+you use reactive forms or template
+driven forms. And so we wanted to kind
+of resolve that once and for all by
+bringing the best of both worlds into a
+new form system that everyone can use
+that depends on signals.
+>> One question that isn't intended to be a
+gotcha but is is like the hard question
+to ask. If you've got these previous two
+ways of approaching forms and you've
+introduced a third, does that mean that
+you're phasing out the other ways or is
+it further broadening how somebody could
+approach forms in Angular? Oh, we're
+we're very open about the fact that we
+would like to replace the existing
+systems eventually.
+>> Okay. So, it's not it's not like an
+active deprecation, but you're going to
+move all suggestions that way.
+>> Yes. Yeah. This is intended to
+eventually become the like the one one
+true form solution.
+>> Can I ask a a maintainer question?
+>> Yeah. So you're trying to you like you
+see something that you see as being a a
+clearly better solution than what has
+been done in the past. But Angular is
+used by tens of thousands if not more
+developers across the world. All of whom
+are varying levels of you know legacy
+systems or brand new systems. Some of
+them are willing to upgrade the whole
+thing today because V21 just came out.
+And some of them are still on, I don't
+know, V2 because that's what they that's
+what they shipped back when it first
+came out, right? How do you approach
+behavioral change when you've got such a
+a massive and and varied user base?
+>> It's a challenge and I think actually
+that's one of Angular's differentiating
+factors as a framework out there. We
+spend a lot of time thinking about kind
+of how we can introduce these new things
+like bring you signals, bring new signal
+forms, uh bring you a new animations
+package for example and still maintain
+that backwards compatibility and not
+leave kind of existing code bases that
+are on you know v15, v14 etc like
+stranded. So signal forms is new, but it
+also has a lot of thought put into it on
+how that upgrade path would work if
+someone did want to kind of migrate from
+one system to the other. So there's an
+whole interop layer for it where you can
+kind of take your existing form and
+start migrating it to signal forms one
+piece at a time. So we think about
+compatibility in that way. Then we have
+our migration tooling in the CLI where
+as much as possible we give you kind of
+just run a command to update from one
+thing to another. Um for example,
+Angular used to have this concept called
+ng modules that was central to how you
+structured component templates. It was
+built for reasons at a time when the
+world kind of looked like it was going
+in a certain direction. We introduced
+standalone components which is kind of a
+much more streamlined version of how you
+write template dependencies. right?
+>> Uh there's an upgrade command you run
+that can take your entire application
+and convert it from ngm modules to
+standalone and it will get most of it
+right and where it can't figure things
+out. It will leave comments for you like
+hey you'll have to fix this piece. Um we
+still also have not deprecated ng
+modules because we know there are
+applications out there that are still
+kind of built this way um and still
+using it and haven't had the chance to
+upgrade over. So, uh, that's kind of the
+third piece is we we do put a lot of
+effort into maintaining the kind of
+older ways of doing things as long as
+there are customers that are still
+getting value from it.
+>> And is that something that you see a
+world where, you know, maybe in V2, you
+start putting in notices that are like,
+hey, you're doing it the old way and you
+should maybe consider this new way. Or
+or do you just kind of say like, you
+know what, if somebody wants to do it,
+we'll let them do it for as long as they
+want.
+>> More the latter. uh we tend to be more
+customer driven when it comes to what to
+deprecate um where we're really looking
+at our community to tell us like when
+are you done with this thing, right?
+When do you want to move on and start
+discouraging people from actually using
+this path?
+>> How do you determine that? Like do you
+get anonymous reporting that says when
+people use features or anything like
+that? Yeah, we have some of those
+channels um where we can look at HTTP
+archive and look at Angular applications
+that are deployed and see what features
+they're using. We have our developer
+survey that we run every year where
+we're actually just asking our
+community, hey, what's important to you?
+Um and we can ask those kinds of
+questions there.
+>> So for somebody who is is looking to use
+these today, it sounds like, you know, I
+know that there's probably documentation
+on how to get started. It's still
+experimental.
+>> Yes. And so what what are the the
+caveats around it being experimental?
+Are there any things that people should
+keep in mind as they start adopting
+this?
+>> Yeah. So so we have two categorizations
+of APIs that are of the like beta
+category. Uh experimental and developer
+preview experimental thing and and and
+they kind of have the same same caveat
+with regards to these are APIs that
+could change from release to release.
+Right? Normally Angular says if we
+release an API as stable we give you
+kind of if we are going to make a
+breaking change to it we give you two
+major versions to migrate before we you
+know for example from the time we
+deprecate something to the time we've
+remove it um or we have some kind of
+auto migration for you that will make
+sure that as you update the code it it
+kind of follows along that is not true
+for experimental and developer preview
+APIs we're explicitly kind of carving
+out hey we're still working on this we
+can change it kind of go do production
+at your own risk. If you want to use
+this API in production, it might work
+for you, but be aware that you might pay
+some extra cost if we do decide to make
+behavioral changes.
+>> Yeah. When you when you upgrade to the
+next version, you might have to make
+some tweaks to the code to to keep up
+with whatever you've been and I and I
+guess that's like a great way to to
+signal too that this is new and you
+don't necessarily want to commit to an
+API if once it gets out into the world
+you realize, ah, no, we missed this one
+thing. And if you if you're stuck
+supporting it forever, then it's really
+really hard
+>> to like correct those sorts of things.
+And we've seen this, you know, I think
+there's like there's stuff on the web
+platform that's just we you don't break
+backward compatibility on the web,
+right? So you just you just kind of live
+with it the way that it is. But it's
+nice when you're a framework author
+because you can be explicit and say,
+"Hey, we're we're learning. So, here's
+our signal to you that we're still
+learning on this one and we want your
+feedback, but also your feedback means
+you may have to tweak your own code to
+like keep up with our evolution as we
+learn more about how this works.
+>> Absolutely right. Like no, no API
+survives first contact with developers
+really.
+>> Um, and so we used to be very
+conservative about releasing new
+features. when we rolled it out right
+the moment it became public API we had
+this commitment to two two major
+versions which is roughly one year for
+us of stability we were missing out on
+the the chance to get that kind of early
+feedback and involve developers in the
+actual design process and so that's
+really what experimental is for us is
+hey this is not fully baked yet but
+we're letting you onto it early because
+we really value that kind of on the
+ground feedback about how it's working
+for real use cases
+>> then we have developer preview view
+which is more of like a release extended
+release candidate like we think this is
+feature complete this could ship a
+stable but we want to give developers
+one more chance to kind of bang on it
+and see what breaks.
+>> Got it. Got it. Got it. I mean this is
+wonderful. I am really excited to see
+how the Angular team has just been it it
+just seems like y'all have been pushing
+hard to to really modernize to add a lot
+of quality of life improvements. Um you
+know it it a lot of cool things are
+coming out of Angular right now. And so
+for anybody who wants to check it out,
+you should head over to angular.dev. You
+can find Alex on Twitter at signal Alex.
+It's salx
+is where you're going to find him
+online. Alex, thank you so much for
+spending some time with us today. For
+anybody who wants to see more of this,
+we're going to be pair programming on
+Learn with Jason. You can head over to
+codetv.dev and look for Learn with Jason
+to find the episode. This has been the
+WebDev podcast. You can find us on your
+favorite podcaster if you want to uh
+like, subscribe, share it with your
+friends. That means a lot to us here on
+the show. Thank you so much, Alex, for
+hanging out.
+>> Thank you very much for having me.
+>> All right, we will see you all next
+time.

@@ -1,0 +1,405 @@
+Hi, last week happened pretty big thing
+in Angular community because the branch
+with experimental signal forms has been
+merged into Angular master branch which
+means that already now we can play with
+signal forms and see them in action. By
+no mean it is a production ready code.
+No, it is still an experiment. It is
+still a draft if you want. The API might
+significantly change before signal forms
+get stable. But already now we can see
+how they conceptually will look like and
+I will be happy to guide you through.
+From this video, you will learn how to
+create a basic signal form, how to apply
+validators to certain form controls, how
+to configure and resolve error messages
+for certain validation errors, how to
+apply validator based on the value from
+some other form control, and of course,
+how to submit the form. My name is
+Metramenski and besides creating
+advanced Angular content for free for
+YouTube, I'm also an author of one of
+the most indepth courses about Angular
+forms, which I definitely update with
+signal forms once they get stable. But
+now, let's get started and see signal
+forms in action.
+Before we start exploring signal forms,
+just make sure that your project is
+updated to at least this version that I
+have. And once the project is updated,
+we can continue. So here I've got a very
+simple component that contains a simple
+web form and currently no Angular forms
+magic is applied. Besides that, the
+component class has a simple signal and
+the value of this signal is a user
+object that we will be binding to the
+form. So let's name it as a data model.
+If you remember in reactive forms to
+create a form we had to manually
+describe its structure using form group
+and form controls etc. And then we
+mapped values from our model with the
+form structure we created. And with
+signal forms it is much easier because
+you can construct a form directly from
+the model. For that you have to use the
+brand new dedicated function called form
+and simply provide your model signal as
+an argument. And this is pretty much
+everything you have to do to read the
+state of the created form. You simply
+have to unwrap this sign up form signal
+and there you will see already familiar
+API like if the form is dirty meaning if
+the form value has changed if it is
+disabled or if there are any errors etc.
+If you want to read the state of a
+certain form control, then you don't
+need to unwrap the form signal itself,
+but instead using the simple dot
+notation, you can reference the control
+unit and unwrap this control signal to
+read or manipulate its state. You can
+even change the control value by
+accessing its value signal. And like for
+any other signal, you can change the
+value via set or update methods. And by
+the way, changing the value of the form
+control will be synchronized with your
+model signal. Okay. However, despite I
+have changed value of a certain control,
+it is not reflected on the UI side. And
+this is because we didn't connect our
+model with the particular native control
+yet. So let's see how we can do that.
+The binding of the form control model
+with the native form control happens
+with a brand new directive called
+control that you obviously have to
+import in your component before using
+it. Once you have done so, you can apply
+this directive to any native form
+control like input, select etc. and bind
+the corresponding form control from the
+model with this native control. And once
+you have done that, you can see that the
+form control model value is in sync with
+your native control. And obviously we
+have to connect all other controls. So
+let's do it right now. Just a piece of
+post-production magic. And I'm back with
+the web form that is fully connected
+with my signal form model. And because
+of that, let's go and remove the control
+that modifies the value of the first
+name form control because I don't need
+it anymore. And now let's talk about
+pretty interesting part namely
+validations. In the terminology of
+signal forms things like validations
+enabling or disabling the control etc.
+It is referred as a field logic and this
+logic is defined in a special callback
+function also known as a schema
+function. And to make a certain control
+required, you need to import a dedicated
+validator function and provide the path
+to the desired control you want to
+disable as an argument. And this path I
+mentioned you receive as a first
+argument for this schema function. And
+you can eventually use it to specify the
+particular control. And if you want to
+apply something like min length
+validator for instance, you can simply
+import a dedicated validator function
+then you provide a path to certain
+control and then as a next argument you
+specify the minimum length and then you
+define the validation rules for other
+form controls in the same manner. So
+let's adjust the path here. And also I
+can use the builtin email validator to
+validate my email form control and make
+sure that the valid email address is
+used there. And also let's make the
+email form control also required because
+later in this video I'm going to show
+you another couple of cool things. And
+namely I will show you how to reduce
+amount of applications right here. And
+also we will make the email form control
+required only when this checkbox is
+checked. So continue watching. As you
+can see my validation works just fine.
+But it would be much better if we could
+show the user a certain message that
+explains the exact reason why the field
+is invalid. And it would be also great
+to disable the submit button while the
+form is invalid. So let's do that.
+Disabling the button is very easy. We
+just have to apply the disabled
+attribute whenever the form is not
+valid. As easy as that. And now if I
+save this change, you can see that
+everything works. I could make the
+disabling styles more obvious. But okay,
+doesn't matter. It works. Now let's go
+to the error handling for a certain form
+control. Generally speaking, what you
+have to do here is just reading the
+errors signal of a certain form control
+and walk through this array of errors
+and display the corresponding error
+messages. If you want to show message
+for a particular validator error, uh you
+have multiple options to achieve that.
+You can either use something like if
+statement and then depending on which
+validator fails you can show certain
+message if it is a required validator
+fails then you can show the message like
+this field is required or anything like
+that you could use a switch case for
+that. So it's up to you or alternatively
+you can define the error message
+directly inside the validator function.
+So for that just go to for example let's
+go to the required validator and there
+you can provide additionally a
+configuration object that has a message
+key where you as a value can provide the
+error message for this particular
+validator. And after that in your
+template, you can basically go and
+remove the if statement because we don't
+need it anymore. And you can just go
+through the loop of errors and render
+the error message that you can read from
+the corresponding error object. Right?
+As easy as that. And obviously we would
+need to follow the same pattern also for
+other validators and for other form
+controls. So let's go and do that. So
+here I'm going to update the min length
+validator and provide a certain message
+there and also the remaining email
+validator
+where I also add this configuration
+object and provide a message that I want
+to display for the user and obviously we
+should not forget about remaining form
+controls and show errors also for them.
+So I simply duplicate this piece of code
+namely this for loop under the last name
+form control and also I have to do the
+same for email input as well. And you
+can see that error messages are rendered
+for all of them. And by the way, if you
+are curious how to get rid of this
+boiler plate related to validation error
+messages from your template in my video
+course about Angular forms, I also cover
+error management and provide you a
+scalable and clean, highly maintainable
+architecture that can be adjusted to
+every project. However, I will be happy
+to show you in this video how to reduce
+the amount of boiler plate inside the
+component class. Namely, I will show you
+how to reuse some validators for certain
+controls without duplicating stuff too
+much. So, let's get started. For that,
+we have to use a new concept that comes
+with signal forms and it is called
+schema.
+schema allows you to let's say reuse
+certain field logic or extract the field
+logic and apply it to other form
+controls. For example, let's create my
+first form schema. And let's name it
+name schema, but you can name it
+whatever makes sense to you, of course.
+And here we can define type of my schema
+as a string. And to create the schema
+itself, we have to use a dedicated
+function called
+schema of course. And as an argument it
+takes a callback function which receives
+again the path and here again we can
+define certain validators that I want to
+let's say reuse for example it's going
+to be the required validator and also I
+want to use here the which one I used
+min length validator right so let's
+apply it here as well and obviously The
+error message should be there. And now I
+can go back and instead of duplicating
+this stuff, I just use the helper
+function called apply. And there I
+define the form control. And for this
+control, I'm going to apply my new name
+schema. As easy as that. and it will
+apply the required and min length
+validator from the schema to that form
+controls. So now you don't need to
+duplicate those validators and you can
+simply remove them and you can see that
+everything remains working which is
+really great. Now, what about applying
+validators conditionally?
+As I promised, I wanted to show you how
+to apply the required validator to our
+email field only when the checkbox is
+checked. And to do that, we have to
+extend our email validator
+configuration. And next to the message
+key, we have to additionally define a
+key when. And here we have to define a
+function that takes as an argument a
+certain context. And from this context
+you can destructure certain helper
+functions. For example, value of that
+will allow you to get value of a certain
+control you are interested in. I'm going
+to use this value of helper to read the
+value for a certain path for a certain
+form control. And then we just check if
+the value of the notify by email form
+control is equal to true. Meaning if it
+is checked then the required validator
+will be applied otherwise obviously not.
+And indeed as you can see the validation
+error is gone for the email field right
+now but when I take notify by email
+checkbox the required validator is back
+again. Another important aspect of
+basically any web form is the form
+submission. So let's take a look how it
+is implemented in signal forms because
+it is quite different from what we
+currently have in reactive and templated
+driven forms. Signal forms will be
+providing us with multiple form
+submission statuses like if it is
+submitted or is being submitted etc. And
+also it will allow us to handle errors
+that might happen on the server side
+during the form submission. And if we
+want we can bind this server error to a
+particular field in our form. And to
+simplify the tracking of the form
+submission statuses and all these
+processes, a new helper function was
+introduced and it is called submit. So
+this function takes two arguments. The
+first one is the form or the form fields
+you want to submit. And the second
+argument is a function where you have to
+run a certain asynchronous logic that
+should happen when user click submit
+button. And this function should return
+a promise of a type void or undefined if
+the form has been successfully saved on
+the server or alternatively the promise
+can be resolved with the array of errors
+if something went wrong on the backend
+side. So in my case, I could call a
+certain API to register or save my user
+and the value of the request body will
+be stringified form value. And of course
+you can use HTTP client instead of
+fetch. I do that just for demo purposes.
+Do not bother myself with configuring
+HTTP client, injecting and converting
+observables to promise. Anyway, then if
+you want, you can reset your form,
+right? Calling the reset method.
+However, please keep in mind that it
+only resets their field statuses like
+touch, dirty, etc., but it doesn't reset
+their values. But if you need to change
+form values after the submission, then
+consider changing the model you used to
+build this form. All right? And then if
+everything is all right, we simply
+return undefined right here. And this is
+going to be my success scenario. So when
+everything goes okay and now let's
+handle potential error use case and for
+that I'm going to wrap my logic in a try
+catch block. And inside a catch block I
+will handle the exception. And here I'm
+simply going to return an array of error
+objects. And this object will have a key
+kind that describes the type of the
+error. So let's say that it is a server
+error in my case. And then you can also
+provide a key message which you can get
+from the
+error or you can have your own message.
+It's up to you completely and basically
+you can leave it as it is if it this
+error doesn't belong to a certain form
+control right or you can bind this error
+to a specific form control and you can
+do that by using key called field and
+there you provide the path to the form
+control this server error belongs to
+just For demo purposes, let's imagine
+that this is something related to an
+email, right? Why not? And now let's
+test our form submission. And first of
+all, let's see if the submission status
+is being properly handled. And for that,
+I'm going to go to my submit button. And
+here I'm going to simply disable it
+while the form is being submitted.
+Right. And now let's go and try to fill
+out the form. Enter some test values and
+then let's try to submit it. And as you
+can see while the async operation was
+performed the button was disabled for
+for a while which proves that everything
+works. And now let's also test our error
+scenario. And for that let's go to our
+onsubmit handler. And let's imagine that
+during the user processing certain error
+happened and let's provide maybe some
+message we couldn't save the user with
+this email anything like that doesn't
+really matter. So now I'm going to save
+this change again fill out the form and
+let's try to submit it. And once we did
+it, we got an error and we got the error
+message right under the email from
+control exactly as we wanted. So this is
+the state of signal forms right now. In
+my opinion, it looks pretty solid and
+promising. But what do you think? Let me
+know in the comment section. Of course,
+a lot of things remain unclear. for
+example, how it will work for
+dynamically created forms, etc. But as
+soon as the new information appears, I
+will be sharing it with you on my
+YouTube channel. So, it's a great time
+to subscribe right now to not miss my
+future videos. Besides that, I help
+companies with uh massive and complex
+Angular forms, helping them to make
+forms more maintainable and scalable.
+And of course be prepared for the
+smoother transition to signal forms. So
+if you have such a case, feel free to
+contact me. Otherwise, thanks for
+watching until the end. I wish you
+productive week ahead. Stay safe and see
+you in the next videos about signal
+angular forms. Bye.
