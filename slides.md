@@ -26,7 +26,7 @@ months in it. This is what it is, how it differs from what you know, and what it
 ---
 layout: content
 eyebrow: Orientation
-heading: What a Signal Form actually is
+heading: What are Signal Forms?
 split: 1.15fr 0.85fr
 ---
 
