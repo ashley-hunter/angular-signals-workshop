@@ -116,21 +116,21 @@ heading: Why it has to be that long
 ---
 
 <div class="cards" style="--cols:3">
-  <div class="card">
+  <div class="card" v-click="1">
     <div class="label">THE SUBSCRIPTION</div>
     <p>Validation is attached at construction, so anything conditional has to be pushed in later, from a stream.</p>
   </div>
-  <div class="card">
+  <div class="card" v-click="2">
     <div class="label">THE TEARDOWN</div>
     <p><code>takeUntilDestroyed</code>, because you have created a lifetime that has to be managed.</p>
   </div>
-  <div class="card">
+  <div class="card" v-click="3">
     <div class="label">THE REVALIDATE CALL</div>
     <p><code>updateValueAndValidity()</code>. Leave it out and the validator attaches but nothing re-runs, and QA finds it in three weeks.</p>
   </div>
 </div>
 
-<p class="lead" style="margin-top:48px;max-width:1560px">
+<p class="lead" style="margin-top:48px;max-width:1560px" v-click="4">
 None of that is about your feature. All of it is bookkeeping between two copies of the same state.
 </p>
 
@@ -156,19 +156,19 @@ Component state lives in signals. Form state lives in a parallel tree of control
 </p>
 
 <div class="cards" style="--cols:2">
-  <div class="card">
+  <div class="card" v-click="1">
     <div class="label">READING OUT</div>
     <p><code>valueChanges</code> into a signal. A subscription and a teardown per dependency.</p>
   </div>
-  <div class="card">
+  <div class="card" v-click="2">
     <div class="label">WRITING BACK</div>
     <p><code>patchValue</code>, and the <code>{{ '{' }} emitEvent: false {{ '}' }}</code> you add after the first infinite loop.</p>
   </div>
-  <div class="card">
+  <div class="card" v-click="3">
     <div class="label">VALIDATION IS FROZEN</div>
     <p>Rules attach at construction, so anything conditional becomes imperative setter calls.</p>
   </div>
-  <div class="card">
+  <div class="card" v-click="4">
     <div class="label">SUBMIT</div>
     <p>Touch-all, check validity, loading flag, map server errors back onto controls. Rewritten per feature.</p>
   </div>
@@ -191,10 +191,10 @@ eyebrow: 'The part nobody mentions'
 
 <p style="font-family:var(--font-display);font-size:64px;font-weight:500;letter-spacing:-0.03em;line-height:1.25;max-width:1560px">
 You would assume forms were the last part of Angular to get signals.<br>
-<span>They are the reason Angular <em>has</em> signals.</span>
+<span v-click="1">They are the reason Angular <em>has</em> signals.</span>
 </p>
 
-<div>
+<div v-click="2">
 
 <p class="lead" style="font-size:30px;margin-top:48px;max-width:1500px;font-style:italic">
 "We were looking at replacing zone.js with something and signals was one option on the table. There were a few others. But forms was actually one of the main drivers of that decision. So we even knew back then that we wanted to do a signal form system if we created a signal reactivity system in the framework."
@@ -222,7 +222,7 @@ eyebrow: The one idea
 Signal Forms delete the second copy of your state.
 </h2>
 
-<p class="lead" style="font-size:36px;margin-top:44px;max-width:1450px">
+<p class="lead" style="font-size:36px;margin-top:44px;max-width:1450px" v-click="1">
 Your model signal <em>is</em> the form. Structure, validation, touched, errors and submission are all derived from it.
 </p>
 
@@ -278,11 +278,11 @@ f = form(this.model);
     <div class="label">THE MODEL</div>
     <p>A writable signal of plain data. It is yours, and <code>form()</code> does not copy it.</p>
   </div>
-  <div>
+  <div v-click="1">
     <div class="label">THE FIELD TREE</div>
     <p>Derived from the data's shape, typed end to end. No control classes to declare.</p>
   </div>
-  <div>
+  <div v-click="2">
     <div class="label">THE BINDING</div>
     <p>One directive: value, state, validation, blur-to-touched.</p>
   </div>
@@ -307,7 +307,7 @@ heading: 'What form() actually hands you'
 
 <div class="split" style="--split:1.05fr 0.95fr">
 
-```ts {all|1-4|6|7|8|10-11}
+```ts {all|1-4|6|7-8|10-11}
 model = signal({
   email: '',
   addresses: [{ street: '', postcode: '' }],
@@ -322,10 +322,11 @@ f.addresses().value()           // the whole array
 ```
 
 <div class="notes-col">
-  <p>The tree mirrors the shape of your data. Add a property to the model and the field exists; there is nothing to declare.</p>
-  <p><strong>Dots navigate. Calling reads.</strong> <code>f.email</code> is an address you can pass around and bind to. <code>f.email()</code> is the state at that address, right now.</p>
-  <p>Arrays are indexable and iterable, but they are not real arrays - there is no <code>.map</code> or <code>.filter</code>, only <code>[i]</code>, <code>length</code> and <code>for..of</code>.</p>
-  <p class="dim">Nodes are materialised lazily, so a subtree nobody touches never allocates.</p>
+  <p v-click="1">The tree mirrors the shape of your data. Add a property to the model and the field exists; there is nothing to declare.</p>
+  <p v-click="2"><code>form()</code> returns a <code>FieldTree</code> of the same shape. No control classes, no builder.</p>
+  <p v-click="3"><strong>Dots navigate. Calling reads.</strong> <code>f.email</code> is an address you can pass around and bind to. <code>f.email()</code> is the state at that address, right now.</p>
+  <p v-click="4">Arrays are indexable and iterable, but they are not real arrays - there is no <code>.map</code> or <code>.filter</code>, only <code>[i]</code>, <code>length</code> and <code>for..of</code>.</p>
+  <p class="dim" v-click="4">Nodes are materialised lazily, so a subtree nobody touches never allocates.</p>
 </div>
 
 </div>
@@ -363,10 +364,10 @@ form(this.model, (p) => {      // p is a SchemaPath
 ```
 
 <div class="notes-col">
-  <p><code>p</code> is not a field. It is a <em>description of a location</em> in the tree - which is why one rule can cover an array item that does not exist yet.</p>
-  <p>It has no state and is not callable. <code>p.email()</code> is a type error, and so is <code>p.addresses[0]</code>; you reach items with <code>applyEach</code>, not by index.</p>
-  <p>To read across the form, ask the context: <code>valueOf(path)</code> for a value, <code>stateOf(path)</code> for state.</p>
-  <p class="dim">A path only works inside the schema that owns it. Close over an outer <code>p</code> from inside an applied sub-schema and you get NG1908 at runtime.</p>
+  <p v-click="1"><code>p</code> is not a field. It is a <em>description of a location</em> in the tree - which is why one rule can cover an array item that does not exist yet.</p>
+  <p v-click="2">It has no state and is not callable. <code>p.email()</code> is a type error, and so is <code>p.addresses[0]</code>; you reach items with <code>applyEach</code>, not by index.</p>
+  <p v-click="3">To read across the form, ask the context: <code>valueOf(path)</code> for a value, <code>stateOf(path)</code> for state.</p>
+  <p class="dim" v-click="4">A path only works inside the schema that owns it. Close over an outer <code>p</code> from inside an applied sub-schema and you get NG1908 at runtime.</p>
 </div>
 
 </div>
@@ -392,19 +393,19 @@ The schema function executes one time, to build a tree of logic. The functions y
 </p>
 
 <div class="cards" style="--cols:2">
-  <div class="card">
+  <div class="card" v-click="1">
     <div class="label">SO AN <code style="color:var(--purple)">if</code> DOESN'T WORK</div>
     <p>An <code>if</code> in the schema is evaluated once at construction and frozen. Use <code>applyWhen</code>.</p>
   </div>
-  <div class="card">
+  <div class="card" v-click="2">
     <div class="label">SO THERE IS NO <code style="color:var(--purple)">setValidators</code></div>
     <p>Rules never change. Their <code>when</code> does. Mutation is not an API because it needs none.</p>
   </div>
-  <div class="card">
+  <div class="card" v-click="3">
     <div class="label">SO <code style="color:var(--purple)">valueOf</code> EXISTS</div>
     <p>Inside a rule you are in a reactive context, so reading another field tracks it.</p>
   </div>
-  <div class="card">
+  <div class="card" v-click="4">
     <div class="label">SO PATHS ARE SCOPED</div>
     <p>Using a path outside its own schema throws NG1908. The tree is built, then sealed.</p>
   </div>
@@ -496,7 +497,7 @@ required(p.email, {
 ```
 ````
 
-<p class="lead" style="margin-top:48px;max-width:1560px">
+<p class="lead" style="margin-top:48px;max-width:1560px" v-click="2">
 No subscription, because nothing needs pushing. No teardown, because nothing was created. No revalidate call, because <code>when</code> is just a <code>computed</code>.
 </p>
 
@@ -532,11 +533,11 @@ pattern(p.postcode, UK_POSTCODE);
 ```
 
 <div class="notes-col">
-  <p>The message belongs to the rule, not the template.</p>
-  <p>A plain bound, when that is all you need.</p>
-  <p>Or a <em>reactive</em> bound. It recomputes like a <code>computed</code>, so the limit can depend on another field.</p>
-  <p>A regex. Note this one is not mirrored to the DOM - Signal Forms allows several, the attribute allows one.</p>
-  <p class="dim">Careful: <code>required()</code> passes on an empty array - use <code>minLength(p.items, 1)</code>. And every other validator skips entirely when the value is empty, so <code>required</code> and <code>minLength</code> are both needed.</p>
+  <p v-click="1">The message belongs to the rule, not the template.</p>
+  <p v-click="2">A plain bound, when that is all you need.</p>
+  <p v-click="3">Or a <em>reactive</em> bound. It recomputes like a <code>computed</code>, so the limit can depend on another field.</p>
+  <p v-click="4">A regex. Note this one is not mirrored to the DOM - Signal Forms allows several, the attribute allows one.</p>
+  <p class="dim" v-click="5">Careful: <code>required()</code> passes on an empty array - use <code>minLength(p.items, 1)</code>. And every other validator skips entirely when the value is empty, so <code>required</code> and <code>minLength</code> are both needed.</p>
 </div>
 
 </div>
@@ -572,13 +573,13 @@ validate(p.confirm, ({ value, valueOf, stateOf }) => {
 ```
 
 <div class="notes-col">
-  <p><code>valueOf</code> reads another field's value; <code>stateOf</code> reads its state. Gate on <code>touched()</code> so you are not shouting "passwords differ" at someone halfway through typing the first one.</p>
-  <p>A validator cannot put an error on a <em>different</em> field. That is a compile error, and it is <code>validateTree</code>'s job.</p>
+  <p v-click="1"><code>valueOf</code> reads another field's value; <code>stateOf</code> reads its state. Gate on <code>touched()</code> so you are not shouting "passwords differ" at someone halfway through typing the first one.</p>
+  <p v-click="2">A validator cannot put an error on a <em>different</em> field. That is a compile error, and it is <code>validateTree</code>'s job.</p>
 </div>
 
 </div>
 
-<div>
+<div v-click="3">
 
 ```ts {all|4}
 // one validator, errors aimed at descendants
@@ -622,10 +623,10 @@ validateHttp(p.username, {
 ```
 
 <div class="notes-col">
-  <p>Debounce is declared, not piped.</p>
-  <p>The request is a function of the value. It only re-fires when that value changes - and only once the field's own sync rules pass, so you are not hammering the endpoint on obviously broken input.</p>
-  <p>Map the response to errors, or to <code>null</code>. While it is in flight, <code>pending()</code> is true and you have nothing to maintain.</p>
-  <p>Handling failure is not optional - <code>onError</code> is a required key.</p>
+  <p v-click="1">Debounce is declared, not piped.</p>
+  <p v-click="2">The request is a function of the value. It only re-fires when that value changes - and only once the field's own sync rules pass, so you are not hammering the endpoint on obviously broken input.</p>
+  <p v-click="3">Map the response to errors, or to <code>null</code>. While it is in flight, <code>pending()</code> is true and you have nothing to maintain.</p>
+  <p v-click="4">Handling failure is not optional - <code>onError</code> is a required key.</p>
 </div>
 
 </div>
@@ -650,11 +651,11 @@ heading: Zod drops straight in
 form(this.model, (p) => validateStandardSchema(p, userSchema));
 ```
 
-<p class="lead" style="font-size:34px;margin-top:44px;max-width:1500px">
+<p class="lead" style="font-size:34px;margin-top:44px;max-width:1500px" v-click="1">
 Standard Schema, so Zod, Valibot or ArkType. Issues are routed to the exact nested field they came from. Zod is already a dependency of <code>@angular/forms</code>.
 </p>
 
-<p class="lead" style="margin-top:28px;max-width:1500px">
+<p class="lead" style="margin-top:28px;max-width:1500px" v-click="2">
 It validates. It does not transform - so <code>z.coerce</code> and <code>.transform()</code> do not apply. Your model must already be the shape Zod expects.
 </p>
 
@@ -695,9 +696,9 @@ orderForm = form(this.order, (p) => {
 ```
 
 <div class="notes-col">
-  <p>Pull the rules out of the <code>form()</code> call and they become a value: typed, reusable, testable on their own.</p>
-  <p>Mount it at any matching path. <code>applyEach</code> does the same for every item in an array.</p>
-  <p>The same schema, at two different paths. That is the whole argument for schemas being values rather than syntax.</p>
+  <p v-click="1">Pull the rules out of the <code>form()</code> call and they become a value: typed, reusable, testable on their own.</p>
+  <p v-click="2">Mount it at any matching path. <code>applyEach</code> does the same for every item in an array.</p>
+  <p v-click="3">The same schema, at two different paths. That is the whole argument for schemas being values rather than syntax.</p>
 </div>
 
 </div>
@@ -732,10 +733,10 @@ applyWhenValue(p.payment, isBankTransfer, (bank) => {
 ```
 
 <div class="notes-col">
-  <p>The predicate is a TypeScript type guard.</p>
-  <p>So inside the branch, the path has narrowed to <code>CreditCard</code>. No casts, no ceremony.</p>
-  <p>And in the other branch, reaching for a card field is a compile error. Discriminated-union forms that actually type-check.</p>
-  <p class="dim">Honest footnote: this narrows the <em>schema path</em>, not the field tree. In the template a union model still needs a superset with <code>hidden()</code> per variant - which is what the docs recommend anyway, because switching branches loses user input.</p>
+  <p v-click="1">The predicate is a TypeScript type guard.</p>
+  <p v-click="2">So inside the branch, the path has narrowed to <code>CreditCard</code>. No casts, no ceremony.</p>
+  <p v-click="3">And in the other branch, reaching for a card field is a compile error. Discriminated-union forms that actually type-check.</p>
+  <p class="dim" v-click="4">Honest footnote: this narrows the <em>schema path</em>, not the field tree. In the template a union model still needs a superset with <code>hidden()</code> per variant - which is what the docs recommend anyway, because switching branches loses user input.</p>
 </div>
 
 </div>
@@ -802,7 +803,7 @@ export class MyInput implements FormValueControl<string> {
 ```
 ````
 
-<p class="lead" style="margin-top:48px;max-width:1560px">
+<p class="lead" style="margin-top:48px;max-width:1560px" v-click="2">
 That is the whole required contract. <code>errors</code>, <code>disabled</code>, <code>touched</code> and the rest are optional inputs you take only if you render them.
 </p>
 
@@ -838,9 +839,9 @@ f = form(this.model, signupSchema, {
 ::right::
 
 <div class="notes-col">
-  <p>Declare the tool and Angular walks your model to generate a JSON schema for it. Your <code>required()</code> calls become the agent's mandatory arguments.</p>
-  <p>The agent fills the model and triggers your submission. If it fails, it gets <code>errorSummary()</code> back per field, so it can correct itself and retry.</p>
-  <p class="dim">Experimental - the only such API left in the package. Schema inference rejects <code>null</code>, <code>undefined</code> and empty arrays, which fights the model-design advice coming up next.</p>
+  <p v-click="1">Declare the tool and Angular walks your model to generate a JSON schema for it. Your <code>required()</code> calls become the agent's mandatory arguments.</p>
+  <p v-click="2">The agent fills the model and triggers your submission. If it fails, it gets <code>errorSummary()</code> back per field, so it can correct itself and retry.</p>
+  <p class="dim" v-click="3">Experimental - the only such API left in the package. Schema inference rejects <code>null</code>, <code>undefined</code> and empty arrays, which fights the model-design advice coming up next.</p>
 </div>
 
 <!--
@@ -883,15 +884,15 @@ p.address.street  // Property 'street' does not exist
 ```
 
 <div class="notes-col">
-  <p><code>undefined</code> does not mean "empty". It means <em>this field does not exist</em>, so Angular deletes the node.</p>
-  <p>And it is a compile error, not a lint. You cannot attach a single rule to an optional property.</p>
-  <p><code>null</code> is allowed - it is the sanctioned empty for number and date inputs. But a nullable <em>object</em> makes that entire subtree unnavigable.</p>
-  <p class="dim">Also: <code>string | null</code> silently costs you <code>email</code>, <code>pattern</code>, <code>minLength</code> and <code>maxLength</code>. They are declared on <code>string</code>.</p>
+  <p v-click="1"><code>undefined</code> does not mean "empty". It means <em>this field does not exist</em>, so Angular deletes the node.</p>
+  <p v-click="2">And it is a compile error, not a lint. You cannot attach a single rule to an optional property.</p>
+  <p v-click="3"><code>null</code> is allowed - it is the sanctioned empty for number and date inputs. But a nullable <em>object</em> makes that entire subtree unnavigable.</p>
+  <p class="dim" v-click="4">Also: <code>string | null</code> silently costs you <code>email</code>, <code>pattern</code>, <code>minLength</code> and <code>maxLength</code>. They are declared on <code>string</code>.</p>
 </div>
 
 </div>
 
-<p class="lead" style="margin-top:40px;max-width:1560px">
+<p class="lead" style="margin-top:40px;max-width:1560px" v-click="5">
 The rule: <code>''</code> for text, <code>null</code> for numbers and dates, never <code>undefined</code>, never optional. Map to and from your domain model at the edges.
 </p>
 
@@ -921,7 +922,7 @@ hidden(p.spouseName, {
 });
 ```
 
-<div>
+<div v-click="1">
 
 ```html
 @if (!f.spouseName().hidden()) {
@@ -934,15 +935,15 @@ hidden(p.spouseName, {
 </div>
 
 <div class="cards" style="--cols:3;margin-top:44px">
-  <div class="card">
+  <div class="card" v-click="1">
     <div class="label">IT DOES NOT TOUCH THE DOM</div>
     <p>You write the <code>&#64;if</code>. Render it anyway and you get a dev-mode warning.</p>
   </div>
-  <div class="card">
+  <div class="card" v-click="2">
     <div class="label">IT SKIPS VALIDATION</div>
     <p>Hidden, disabled <em>and readonly</em> all skip. A hidden <code>required</code> field will not block submit.</p>
   </div>
-  <div class="card">
+  <div class="card" v-click="3">
     <div class="label">IT KEEPS THE VALUE</div>
     <p><code>f().value()</code> still contains it. It still goes to your server.</p>
   </div>
@@ -988,10 +989,10 @@ f.items().value.update((xs) => [...xs, blank]);
 ```
 
 <div class="notes-col">
-  <p>Track by <em>field identity</em>, not <code>$index</code>. Angular stamps a hidden <code>Symbol</code> on each object so state follows a row across a reorder.</p>
-  <p>Add and remove by replacing the array. There is no <code>push</code>, and <code>f.items</code> has no <code>.map</code> or <code>.filter</code> - only indexing, <code>length</code> and iteration.</p>
-  <p class="dim">Consequences of that hidden Symbol: frozen objects in arrays throw, and <code>structuredClone</code> of your model resets every row's touched and dirty state.</p>
-  <p>Genuinely dynamic shapes have an official pattern - derive the model and the schema from one config array. You surrender some type safety and cast inside each branch.</p>
+  <p v-click="1">Track by <em>field identity</em>, not <code>$index</code>. Angular stamps a hidden <code>Symbol</code> on each object so state follows a row across a reorder.</p>
+  <p v-click="2">Add and remove by replacing the array. There is no <code>push</code>, and <code>f.items</code> has no <code>.map</code> or <code>.filter</code> - only indexing, <code>length</code> and iteration.</p>
+  <p class="dim" v-click="3">Consequences of that hidden Symbol: frozen objects in arrays throw, and <code>structuredClone</code> of your model resets every row's touched and dirty state.</p>
+  <p v-click="4">Genuinely dynamic shapes have an official pattern - derive the model and the schema from one config array. You surrender some type safety and cast inside each branch.</p>
 </div>
 
 </div>
@@ -1024,15 +1025,15 @@ it('requires email when notify is on', () => {
 ```
 
 <div class="notes-col">
-  <p>Build the form in an injection context - that is the only ceremony.</p>
-  <p>Assert by reading a signal.</p>
-  <p>Change the model, assert again. No fixture, no <code>detectChanges</code>, no <code>fakeAsync</code>, no <code>tick()</code>.</p>
-  <p class="dim">Render a component only for what genuinely needs the DOM: binding, typing, custom controls, focus.</p>
+  <p v-click="1">Build the form in an injection context - that is the only ceremony.</p>
+  <p v-click="2">Assert by reading a signal.</p>
+  <p v-click="3">Change the model, assert again. No fixture, no <code>detectChanges</code>, no <code>fakeAsync</code>, no <code>tick()</code>.</p>
+  <p class="dim" v-click="4">Render a component only for what genuinely needs the DOM: binding, typing, custom controls, focus.</p>
 </div>
 
 </div>
 
-<p class="lead" style="margin-top:36px;max-width:1520px">
+<p class="lead" style="margin-top:36px;max-width:1520px" v-click="5">
 There is no <code>@angular/forms/signals/testing</code> entry point, and that is the good news - there is nothing to learn.
 </p>
 
@@ -1052,25 +1053,25 @@ heading: 'Is it stable? Are reactive forms going away?'
 ---
 
 <div class="cards" style="--cols:2">
-  <div class="card">
+  <div class="card" v-click="1">
     <div class="label">STABLE IN v22</div>
     <p>Every symbol is <code>&#64;publicApi 22.0</code>. The only <code>&#64;experimental</code> thing left in the package is the WebMCP integration.</p>
   </div>
-  <div class="card">
+  <div class="card" v-click="2">
     <div class="label">BUT NOT FROZEN</div>
     <p>22.1 already deprecated passing a bare function to <code>disabled()</code> and <code>hidden()</code> in favour of <code>{{ '{' }} when {{ '}' }}</code>. One minor release after stable.</p>
   </div>
-  <div class="card">
+  <div class="card" v-click="3">
     <div class="label">NOTHING IS DEPRECATED TODAY</div>
     <p>Reactive forms carry no deprecation and no announced timeline. But the stated intent is explicit: "we would like to replace the existing systems eventually".</p>
   </div>
-  <div class="card">
+  <div class="card" v-click="4">
     <div class="label">YOU CHOOSE PER FORM</div>
     <p>The interop layer runs both directions, so this is not an application-wide decision. That is what makes the risk small, not a promise about the future.</p>
   </div>
 </div>
 
-<p class="lead" style="margin-top:40px;max-width:1560px">
+<p class="lead" style="margin-top:40px;max-width:1560px" v-click="5">
 And everything you find online is written against a dead API: <code>Control</code> became <code>Field</code> became <code>FormField</code>. <code>FieldPath</code> became <code>SchemaPath</code>. <code>customError()</code> is gone.
 </p>
 
@@ -1091,21 +1092,21 @@ heading: 'Will it work with our component library?'
 ---
 
 <div class="cards" style="--cols:3">
-  <div class="card">
+  <div class="card" v-click="1">
     <div class="label teal">NATIVE INPUTS</div>
     <p>Work directly. Including <code>type=number</code> and <code>type=date</code>, which write <code>null</code> when empty.</p>
   </div>
-  <div class="card">
+  <div class="card" v-click="2">
     <div class="label teal">EXISTING CVA COMPONENTS</div>
     <p>Work with <code>[formField]</code> today. Angular provides a fake <code>NgControl</code> - a <em>subset</em>, so a control reaching deep into it may misbehave.</p>
   </div>
-  <div class="card">
+  <div class="card" v-click="3">
     <div class="label teal">NEW CONTROLS</div>
     <p><code>FormValueControl</code> or <code>FormCheckboxControl</code>. Never both.</p>
   </div>
 </div>
 
-<p class="lead" style="margin-top:44px;max-width:1560px">
+<p class="lead" style="margin-top:44px;max-width:1560px" v-click="4">
 Check your specific library before promising it to your team - I am not going to assert Material's status from this stage.
 </p>
 
@@ -1131,25 +1132,25 @@ heading: 'The gaps, named before you find them'
 ---
 
 <div class="cards" style="--cols:2">
-  <div class="card">
+  <div class="card" v-click="1">
     <div class="label">NO ARIA WIRING</div>
     <p>Zero <code>aria-</code> attributes in the package. <code>aria-invalid</code>, <code>aria-describedby</code>, <code>role="alert"</code> are yours. Angular's own example writes them by hand.</p>
   </div>
-  <div class="card">
+  <div class="card" v-click="2">
     <div class="label">SSR IS UNDOCUMENTED</div>
     <p>Not a single Signal Forms page mentions SSR or hydration - including the async page, where you would most expect it. Test it before you bet on it.</p>
   </div>
-  <div class="card">
+  <div class="card" v-click="3">
     <div class="label">NO STATUS CLASSES</div>
     <p><code>.ng-valid</code> and <code>.ng-dirty</code> do not appear. Your existing CSS silently stops working until you opt in.</p>
   </div>
-  <div class="card">
+  <div class="card" v-click="4">
     <div class="label">THE BUNDLE DOES NOT SHRINK</div>
     <p>Signal Forms import <code>Validators</code>, <code>NgControl</code> and <code>FormGroup</code> from the classic package. You do not get to delete <code>@angular/forms</code>.</p>
   </div>
 </div>
 
-<p class="lead" style="margin-top:40px;max-width:1560px">
+<p class="lead" style="margin-top:40px;max-width:1560px" v-click="5">
 And a genuine footgun: <code>submit()</code> ignores <em>pending</em> validators by default, so a user can submit while your username check is still in flight. Set <code>ignoreValidators: 'none'</code>.
 </p>
 
@@ -1174,19 +1175,19 @@ heading: 'Where to go next'
 ---
 
 <div class="cards" style="--cols:2">
-  <div class="card">
+  <div class="card" v-click="1">
     <div class="label">FIELD METADATA</div>
     <p><code>createManagedMetadataKey</code> lets an <code>httpResource</code> live on a field, created in that field's own injector and destroyed with it. Per-row link previews for free.</p>
   </div>
-  <div class="card">
+  <div class="card" v-click="2">
     <div class="label">TYPED ERRORS</div>
     <p><code>NgValidationError</code> is a runtime base class <em>and</em> a discriminated union, so <code>e.min</code> and <code>e.maxLength</code> narrow. Message i18n at the render layer.</p>
   </div>
-  <div class="card">
+  <div class="card" v-click="3">
     <div class="label">transformedValue()</div>
     <p>Parse and format between what the input gives you and what your model wants, with parse errors reported into the field automatically.</p>
   </div>
-  <div class="card">
+  <div class="card" v-click="4">
     <div class="label">disabledReasons()</div>
     <p>Return a string instead of <code>true</code> from <code>disabled</code> and the UI can finally answer "why is this greyed out?"</p>
   </div>
@@ -1204,7 +1205,7 @@ heading: 'Three things, and only the first is a bet'
 ---
 
 <div class="steps" style="margin-top:56px">
-  <div class="step">
+  <div class="step" v-click="1">
     <div class="n">01</div>
     <h3>Write your next form signal-first</h3>
     <p>Not a migration. The next one. You will know inside a day whether the model fits your head.</p>
@@ -1236,11 +1237,11 @@ eyebrow: 'One more time'
 Your data stopped being a copy.
 </h2>
 
-<p class="lead" style="font-size:34px;margin-top:44px;max-width:1500px">
+<p class="lead" style="font-size:34px;margin-top:44px;max-width:1500px" v-click="1">
 There is one object now. The model lives in a signal, the form is a view of it, and validation, touched, errors and submission are all derived. When you stop keeping two copies in sync, all the code that kept them in sync goes away.
 </p>
 
-<div style="display:flex;gap:56px;margin-top:64px;font-family:var(--font-mono);font-size:26px;color:var(--teal)">
+<div style="display:flex;gap:56px;margin-top:64px;font-family:var(--font-mono);font-size:26px;color:var(--teal)" v-click="2">
   <span>angular.dev/guide/forms/signals</span>
   <span>Questions?</span>
 </div>
