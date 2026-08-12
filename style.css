@@ -258,14 +258,10 @@
   transition: opacity 220ms ease;
 }
 
-/* Clicked-in content fades up rather than just appearing */
-.slidev-layout .slidev-vclick-target {
-  transition: opacity 260ms ease, transform 260ms ease;
-}
-
-.slidev-layout .slidev-vclick-hidden {
-  transform: translateY(6px);
-}
+/* ponytail: no v-click reveals in this deck. On these raw-HTML card grids the directive
+   applies its classes but never settles - a JS-driven opacity animation stays mid-flight,
+   so revealed elements stay invisible even with `opacity: 1 !important`. Code-block click
+   highlighting and Magic Move both work, so the animation lives there instead. */
 
 /* Two-column code/notes split used on most API slides */
 .split {

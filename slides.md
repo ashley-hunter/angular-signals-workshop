@@ -1,17 +1,81 @@
 ---
 theme: default
 title: Angular Signal Forms
-info: There is no form object any more. There is your data, and a view of it.
+info: Your data is the form. Everything else is derived.
 canvasWidth: 1920
 colorSchema: dark
 highlighter: shiki
 transition: slide-left
 mdc: true
-layout: content
-eyebrow: ''
+layout: cover
+eyebrow: '@angular/forms/signals &middot; stable in v22'
+meta: ['Ashley Hunter', 'angular.dev/guide/forms/signals']
 ---
 
-<div style="font-family:var(--font-mono);font-size:24px;color:var(--dim);margin-bottom:36px">Find the bug.</div>
+# Angular Signal Forms
+
+Angular's third forms API, and the first one built on signals. Your data is the form - everything else is derived from it.
+
+<!--
+Title up while people settle. Introduce yourself here, not later.
+
+"Angular shipped a new forms API in v21, and it went stable in v22. I've spent the last few
+months in it. This is what it is, how it differs from what you know, and what it costs."
+-->
+
+---
+layout: content
+eyebrow: Orientation
+heading: What a Signal Form actually is
+split: 1.05fr 0.95fr
+---
+
+```ts
+import { form, required, email, FormField } from '@angular/forms/signals';
+
+model = signal({ email: '', notify: false });
+
+f = form(this.model, (p) => {
+  required(p.email);
+  email(p.email);
+});
+```
+
+```html
+<input [formField]="f.email" />
+```
+
+::right::
+
+<div class="notes-col">
+  <div>
+    <div class="label">A THIRD API, NOT A REWRITE</div>
+    <p>It lives beside template-driven and reactive forms in <code>@angular/forms/signals</code>. Nothing you have today changes.</p>
+  </div>
+  <div>
+    <div class="label">THREE PIECES</div>
+    <p>A signal holding your data, a <code>form()</code> wrapping it, and one directive binding a field to an input.</p>
+  </div>
+  <div>
+    <div class="label">STABLE IN v22</div>
+    <p>Experimental in v21, stable now. The rest of this talk assumes v22.</p>
+  </div>
+</div>
+
+<!--
+Deliberately no animation - this is the map, and people need to see all of it at once.
+
+Thirty seconds. Do not explain the API here, just orient. "That is the entire shape of it.
+Signal, form, directive. Everything else in this talk is a consequence of those three lines."
+
+Then: "So why did Angular build a third one?"
+-->
+
+---
+layout: content
+eyebrow: 'Where we are today'
+heading: 'Eighteen lines, and every one of them is necessary'
+---
 
 ```ts
 export class SignupForm {
@@ -34,45 +98,51 @@ export class SignupForm {
 ```
 
 <!--
-Deliberately NO click animation on this slide. They are hunting for a bug - highlighting a line
-would hand them the answer.
+No trick here, and no animation - let them read it.
 
-Walk to the centre before speaking. Do not introduce yourself yet.
+"This does one thing. Email is required, but only when 'notify me' is ticked. That's the whole
+feature. Eighteen lines.
 
-"This does exactly one thing. It makes email required, but only when 'notify me' is ticked.
-Find the bug."
+And I want to be clear: this is good code. It passes review. I've written it, most of you have
+written it. There's nothing to fix."
 
-WAIT. Five full seconds. Count them. Do not fill the gap.
+Then advance and take it apart.
 -->
 
 ---
 layout: content
-center: true
-alt: true
-eyebrow: 'The answer'
+eyebrow: 'Where we are today'
+heading: Why it has to be that long
 ---
 
-<h2 style="font-size:76px;letter-spacing:-0.03em;line-height:1.1;max-width:1500px">
-There isn't one. That is the correct way to write it.
-</h2>
+<div class="cards" style="--cols:3">
+  <div class="card">
+    <div class="label">THE SUBSCRIPTION</div>
+    <p>Validation is attached at construction, so anything conditional has to be pushed in later, from a stream.</p>
+  </div>
+  <div class="card">
+    <div class="label">THE TEARDOWN</div>
+    <p><code>takeUntilDestroyed</code>, because you have created a lifetime that has to be managed.</p>
+  </div>
+  <div class="card">
+    <div class="label">THE REVALIDATE CALL</div>
+    <p><code>updateValueAndValidity()</code>. Leave it out and the validator attaches but nothing re-runs, and QA finds it in three weeks.</p>
+  </div>
+</div>
 
-<p class="lead" style="font-size:34px;max-width:1400px" v-click>
-The subscription is right. <code>takeUntilDestroyed</code> is right. And <code>updateValueAndValidity()</code> is right - leave it out and the validator attaches but nothing revalidates, and QA finds it three weeks later.
-</p>
-
-<p class="lead" style="font-size:34px;max-width:1400px;color:var(--text)" v-click>
-Eighteen lines. To say: <em>this field is required when that box is ticked.</em>
+<p class="lead" style="margin-top:48px;max-width:1560px">
+None of that is about your feature. All of it is bookkeeping between two copies of the same state.
 </p>
 
 <!--
-Let "there isn't one" sit alone for a beat before clicking. The silence does the work.
+Three clicks, one per piece, then the point.
 
-CLICK 1: why each line is correct.
-CLICK 2: the count. This is the line they should still remember at the end.
+The tone matters: this is not a takedown of reactive forms. Date-stamp them instead. Reactive
+forms were designed in 2016, before Angular had signals as an option. Rickabaugh says it
+plainly: "Neither of these things plug-and-play very well with signals, because they were
+designed obviously before Angular had signals as an option."
 
-"This code passes review. I've written it. Most of you have written it this month.
-
-I'm Ashley. Hold that snippet - we're deleting most of it in about ten minutes."
+Nobody in the room is being criticised - a date is not an insult.
 -->
 
 ---
@@ -86,19 +156,19 @@ Component state lives in signals. Form state lives in a parallel tree of control
 </p>
 
 <div class="cards" style="--cols:2">
-  <div class="card" v-click>
+  <div class="card">
     <div class="label">READING OUT</div>
     <p><code>valueChanges</code> into a signal. A subscription and a teardown per dependency.</p>
   </div>
-  <div class="card" v-click>
+  <div class="card">
     <div class="label">WRITING BACK</div>
     <p><code>patchValue</code>, and the <code>{{ '{' }} emitEvent: false {{ '}' }}</code> you add after the first infinite loop.</p>
   </div>
-  <div class="card" v-click>
+  <div class="card">
     <div class="label">VALIDATION IS FROZEN</div>
     <p>Rules attach at construction, so anything conditional becomes imperative setter calls.</p>
   </div>
-  <div class="card" v-click>
+  <div class="card">
     <div class="label">SUBMIT</div>
     <p>Touch-all, check validity, loading flag, map server errors back onto controls. Rewritten per feature.</p>
   </div>
@@ -107,16 +177,9 @@ Component state lives in signals. Form state lives in a parallel tree of control
 <!--
 Four clicks, ~20 seconds each. Do not dwell - past 2.5 minutes this turns into whining.
 
-Do not attack reactive forms. Date-stamp them. Let the tech lead say the harsh part:
-
-"Neither of these things plug-and-play very well with signals, because they were designed
-obviously before Angular had signals as an option." - Alex Rickabaugh
-
-"These systems are like eight years old at this point. There's a lot of stuff that's happened
-in HTML."
-
-And the war: template-driven vs reactive was never resolvable because each side was right about
-a different thing. One had the logic where the fields are. The other had it where the types are.
+Close the beat on the old war: template-driven vs reactive was never resolvable because each
+side was right about a different thing. One had the logic in the template where the fields are,
+the other had it in TypeScript where the types are.
 -->
 
 ---
@@ -128,10 +191,10 @@ eyebrow: 'The part nobody mentions'
 
 <p style="font-family:var(--font-display);font-size:64px;font-weight:500;letter-spacing:-0.03em;line-height:1.25;max-width:1560px">
 You would assume forms were the last part of Angular to get signals.<br>
-<span v-click>They are the reason Angular <em>has</em> signals.</span>
+<span>They are the reason Angular <em>has</em> signals.</span>
 </p>
 
-<div v-click>
+<div>
 
 <p class="lead" style="font-size:30px;margin-top:48px;max-width:1500px;font-style:italic">
 "We were looking at replacing zone.js with something and signals was one option on the table. There were a few others. But forms was actually one of the main drivers of that decision. So we even knew back then that we wanted to do a signal form system if we created a signal reactivity system in the framework."
@@ -143,11 +206,10 @@ You would assume forms were the last part of Angular to get signals.<br>
 
 <!--
 The first line is a setup, so let it hang. CLICK 1 is the turn - deliver it flat, no emphasis,
-and let the room do the reacting. CLICK 2 is the receipt.
+and let the room react. CLICK 2 is the receipt.
 
-This is not a library release. It is the payload the last four years of Angular were built to
-deliver. It also retroactively legitimises the previous slide: the pain was real enough to
-change the framework's reactivity strategy.
+Signal Forms are not a library release bolted on after signals. They are the thing the
+reactivity rewrite was chosen for.
 -->
 
 ---
@@ -160,12 +222,12 @@ eyebrow: The one idea
 Signal Forms delete the second copy of your state.
 </h2>
 
-<p class="lead" style="font-size:36px;margin-top:44px;max-width:1450px" v-click>
+<p class="lead" style="font-size:36px;margin-top:44px;max-width:1450px">
 Your model signal <em>is</em> the form. Structure, validation, touched, errors and submission are all derived from it.
 </p>
 
 <!--
-State it bare, then admit it's unproven: "That's the claim. Here's the proof."
+State it bare, then admit it's unproven: "That's the claim. The rest of the talk is the proof."
 
 If someone genuinely holds this idea they can derive the rest of the API themselves - which is
 the test of a thesis.
@@ -182,25 +244,25 @@ transition: fade
 ---
 layout: content
 eyebrow: 'Core &middot; anatomy'
-heading: There is no form object
+heading: The form has no state of its own
 split: 1.15fr 0.85fr
 ---
 
 ````md magic-move
 ```ts
-// 1. your data. a plain writable signal.
+// your data. a plain writable signal.
 model = signal({ email: '', notify: false });
 ```
 
 ```ts
-// 2. wrap it. the tree is derived from the shape.
+// wrap it. the tree is derived from the shape.
 model = signal({ email: '', notify: false });
 
 f = form(this.model);
 ```
 
 ```ts
-// 3. bind a leaf. that is the whole API surface.
+// bind a leaf. two-way, no patchValue.
 model = signal({ email: '', notify: false });
 
 f = form(this.model);
@@ -212,84 +274,111 @@ f = form(this.model);
 ::right::
 
 <div class="notes-col">
-  <div v-click="1">
+  <div>
     <div class="label">THE MODEL</div>
-    <p>A writable signal of plain data. It is yours. <code>form()</code> does not copy it.</p>
+    <p>A writable signal of plain data. It is yours, and <code>form()</code> does not copy it.</p>
   </div>
-  <div v-click="2">
+  <div>
     <div class="label">THE FIELD TREE</div>
     <p>Derived from the data's shape, typed end to end. No control classes to declare.</p>
   </div>
-  <div v-click="3">
+  <div>
     <div class="label">THE BINDING</div>
     <p>One directive: value, state, validation, blur-to-touched.</p>
   </div>
 </div>
 
 <!--
-The code grows as each note appears - magic-move keeps the earlier lines anchored so the eye
-tracks what was ADDED rather than re-reading the whole block.
+Each magic-move step lands with its own note - code and explanation arrive together.
 
-LIVE DEMO 1 (~2.5 min) after the third click. Build this from an empty component.
+LIVE DEMO 1 (~2.5 min) after the last click. Build this from an empty component.
 
 1. Type in the input - the JSON dump of model() changes. Expected.
-2. Click a button wired to model.set({...}) - THE INPUT CHANGES. No patchValue. This is the
-   moment; a slide can only assert bidirectionality, a demo proves it.
+2. Click a button wired to model.set({...}) - THE INPUT CHANGES. No patchValue. A slide can only
+   assert bidirectionality; a demo proves it.
 3. Hover f.email in Monaco. The type came from the data.
-
-Land it on Deborah Kurata's line: "Forms don't maintain their own data. Rather, they use the
-passed signal."
 -->
 
 ---
 layout: content
-eyebrow: 'Core &middot; the tripwire'
-heading: 'Two objects, one letter apart'
+eyebrow: 'Core &middot; the field tree'
+heading: 'What form() actually hands you'
 ---
 
-<div class="split">
+<div class="split" style="--split:1.05fr 0.95fr">
 
-<div>
+```ts {all|1-4|6|7|8|10-11}
+model = signal({
+  email: '',
+  addresses: [{ street: '', postcode: '' }],
+});
 
-```ts
-// p - a SchemaPath. A description of WHERE.
-// Only valid inside the schema function.
-f = form(model, (p) => {
-  required(p.email);
+f = form(this.model);           // FieldTree<Profile>
+f.email                         // FieldTree<string>
+f.email()                       // FieldState<string>
+
+f.addresses[0].street           // indexable
+f.addresses().value()           // the whole array
+```
+
+<div class="notes-col">
+  <p>The tree mirrors the shape of your data. Add a property to the model and the field exists; there is nothing to declare.</p>
+  <p><strong>Dots navigate. Calling reads.</strong> <code>f.email</code> is an address you can pass around and bind to. <code>f.email()</code> is the state at that address, right now.</p>
+  <p>Arrays are indexable and iterable, but they are not real arrays - there is no <code>.map</code> or <code>.filter</code>, only <code>[i]</code>, <code>length</code> and <code>for..of</code>.</p>
+  <p class="dim">Nodes are materialised lazily, so a subtree nobody touches never allocates.</p>
+</div>
+
+</div>
+
+<!--
+This is the concept to get right, because the rest of the API is navigation over this tree.
+
+PREDICTION MOMENT - the only show of hands in the talk. Before revealing line 7 and 8, put
+[formField]="f.email" and [formField]="f.email()" to the room and ask which one binds.
+
+Most vote for the called one, because form.get('email') trained them to expect the call to
+return the thing. It is the uncalled one: binding needs an address, not a snapshot.
+-->
+
+---
+layout: content
+eyebrow: 'Core &middot; the schema path'
+heading: 'And what the schema function hands you'
+---
+
+<div class="split" style="--split:1.05fr 0.95fr">
+
+```ts {all|1|2|4-6|8-10}
+form(this.model, (p) => {      // p is a SchemaPath
+  required(p.email);           // "the email field, whenever it exists"
+
+  applyEach(p.addresses, (a) => {
+    required(a.street);        // every item, present and future
+  });
+
+  validate(p.confirm, ({ valueOf }) => {
+    return valueOf(p.password) === ... ;
+  });
 });
 ```
 
-</div>
-
-<div v-click>
-
-```ts
-// f - a FieldTree. A handle on WHAT.
-// Navigate with dots, call to read state.
-f.email           // FieldTree<string>
-f.email()         // FieldState<string>
-f.email().value() // 'a@b.com'
-```
-
+<div class="notes-col">
+  <p><code>p</code> is not a field. It is a <em>description of a location</em> in the tree - which is why one rule can cover an array item that does not exist yet.</p>
+  <p>It has no state and is not callable. <code>p.email()</code> is a type error, and so is <code>p.addresses[0]</code>; you reach items with <code>applyEach</code>, not by index.</p>
+  <p>To read across the form, ask the context: <code>valueOf(path)</code> for a value, <code>stateOf(path)</code> for state.</p>
+  <p class="dim">A path only works inside the schema that owns it. Close over an outer <code>p</code> from inside an applied sub-schema and you get NG1908 at runtime.</p>
 </div>
 
 </div>
-
-<p class="lead" style="margin-top:44px;max-width:1500px" v-click>
-<code>p.email</code> is not callable. <code>p.items[0]</code> does not compile. They look identical in every code sample you will ever read, including mine.
-</p>
 
 <!--
-PREDICTION MOMENT - the only show of hands in the talk, and it goes BEFORE the first click.
+The pairing to land: `p` is the blueprint, `f` is the building. You write rules against the
+blueprint once; you read state from the building forever.
 
-Put [formField]="f.email" and [formField]="f.email()" to the room. "Which one binds?"
-Most vote for the called one, because form.get('email') trained them to expect the call to
-return the thing.
+That is also why a rule can target items that do not exist yet - it was never about a
+particular field object.
 
-CLICK 1 reveals: uncalled. Binding needs an address, not a snapshot.
-CLICK 2 is the warning - they will misread this in every blog post they read next week.
-
-This single distinction causes more confusion than the rest of the API combined.
+They will meet `p` and `f` one letter apart in every code sample they read, including mine.
 -->
 
 ---
@@ -303,29 +392,29 @@ The schema function executes one time, to build a tree of logic. The functions y
 </p>
 
 <div class="cards" style="--cols:2">
-  <div class="card" v-click>
+  <div class="card">
     <div class="label">SO AN <code style="color:var(--purple)">if</code> DOESN'T WORK</div>
     <p>An <code>if</code> in the schema is evaluated once at construction and frozen. Use <code>applyWhen</code>.</p>
   </div>
-  <div class="card" v-click>
+  <div class="card">
     <div class="label">SO THERE IS NO <code style="color:var(--purple)">setValidators</code></div>
     <p>Rules never change. Their <code>when</code> does. Mutation is not an API because it needs none.</p>
   </div>
-  <div class="card" v-click>
+  <div class="card">
     <div class="label">SO <code style="color:var(--purple)">valueOf</code> EXISTS</div>
     <p>Inside a rule you are in a reactive context, so reading another field tracks it.</p>
   </div>
-  <div class="card" v-click>
+  <div class="card">
     <div class="label">SO PATHS ARE SCOPED</div>
     <p>Using a path outside its own schema throws NG1908. The tree is built, then sealed.</p>
   </div>
 </div>
 
 <!--
-THIS IS THE SLIDE. Everything after it is a corollary, and the four clicks are the corollaries
-arriving one at a time so the audience can feel them being derived rather than listed.
+THIS IS THE SLIDE. Everything after it is a corollary, and the four clicks are those corollaries
+being derived one at a time rather than listed.
 
-Frame it as "the four reasons your form looks broken" if the room is flagging:
+If the room is flagging, reframe as "the four reasons your form looks broken":
   1. the schema ran once
   2. you mutated the model instead of replacing it
   3. you debounced it (value() lags; controlValue() is the un-debounced one)
@@ -339,34 +428,34 @@ heading: Everything you read is a signal
 ---
 
 <div class="cards tight" style="--cols:4">
-  <div class="card" v-click>
+  <div class="card">
     <div class="label teal">value()</div>
     <p>Writable, and it writes through to your model.</p>
   </div>
-  <div class="card" v-click>
+  <div class="card">
     <div class="label teal">errors()</div>
     <p>An <em>array</em> of <code>{{ '{' }} kind, message {{ '}' }}</code>. All validators run.</p>
   </div>
-  <div class="card" v-click>
+  <div class="card">
     <div class="label teal">touched()</div>
     <p>Plus <code>dirty</code>, <code>disabled</code>, <code>readonly</code>, <code>hidden</code>.</p>
   </div>
-  <div class="card" v-click>
+  <div class="card">
     <div class="label teal">pending()</div>
     <p>Async validation in flight. No flag to maintain.</p>
   </div>
 </div>
 
-<p class="lead" style="margin-top:44px;max-width:1500px" v-click>
+<p class="lead" style="margin-top:44px;max-width:1500px">
 There are about twenty more. That is what autocomplete is for.
 </p>
 
 <!--
-Four fast clicks - two seconds each, no dwelling. The last click is the joke that stops anyone
+Four fast clicks - two seconds each, no dwelling. The last one is the joke that stops anyone
 asking you to enumerate the rest.
 
 Worth saying once: errors() is an ARRAY, not reactive forms' {[key]: any} bag, and nothing
-short-circuits - every validator runs every time.
+short-circuits - every validator runs, every time.
 -->
 
 ---
@@ -379,11 +468,11 @@ transition: fade
 
 ---
 layout: content
-eyebrow: 'Cashing the cold open'
-heading: Eighteen lines becomes three
+eyebrow: 'Back to those eighteen lines'
+heading: Same behaviour, three lines
 ---
 
-````md magic-move {at:1}
+````md magic-move
 ```ts
 notify.valueChanges
   .pipe(takeUntilDestroyed())
@@ -407,20 +496,20 @@ required(p.email, {
 ```
 ````
 
-<p class="lead" style="margin-top:48px;max-width:1560px" v-click>
-Same behaviour. No subscription, no teardown, no <code>updateValueAndValidity</code>, and nothing to forget.
+<p class="lead" style="margin-top:48px;max-width:1560px">
+No subscription, because nothing needs pushing. No teardown, because nothing was created. No revalidate call, because <code>when</code> is just a <code>computed</code>.
 </p>
 
 <!--
-THE HIGHEST-VALUE MOMENT IN THE DECK. Do not rush the click.
+THE HIGHEST-VALUE MOMENT IN THE DECK. Do not rush it.
 
-Bring the snippet up, let them recognise it from the cold open, then click ONCE and let the
-code physically collapse. Say nothing while it animates.
+Bring the snippet up, let them recognise it from the opening, then click ONCE and let the code
+physically collapse. Say nothing while it animates.
+
+CLICK 2 maps each deleted thing back to the card that explained it earlier.
 
 LIVE DEMO 2 (~2 min) straight after: type the `when` clause in Monaco and save. The running
 form's validation behaviour changes with no reload.
-
-This is the release of the tension you set up at 0:00. If you only keep one demo, keep this one.
 -->
 
 ---
@@ -443,24 +532,25 @@ pattern(p.postcode, UK_POSTCODE);
 ```
 
 <div class="notes-col">
-  <p>The ones you would expect: <code>required</code>, <code>email</code>, <code>min</code>/<code>max</code>, <code>minDate</code>/<code>maxDate</code>, <code>minLength</code>/<code>maxLength</code>, <code>pattern</code>.</p>
-  <p class="dim" v-click="[5,6]">Careful: <code>required()</code> passes on an empty array. Use <code>minLength(p.items, 1)</code>. And every other validator skips entirely when the value is empty, so <code>required</code> and <code>minLength</code> are both needed.</p>
+  <p>The message belongs to the rule, not the template.</p>
+  <p>A plain bound, when that is all you need.</p>
+  <p>Or a <em>reactive</em> bound. It recomputes like a <code>computed</code>, so the limit can depend on another field.</p>
+  <p>A regex. Note this one is not mirrored to the DOM - Signal Forms allows several, the attribute allows one.</p>
+  <p class="dim">Careful: <code>required()</code> passes on an empty array - use <code>minLength(p.items, 1)</code>. And every other validator skips entirely when the value is empty, so <code>required</code> and <code>minLength</code> are both needed.</p>
 </div>
 
 </div>
 
 <!--
-Walk the four lines: message on the rule / a plain bound / a REACTIVE bound, which is the one
-worth pausing on / a regex. Then the caution appears on the final click.
+Each line lights up as its explanation appears. Pause on the third - a reactive bound is the one
+that has no reactive-forms equivalent worth writing.
 
-Second prediction, rhetorical, two-second beat:
+Rhetorical prediction, two-second beat, before the last click:
 
   <input required [formField]="f.email">   - does the browser block submit?
 
-No. FormRoot sets novalidate. Angular mirrors required/min/max/minlength/maxlength/readonly/
-disabled/name onto the element for behaviour and accessibility, and validates entirely in
-signals. Note pattern is NOT mirrored - signal forms supports multiple regexes, the attribute
-takes one.
+No. FormRoot sets novalidate, and Angular mirrors required/min/max/minlength/maxlength/readonly/
+disabled/name onto the element for behaviour and accessibility only.
 -->
 
 ---
@@ -471,7 +561,7 @@ heading: Rules can see the whole form
 
 <div class="split">
 
-```ts {all|3|4-6}
+```ts {all|3}
 // one field, reading another
 validate(p.confirm, ({ value, valueOf, stateOf }) => {
   if (!stateOf(p.password).touched()) return null;
@@ -481,34 +571,34 @@ validate(p.confirm, ({ value, valueOf, stateOf }) => {
 });
 ```
 
-<div v-click="3">
+<div class="notes-col">
+  <p><code>valueOf</code> reads another field's value; <code>stateOf</code> reads its state. Gate on <code>touched()</code> so you are not shouting "passwords differ" at someone halfway through typing the first one.</p>
+  <p>A validator cannot put an error on a <em>different</em> field. That is a compile error, and it is <code>validateTree</code>'s job.</p>
+</div>
 
-```ts {all|5}
+</div>
+
+<div>
+
+```ts {all|4}
 // one validator, errors aimed at descendants
 validateTree(p, ({ valueOf, fieldTreeOf }) => {
   return valueOf(p.start) >= valueOf(p.end)
-    ? { kind: 'range',
-        message: 'End must be after start',
-        fieldTree: fieldTreeOf(p.end) }
+    ? { kind: 'range', message: 'End must be after start', fieldTree: fieldTreeOf(p.end) }
     : null;
 });
 ```
 
 </div>
 
-</div>
-
-<p class="lead" style="margin-top:44px;max-width:1520px" v-click>
-<code>validate</code> cannot target another field - that is a compile error, and it is <code>validateTree</code>'s job. The error lands where the user fixes it, not on the group.
-</p>
-
 <!--
-The stateOf().touched() gate gets its own highlight because it is the humane touch: don't shout
-"passwords differ" at someone halfway through typing the first one.
+CLICK 1: the touched gate lights up with the text that explains it.
+CLICK 2: sets up the limitation.
+CLICK 3: validateTree arrives as the answer to it, with the fieldTree line highlighted.
 
-Then validateTree arrives, and the final highlight is the fieldTree line - the error carrying
-its own target. That is the bit reactive forms cannot express cleanly. A row validator can
-return an ARRAY of errors, each aimed at a different cell - every duplicate flagged at once.
+The error carries its own target, so it lands where the user fixes it rather than on the group.
+A row validator can return an ARRAY of errors, each aimed at a different cell - every duplicate
+flagged at once. That is the thing reactive forms cannot express cleanly.
 -->
 
 ---
@@ -532,25 +622,17 @@ validateHttp(p.username, {
 ```
 
 <div class="notes-col">
-  <div v-click="5">
-    <div class="label">PENDING IS FREE</div>
-    <p>Bind the spinner to <code>pending()</code>. Nothing to track.</p>
-  </div>
-  <div v-click="6">
-    <div class="label">SYNC RUNS FIRST</div>
-    <p>Async only fires once the field's own sync rules pass. You are not hammering the endpoint on every keystroke of an obviously broken value.</p>
-  </div>
-  <div v-click="7">
-    <div class="label">DEBOUNCE IS DECLARED</div>
-    <p class="dim">Not piped. <code>validateAsync</code> is the lower-level escape hatch, backed by <code>resource()</code>.</p>
-  </div>
+  <p>Debounce is declared, not piped.</p>
+  <p>The request is a function of the value. It only re-fires when that value changes - and only once the field's own sync rules pass, so you are not hammering the endpoint on obviously broken input.</p>
+  <p>Map the response to errors, or to <code>null</code>. While it is in flight, <code>pending()</code> is true and you have nothing to maintain.</p>
+  <p>Handling failure is not optional - <code>onError</code> is a required key.</p>
 </div>
 
 </div>
 
 <!--
-Walk the config keys, then the three consequences. Every part of the state machine you would
-have hand-rolled is one key in an object literal.
+Four code steps, four explanations, paired. Every part of the state machine you would have
+hand-rolled is one key in an object literal.
 
 Do NOT demo this live. You will stand in silence watching a spinner on conference wifi with a
 mock everyone assumes is faked. Screen recording if you want motion.
@@ -568,11 +650,11 @@ heading: Zod drops straight in
 form(this.model, (p) => validateStandardSchema(p, userSchema));
 ```
 
-<p class="lead" style="font-size:34px;margin-top:44px;max-width:1500px" v-click>
+<p class="lead" style="font-size:34px;margin-top:44px;max-width:1500px">
 Standard Schema, so Zod, Valibot or ArkType. Issues are routed to the exact nested field they came from. Zod is already a dependency of <code>@angular/forms</code>.
 </p>
 
-<p class="lead" style="margin-top:28px;max-width:1500px" v-click>
+<p class="lead" style="margin-top:28px;max-width:1500px">
 It validates. It does not transform - so <code>z.coerce</code> and <code>.transform()</code> do not apply. Your model must already be the shape Zod expects.
 </p>
 
@@ -580,7 +662,7 @@ It validates. It does not transform - so <code>z.coerce</code> and <code>.transf
 One line, two clicks, move on. First thing to cut for time.
 
 The transform caveat is inferred from the signature (returns void, nothing written back). The
-docs say nothing about it. Say "test it" rather than asserting it.
+docs say nothing about it, so say "test it" rather than asserting it.
 -->
 
 ---
@@ -597,7 +679,9 @@ eyebrow: Composition
 heading: Schemas are values
 ---
 
-```ts {all|1-4|6-10|8-9}
+<div class="split">
+
+```ts {all|1-4|6-10|7-8}
 const addressSchema = schema<Address>((p) => {
   required(p.street);
   pattern(p.postcode, UK_POSTCODE);
@@ -610,15 +694,16 @@ orderForm = form(this.order, (p) => {
 });
 ```
 
-<p class="lead" style="margin-top:36px;max-width:1500px" v-click>
-Nested objects, arrays and sub-forms all go through the same two functions. Your shared validators become shared schemas.
-</p>
+<div class="notes-col">
+  <p>Pull the rules out of the <code>form()</code> call and they become a value: typed, reusable, testable on their own.</p>
+  <p>Mount it at any matching path. <code>applyEach</code> does the same for every item in an array.</p>
+  <p>The same schema, at two different paths. That is the whole argument for schemas being values rather than syntax.</p>
+</div>
+
+</div>
 
 <!--
-Highlight the definition, then the application, then the two lines that matter: the SAME schema
-mounted at two different paths. That is the whole argument for schemas being values.
-
-Do not demo composition live - it is a reading activity and the payoff is seeing two files at
+Do not demo composition live - it is a reading activity, and the payoff is seeing two things at
 once, which a slide does better than an editor you have to scroll.
 
 applyEach also works on Record<string, T>, which is the primitive for generic renderers.
@@ -632,7 +717,7 @@ heading: The schema path narrows
 
 <div class="split">
 
-```ts {all|3|4-5|8|10-11}
+```ts {all|3|4-5|8-11}
 type Payment = CreditCard | BankTransfer;
 
 applyWhenValue(p.payment, isCreditCard, (card) => {
@@ -647,23 +732,21 @@ applyWhenValue(p.payment, isBankTransfer, (bank) => {
 ```
 
 <div class="notes-col">
-  <p v-click="2">A TypeScript type guard, used as the predicate, narrows the schema path inside the branch.</p>
-  <p v-click="5">Discriminated-union forms with no casts and no ceremony.</p>
-  <p class="dim" v-click="6">Honest footnote: this narrows the <em>schema path</em>, not the field tree. In the template, a union model still needs a superset model with <code>hidden()</code> per variant - which is what the docs recommend anyway, because switching branches loses user input.</p>
+  <p>The predicate is a TypeScript type guard.</p>
+  <p>So inside the branch, the path has narrowed to <code>CreditCard</code>. No casts, no ceremony.</p>
+  <p>And in the other branch, reaching for a card field is a compile error. Discriminated-union forms that actually type-check.</p>
+  <p class="dim">Honest footnote: this narrows the <em>schema path</em>, not the field tree. In the template a union model still needs a superset with <code>hidden()</code> per variant - which is what the docs recommend anyway, because switching branches loses user input.</p>
 </div>
 
 </div>
 
 <!--
-Highlight the type guard, then what it bought you inside the branch, then the OTHER branch, then
-the line that would not compile.
+LIVE DEMO 3 (~2 min) on click 3. Reach for card.cardNumber inside the bank-transfer branch and
+let the red squiggle land on the projector. The payload lives in the EDITOR, not the app - a
+screenshot of a type error is a screenshot; a live one is proof.
 
-LIVE DEMO 3 (~2 min) here. Reach for card.cardNumber inside the bank-transfer branch and let the
-red squiggle land on the projector. The payload lives in the EDITOR, not the app - a screenshot
-of a type error is a screenshot; a live one is proof.
-
-And it is on thesis: the types narrow because the form was derived from your data, and your
-data was a discriminated union all along.
+On thesis: the types narrow because the form was derived from your data, and your data was a
+discriminated union all along.
 -->
 
 ---
@@ -681,7 +764,7 @@ Every Angular codebase has one component where someone implemented <code style="
 <!--
 Say it, pause, let the room recognise itself. No punchline needed - the recognition is the joke.
 
-No animation here on purpose. The next slide does the work.
+No animation on purpose. The next slide does the work.
 -->
 
 ---
@@ -690,7 +773,7 @@ eyebrow: 'Custom controls'
 heading: Four methods, a provider and a forwardRef
 ---
 
-````md magic-move {at:1}
+````md magic-move
 ```ts
 @Component({
   selector: 'my-input',
@@ -719,19 +802,19 @@ export class MyInput implements FormValueControl<string> {
 ```
 ````
 
-<p class="lead" style="margin-top:48px;max-width:1560px" v-click>
+<p class="lead" style="margin-top:48px;max-width:1560px">
 That is the whole required contract. <code>errors</code>, <code>disabled</code>, <code>touched</code> and the rest are optional inputs you take only if you render them.
 </p>
 
 <!--
 Leave the "before" up for three seconds without apologising for it. Do not read it. Do not say
-"you can't see this". The volume IS the content.
+"you can't see this" - the volume IS the content.
 
-Then click once and let it collapse to two lines. Say nothing during the animation.
+Then click once and let it collapse. Say nothing during the animation.
 
 Two things worth saying after:
-- Never implement both interfaces. The CVA silently wins, no warning.
-- FormValueControl components work in reactive AND template-driven forms unmodified. That makes
+- Never implement both interfaces. The CVA silently wins, with no warning.
+- FormValueControl components work in reactive AND template-driven forms unmodified, which makes
   porting your control library a no-regret move.
 -->
 
@@ -742,7 +825,7 @@ heading: 'Your form is already a machine-readable contract'
 split: 1.1fr 0.9fr
 ---
 
-```ts {all|2-5|7|all}
+```ts {all|2-5|6}
 f = form(this.model, signupSchema, {
   experimentalWebMcpTool: {
     name: 'registerUser',
@@ -755,13 +838,13 @@ f = form(this.model, signupSchema, {
 ::right::
 
 <div class="notes-col">
-  <p v-click="2">Angular walks your model and generates a JSON schema from it. Your <code>required()</code> calls become the agent's mandatory arguments.</p>
-  <p v-click="3">If the submission fails, it hands back <code>errorSummary()</code> per field, so the agent can correct itself and retry.</p>
-  <p class="dim" v-click="4">Experimental - the only such API left in the package. Schema inference rejects <code>null</code>, <code>undefined</code> and empty arrays, which fights the model-design advice coming up.</p>
+  <p>Declare the tool and Angular walks your model to generate a JSON schema for it. Your <code>required()</code> calls become the agent's mandatory arguments.</p>
+  <p>The agent fills the model and triggers your submission. If it fails, it gets <code>errorSummary()</code> back per field, so it can correct itself and retry.</p>
+  <p class="dim">Experimental - the only such API left in the package. Schema inference rejects <code>null</code>, <code>undefined</code> and empty arrays, which fights the model-design advice coming up next.</p>
 </div>
 
 <!--
-Forty-five seconds, and frame it ON THESIS, not as an AI slide: because the form is derived
+Forty-five seconds, framed ON THESIS rather than as an AI slide: because the form is derived
 from your data, Angular already has enough information to describe it to something else. You
 did not write a schema for the agent. You wrote your model.
 
@@ -787,7 +870,7 @@ heading: 'My API returns optional fields. Why can''t I model that?'
 
 <div class="split">
 
-```ts {all|1-2|3-4|6-8}
+```ts {all|1-3|4-5|7-9}
 // does not compile
 model = signal<{ nickname?: string }>({});
 required(p.nickname);
@@ -800,26 +883,27 @@ p.address.street  // Property 'street' does not exist
 ```
 
 <div class="notes-col">
-  <p v-click="3"><code>undefined</code> does not mean "empty". It means <em>this field does not exist</em>, and Angular deletes the node.</p>
-  <p v-click="4"><code>null</code> is allowed and is the sanctioned empty for number and date inputs - but a nullable <em>object</em> makes that whole subtree unnavigable.</p>
-  <p class="dim" v-click="5">And <code>string | null</code> silently costs you <code>email</code>, <code>pattern</code>, <code>minLength</code> and <code>maxLength</code> - they are declared on <code>string</code>.</p>
+  <p><code>undefined</code> does not mean "empty". It means <em>this field does not exist</em>, so Angular deletes the node.</p>
+  <p>And it is a compile error, not a lint. You cannot attach a single rule to an optional property.</p>
+  <p><code>null</code> is allowed - it is the sanctioned empty for number and date inputs. But a nullable <em>object</em> makes that entire subtree unnavigable.</p>
+  <p class="dim">Also: <code>string | null</code> silently costs you <code>email</code>, <code>pattern</code>, <code>minLength</code> and <code>maxLength</code>. They are declared on <code>string</code>.</p>
 </div>
 
 </div>
 
-<p class="lead" style="margin-top:40px;max-width:1560px" v-click="6">
+<p class="lead" style="margin-top:40px;max-width:1560px">
 The rule: <code>''</code> for text, <code>null</code> for numbers and dates, never <code>undefined</code>, never optional. Map to and from your domain model at the edges.
 </p>
 
 <!--
-The single most valuable slide in the FAQ section. It is a compile error, not a lint, and people
-hit it in the first hour.
+The single most valuable slide in this section - people hit it in the first hour.
 
-The final click is the rule. If they photograph one slide in this section, it is this one.
+The final click is the rule. If they photograph one slide here, it is this one.
 
-Also: class instances lose their prototype on first write (shallow copy), and Map/Set produce
-EMPTY field trees because children are enumerated with Object.keys. The type system does not
-stop you on either - the failure is silent and at runtime.
+Also worth mentioning: class instances lose their prototype on first write, because Signal Forms
+shallow-copies the parent object. Map and Set produce EMPTY field trees, because children are
+enumerated with Object.keys. The type system does not stop you on either - it fails silently at
+runtime.
 -->
 
 ---
@@ -837,7 +921,7 @@ hidden(p.spouseName, {
 });
 ```
 
-<div v-click>
+<div>
 
 ```html
 @if (!f.spouseName().hidden()) {
@@ -850,35 +934,35 @@ hidden(p.spouseName, {
 </div>
 
 <div class="cards" style="--cols:3;margin-top:44px">
-  <div class="card" v-click>
+  <div class="card">
     <div class="label">IT DOES NOT TOUCH THE DOM</div>
     <p>You write the <code>&#64;if</code>. Render it anyway and you get a dev-mode warning.</p>
   </div>
-  <div class="card" v-click>
+  <div class="card">
     <div class="label">IT SKIPS VALIDATION</div>
     <p>Hidden, disabled <em>and readonly</em> all skip. A hidden <code>required</code> field will not block submit.</p>
   </div>
-  <div class="card" v-click>
+  <div class="card">
     <div class="label">IT KEEPS THE VALUE</div>
     <p><code>f().value()</code> still contains it. It still goes to your server.</p>
   </div>
 </div>
 
 <!--
-Order matters: the rule, then the @if they have to write themselves, then the three
-consequences with the surprise LAST.
+CLICK 1 reveals the template AND the card that explains it, together - the @if is the thing you
+have to write yourself.
 
-LIVE DEMO 4 (~1 min) on the final click. This is demos/signup.ts. Toggle the dropdown, the
-input vanishes, spouseName stays in the JSON blob. Eight seconds, and it lands the most
-misunderstood behaviour in the API.
+Then two more consequences, with the surprise LAST.
 
-THE MIGRATION BOMB, say it loudly: reactive forms' form.value STRIPPED disabled controls and
-you needed getRawValue(). Signal forms is exactly reversed - the model is the truth, so
-disabled and hidden fields are in the payload by default. Anyone migrating a form that leaned
+LIVE DEMO 4 (~1 min) on click 3. This is demos/signup.ts. Toggle the dropdown: the input
+vanishes, spouseName stays in the JSON blob.
+
+THE MIGRATION BOMB, say it loudly: reactive forms' form.value STRIPPED disabled controls, and
+you needed getRawValue() to see them. Signal Forms is exactly reversed - the model is the truth,
+so disabled and hidden fields are in the payload by default. Anyone migrating a form that leaned
 on disabled-means-omitted starts silently sending fields they used to drop.
 
-The escape hatch is extractValue(f, { enabled: true }) from @angular/forms/signals/compat.
-
+Escape hatch: extractValue(f, { enabled: true }) from @angular/forms/signals/compat.
 (Payload behaviour verified from source, not documented - flag it as such if pressed.)
 -->
 
@@ -904,19 +988,17 @@ f.items().value.update((xs) => [...xs, blank]);
 ```
 
 <div class="notes-col">
-  <p v-click="2">Track by <em>field identity</em>, not <code>$index</code>. Angular stamps a hidden <code>Symbol</code> on each object so state follows a row across a reorder.</p>
-  <p class="dim" v-click="4">Consequences: frozen objects in arrays throw. <code>structuredClone</code> of your model resets every row's touched and dirty state. Arrays of primitives are tracked by index, so removing item 0 shifts all state.</p>
-  <p v-click="5">Genuinely dynamic shapes have an official pattern - derive model and schema from one config array. You surrender some type safety and cast inside each branch.</p>
+  <p>Track by <em>field identity</em>, not <code>$index</code>. Angular stamps a hidden <code>Symbol</code> on each object so state follows a row across a reorder.</p>
+  <p>Add and remove by replacing the array. There is no <code>push</code>, and <code>f.items</code> has no <code>.map</code> or <code>.filter</code> - only indexing, <code>length</code> and iteration.</p>
+  <p class="dim">Consequences of that hidden Symbol: frozen objects in arrays throw, and <code>structuredClone</code> of your model resets every row's touched and dirty state.</p>
+  <p>Genuinely dynamic shapes have an official pattern - derive the model and the schema from one config array. You surrender some type safety and cast inside each branch.</p>
 </div>
 
 </div>
 
 <!--
-f.items has NO .map/.filter/.find - only [i], .length and iteration. Compile error if you try.
-
-Two things worth admitting: the docs say "avoid models with dynamic structure" on one page and
-show you how to build them on another. Naming that tension makes you look like you read the
-docs properly.
+Worth admitting: the docs say "avoid models with dynamic structure" on one page and show you how
+to build them on another. Naming that tension makes you look like you read the docs properly.
 -->
 
 ---
@@ -942,25 +1024,24 @@ it('requires email when notify is on', () => {
 ```
 
 <div class="notes-col">
-  <p v-click="5">No <code>TestBed.createComponent</code>. No fixture. No <code>fakeAsync</code>, no <code>tick()</code>.</p>
-  <p v-click="6">Most form logic lives in the schema rather than the template, so most of it tests as plain function calls and signal reads.</p>
-  <p class="dim" v-click="7">Render only for what actually needs the DOM: binding, typing, custom controls, focus.</p>
+  <p>Build the form in an injection context - that is the only ceremony.</p>
+  <p>Assert by reading a signal.</p>
+  <p>Change the model, assert again. No fixture, no <code>detectChanges</code>, no <code>fakeAsync</code>, no <code>tick()</code>.</p>
+  <p class="dim">Render a component only for what genuinely needs the DOM: binding, typing, custom controls, focus.</p>
 </div>
 
 </div>
 
-<p class="lead" style="margin-top:36px;max-width:1520px" v-click="8">
+<p class="lead" style="margin-top:36px;max-width:1520px">
 There is no <code>@angular/forms/signals/testing</code> entry point, and that is the good news - there is nothing to learn.
 </p>
 
 <!--
-Walk it: build the form, assert, change the model, assert again. Then the punchline - notice
-what is NOT here.
+Because the logic lives in the schema rather than the template, most of it tests as plain
+function calls and signal reads.
 
-A bigger applause line for a room of maintainers than anything flashy. Testing a reactive
-form's conditional validation meant a fixture and tick(). Here it is a signal read.
-
-form() needs an injection context: runInInjectionContext, or pass { injector }.
+This is a bigger applause line for a room of maintainers than anything flashy. Testing a
+reactive form's conditional validation meant a fixture and tick(). Here it is a signal read.
 -->
 
 ---
@@ -971,37 +1052,35 @@ heading: 'Is it stable? Are reactive forms going away?'
 ---
 
 <div class="cards" style="--cols:2">
-  <div class="card" v-click>
-    <div class="label">STABLE IN V22</div>
+  <div class="card">
+    <div class="label">STABLE IN v22</div>
     <p>Every symbol is <code>&#64;publicApi 22.0</code>. The only <code>&#64;experimental</code> thing left in the package is the WebMCP integration.</p>
   </div>
-  <div class="card" v-click>
+  <div class="card">
     <div class="label">BUT NOT FROZEN</div>
-    <p>22.1 already deprecated passing a bare function to <code>disabled()</code> and <code>hidden()</code> in favour of <code>{{ '{' }} when {{ '}' }}</code>. One minor after stable.</p>
+    <p>22.1 already deprecated passing a bare function to <code>disabled()</code> and <code>hidden()</code> in favour of <code>{{ '{' }} when {{ '}' }}</code>. One minor release after stable.</p>
   </div>
-  <div class="card" v-click>
-    <div class="label">NOTHING IS DEPRECATED</div>
-    <p>Deprecation is driven by usage data and the developer survey. NgModules have been optional since v14 and still are not deprecated.</p>
+  <div class="card">
+    <div class="label">NOTHING IS DEPRECATED TODAY</div>
+    <p>Reactive forms carry no deprecation and no announced timeline. But the stated intent is explicit: "we would like to replace the existing systems eventually".</p>
   </div>
-  <div class="card" v-click>
-    <div class="label">BUT THE INTENT IS CLEAR</div>
-    <p>"We would like to replace the existing systems eventually... the one true form solution."</p>
+  <div class="card">
+    <div class="label">YOU CHOOSE PER FORM</div>
+    <p>The interop layer runs both directions, so this is not an application-wide decision. That is what makes the risk small, not a promise about the future.</p>
   </div>
 </div>
 
-<p class="lead" style="margin-top:40px;max-width:1560px" v-click>
+<p class="lead" style="margin-top:40px;max-width:1560px">
 And everything you find online is written against a dead API: <code>Control</code> became <code>Field</code> became <code>FormField</code>. <code>FieldPath</code> became <code>SchemaPath</code>. <code>customError()</code> is gone.
 </p>
 
 <!--
-The cards are deliberately paired - reassurance, then the qualifier, twice. Click them in pairs
-so the rhythm reads as honesty rather than hedging.
+Do not reassure with "Angular never removes anything" - it does, and the room knows it. The
+honest reassurance is that adoption is per-form and reversible, because interop runs both ways.
 
-"No API survives first contact with developers." - and the reason they shipped it experimental
-was to get that contact early, instead of committing to two majors of stability on day one.
-
-The NgModules precedent is the strongest reassurance you have. It is not a promise, it is a
-ten-year track record, and everyone in the room has lived it.
+"No API survives first contact with developers." The reason they shipped it experimental was to
+get that contact early, rather than committing to two majors of stability on day one. That is
+also why the churn table above exists.
 -->
 
 ---
@@ -1012,21 +1091,21 @@ heading: 'Will it work with our component library?'
 ---
 
 <div class="cards" style="--cols:3">
-  <div class="card" v-click>
+  <div class="card">
     <div class="label teal">NATIVE INPUTS</div>
     <p>Work directly. Including <code>type=number</code> and <code>type=date</code>, which write <code>null</code> when empty.</p>
   </div>
-  <div class="card" v-click>
+  <div class="card">
     <div class="label teal">EXISTING CVA COMPONENTS</div>
     <p>Work with <code>[formField]</code> today. Angular provides a fake <code>NgControl</code> - a <em>subset</em>, so a control reaching deep into it may misbehave.</p>
   </div>
-  <div class="card" v-click>
+  <div class="card">
     <div class="label teal">NEW CONTROLS</div>
     <p><code>FormValueControl</code> or <code>FormCheckboxControl</code>. Never both.</p>
   </div>
 </div>
 
-<p class="lead" style="margin-top:44px;max-width:1560px" v-click>
+<p class="lead" style="margin-top:44px;max-width:1560px">
 Check your specific library before promising it to your team - I am not going to assert Material's status from this stage.
 </p>
 
@@ -1052,25 +1131,25 @@ heading: 'The gaps, named before you find them'
 ---
 
 <div class="cards" style="--cols:2">
-  <div class="card" v-click>
+  <div class="card">
     <div class="label">NO ARIA WIRING</div>
     <p>Zero <code>aria-</code> attributes in the package. <code>aria-invalid</code>, <code>aria-describedby</code>, <code>role="alert"</code> are yours. Angular's own example writes them by hand.</p>
   </div>
-  <div class="card" v-click>
+  <div class="card">
     <div class="label">SSR IS UNDOCUMENTED</div>
     <p>Not a single Signal Forms page mentions SSR or hydration - including the async page, where you would most expect it. Test it before you bet on it.</p>
   </div>
-  <div class="card" v-click>
+  <div class="card">
     <div class="label">NO STATUS CLASSES</div>
     <p><code>.ng-valid</code> and <code>.ng-dirty</code> do not appear. Your existing CSS silently stops working until you opt in.</p>
   </div>
-  <div class="card" v-click>
+  <div class="card">
     <div class="label">THE BUNDLE DOES NOT SHRINK</div>
     <p>Signal Forms import <code>Validators</code>, <code>NgControl</code> and <code>FormGroup</code> from the classic package. You do not get to delete <code>@angular/forms</code>.</p>
   </div>
 </div>
 
-<p class="lead" style="margin-top:40px;max-width:1560px" v-click>
+<p class="lead" style="margin-top:40px;max-width:1560px">
 And a genuine footgun: <code>submit()</code> ignores <em>pending</em> validators by default, so a user can submit while your username check is still in flight. Set <code>ignoreValidators: 'none'</code>.
 </p>
 
@@ -1078,7 +1157,7 @@ And a genuine footgun: <code>submit()</code> ignores <em>pending</em> validators
 Deliver this FASTER and with MORE specificity than the good parts. Vagueness here reads as a
 sales pitch; precision reads as someone who has shipped it.
 
-Third rhetorical prediction before the last click: "A field is pending. Is it valid?"
+Rhetorical prediction before the last click: "A field is pending. Is it valid?"
 Neither. Quote the type definition verbatim - quoting the .d.ts lands differently from quoting
 a podcast:
 
@@ -1095,19 +1174,19 @@ heading: 'Where to go next'
 ---
 
 <div class="cards" style="--cols:2">
-  <div class="card" v-click>
+  <div class="card">
     <div class="label">FIELD METADATA</div>
     <p><code>createManagedMetadataKey</code> lets an <code>httpResource</code> live on a field, created in that field's own injector and destroyed with it. Per-row link previews for free.</p>
   </div>
-  <div class="card" v-click>
+  <div class="card">
     <div class="label">TYPED ERRORS</div>
     <p><code>NgValidationError</code> is a runtime base class <em>and</em> a discriminated union, so <code>e.min</code> and <code>e.maxLength</code> narrow. Message i18n at the render layer.</p>
   </div>
-  <div class="card" v-click>
+  <div class="card">
     <div class="label">transformedValue()</div>
     <p>Parse and format between what the input gives you and what your model wants, with parse errors reported into the field automatically.</p>
   </div>
-  <div class="card" v-click>
+  <div class="card">
     <div class="label">disabledReasons()</div>
     <p>Return a string instead of <code>true</code> from <code>disabled</code> and the UI can finally answer "why is this greyed out?"</p>
   </div>
@@ -1125,17 +1204,17 @@ heading: 'Three things, and only the first is a bet'
 ---
 
 <div class="steps" style="margin-top:56px">
-  <div class="step" v-click>
+  <div class="step">
     <div class="n">01</div>
     <h3>Write your next form signal-first</h3>
     <p>Not a migration. The next one. You will know inside a day whether the model fits your head.</p>
   </div>
-  <div class="step purple" v-click>
+  <div class="step purple">
     <div class="n">02</div>
     <h3>Port one control off ControlValueAccessor</h3>
     <p>Not a bet at all. <code>FormValueControl</code> works in all three forms systems, so nothing breaks.</p>
   </div>
-  <div class="step grey" v-click>
+  <div class="step grey">
     <div class="n">03</div>
     <h3>Leave the big dynamic form alone</h3>
     <p>The JSON-schema-driven one, the giant grid. Weakest path today, and no prize for being early.</p>
@@ -1157,29 +1236,22 @@ eyebrow: 'One more time'
 Your data stopped being a copy.
 </h2>
 
-<p class="lead" style="font-size:34px;margin-top:44px;max-width:1500px" v-click>
+<p class="lead" style="font-size:34px;margin-top:44px;max-width:1500px">
 There is one object now. The model lives in a signal, the form is a view of it, and validation, touched, errors and submission are all derived. When you stop keeping two copies in sync, all the code that kept them in sync goes away.
 </p>
 
-<div style="display:flex;gap:56px;margin-top:64px;font-family:var(--font-mono);font-size:26px;color:var(--teal)" v-click>
+<div style="display:flex;gap:56px;margin-top:64px;font-family:var(--font-mono);font-size:26px;color:var(--teal)">
   <span>angular.dev/guide/forms/signals</span>
   <span>Questions?</span>
 </div>
 
 <!--
-"That's where we started. Same behaviour. Eighteen lines, then three.
+"That's where we started. Eighteen lines, then three. Same behaviour.
 
-The thing that changed isn't that Angular added a `when` option. It's that your data stopped
-being a copy.
+What changed isn't that Angular added a `when` option. It's that your data stopped being a copy.
 
-Your reactive forms are not going anywhere - the team deprecates when we tell them we're done,
-and NgModules still work in v22. Nobody is taking your code away.
-
-But when Alex Rickabaugh was asked, straight out, whether a third forms system means phasing
-out the other two: 'We would like to replace the existing systems eventually. This is intended
-to eventually become the one true form solution.'
-
-So the question was never whether you learn this. It's which form you learn it on.
+Adoption is per-form and the interop runs both ways, so this is not a decision you have to make
+for a whole application. Write the next form in it and find out.
 
 Thank you."
 -->
