@@ -105,7 +105,7 @@ number: '02'
 transition: fade
 ---
 
-## Why anotherforms API?
+## Why another<br/>forms API?
 
 <p class="lead" style="margin-top:40px">Where reactive forms make us do the work twice.</p>
 
@@ -460,7 +460,7 @@ number: '05'
 transition: fade
 ---
 
-## Availabilityand async
+## Availability<br/>and async
 
 <p class="lead" style="margin-top:40px">Hidden, disabled, readonly - and validation that has to leave the browser.</p>
 
@@ -614,7 +614,7 @@ Signal Forms has built-in support for libraries that conform to Standard Schema,
 ---
 layout: content
 eyebrow: 'Arrays'
-heading: 'Where did FormArray go?'
+heading: 'Where did <code style="font-family:''JetBrains Mono'',monospace;font-size:50px;color:#8A97A8;">FormArray</code> go?'
 ---
 
 <div style="display:grid;grid-template-columns:1.2fr 0.8fr;gap:52px;align-items:start;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;font-family:&#x27;JetBrains Mono&#x27;,monospace;font-size:26px;line-height:1.62;color:#C9D4E2;"> <div>contactModel.<span style="color:#7CC4FF;">update</span>((value) =&gt; ({</div> <div style="padding-left:1.2em;">...value,</div> <div style="padding-left:1.2em;">contacts: [</div> <div style="padding-left:2.4em;">...value.contacts,</div> <div style="padding-left:2.4em;">{ name: <span style="color:#2FD8B4;">''</span>, email: <span style="color:#2FD8B4;">''</span> },</div> <div style="padding-left:1.2em;">],</div> <div>}));</div> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:34px;"> <div style="font-family:&#x27;JetBrains Mono&#x27;,monospace;font-size:24px;color:#5E6B7D;margin-bottom:20px;">CONTACT 1</div> <div style="background:#0A0D12;border:1px solid #4A5568;border-radius:8px;padding:14px 18px;font-family:&#x27;JetBrains Mono&#x27;,monospace;font-size:24px;color:#5E6B7D;margin-bottom:12px;">Name</div> <div style="background:#0A0D12;border:1px solid #4A5568;border-radius:8px;padding:14px 18px;font-family:&#x27;JetBrains Mono&#x27;,monospace;font-size:24px;color:#5E6B7D;margin-bottom:26px;">Email</div> <div style="font-family:&#x27;JetBrains Mono&#x27;,monospace;font-size:24px;color:#2FD8B4;margin-bottom:20px;">CONTACT 2</div> <div style="background:#0A0D12;border:1px solid #2FD8B4;border-radius:8px;padding:14px 18px;font-family:&#x27;JetBrains Mono&#x27;,monospace;font-size:24px;color:#5E6B7D;margin-bottom:12px;">Name</div> <div style="background:#0A0D12;border:1px solid #2FD8B4;border-radius:8px;padding:14px 18px;font-family:&#x27;JetBrains Mono&#x27;,monospace;font-size:24px;color:#5E6B7D;margin-bottom:24px;">Email</div> <div style="border:1px solid #4A5568;border-radius:8px;padding:14px 18px;text-align:center;font-size:24px;color:#8A97A8;">+ Add contact</div> </div> </div>
