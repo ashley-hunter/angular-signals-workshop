@@ -706,10 +706,10 @@ transition: fade
 ---
 ## Footguns
 
-<p class="lead" style="margin-top:40px">Fast round. Pause before the answer appears.</p>
+<p class="lead" style="margin-top:40px">Common pitfalls, and what to reach for instead.</p>
 
 <!--
-This section should feel fast. Pause briefly before each answer appears.
+A fast round through the mistakes people actually hit with signal forms.
 -->
 ---
 layout: content
