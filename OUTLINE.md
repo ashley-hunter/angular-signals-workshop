@@ -246,7 +246,7 @@ now accept `null | undefined | void` as success, so both work.
 
 ## Quotes worth a slide
 
-Verbatim from the talk and podcast transcripts below, lightly trimmed of filler.
+Verbatim from the talk and podcast transcripts listed above, lightly trimmed of filler.
 
 **Signal forms are meant to win.** Asked directly whether a third forms system means phasing out
 the other two, Rickabaugh:
