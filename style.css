@@ -258,10 +258,8 @@
   transition: opacity 220ms ease;
 }
 
-/* ponytail: no v-click reveals in this deck. On these raw-HTML card grids the directive
-   applies its classes but never settles - a JS-driven opacity animation stays mid-flight,
-   so revealed elements stay invisible even with `opacity: 1 !important`. Code-block click
-   highlighting and Magic Move both work, so the animation lives there instead. */
+/* v-click reveals are used throughout. Slidev's own vclick.css handles the fade;
+   do not add a competing transition here - overriding it leaves opacity mid-flight. */
 
 /* Two-column code/notes split used on most API slides */
 .split {
@@ -419,3 +417,16 @@
   font-family: var(--font-mono);
   font-size: 20px;
 }
+
+/* Hero code transformations: the collapse is the point, so set them larger than
+   the body code and let Magic Move morph one into the other. */
+.slidev-layout .code-hero .shiki-magic-move-container,
+.slidev-layout .code-hero .shiki-magic-move-container code {
+  font-size: 32px !important;
+  line-height: 1.6 !important;
+}
+
+.slidev-layout .code-hero {
+  margin-bottom: 52px;
+}
+
