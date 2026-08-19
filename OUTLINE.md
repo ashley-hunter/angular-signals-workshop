@@ -221,8 +221,6 @@ Cut first: metadata (48-50), typed error classes (25), `disabledReasons` (32).
 
 ## Talks and sources
 
-Transcripts pulled and stored in `research/transcripts/`.
-
 - angular.dev guides: overview, models, validation, cross-field-logic, schemas, form-logic,
   field-state-management, field-metadata, async-operations, form-submission, custom-controls,
   ai/webmcp
@@ -248,7 +246,7 @@ now accept `null | undefined | void` as success, so both work.
 
 ## Quotes worth a slide
 
-All verbatim from `research/transcripts/`, lightly trimmed of filler.
+Verbatim from the talk and podcast transcripts below, lightly trimmed of filler.
 
 **Signal forms are meant to win.** Asked directly whether a third forms system means phasing out
 the other two, Rickabaugh:
