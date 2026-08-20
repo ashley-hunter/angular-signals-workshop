@@ -1280,14 +1280,59 @@ This is the moment where the rest of the deck pays off, because it is exactly th
 layout: content
 eyebrow: 'Custom controls'
 heading: 'One interface, one signal, no ControlValueAccessor'
+clicks: 1
 ---
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 32px;max-width:1600px;">The <code style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;">[formField]</code> directive detects the interface and binds the field's value to your <code style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#C9D4E2;">value</code> model. No provider, no callbacks.</p>
-<div style="display:grid;grid-template-columns:1.2fr 0.8fr;gap:48px;align-items:center;"> <div style="background:#0A0D12;border:1px solid #2FD8B4;border-radius:14px;padding:32px 38px;font-family:&#x27;JetBrains Mono&#x27;,monospace;font-size:24px;line-height:1.65;color:#C9D4E2;"> <div>@Component({</div> <div style="padding-left:1.2em;">selector: <span style="color:#2FD8B4;">'app-custom-input'</span>,</div> <div style="padding-left:1.2em;">template: <span style="color:#2FD8B4;">`</span></div> <div style="padding-left:2.4em;">&lt;input [value]=<span style="color:#2FD8B4;">"value()"</span></div> <div style="padding-left:3.6em;">(input)=<span style="color:#2FD8B4;">"value.set($any($event.target).value)"</span></div> <div style="padding-left:3.6em;">(blur)=<span style="color:#2FD8B4;">"touch.emit()"</span> /&gt;</div> <div style="padding-left:1.2em;"><span style="color:#2FD8B4;">`</span>,</div> <div>})</div> <div><span style="color:#8B7CF6;">export class</span> <span style="color:#7CC4FF;">CustomInput</span> <span style="color:#8B7CF6;">implements</span> FormValueControl&lt;string&gt; {</div> <div style="padding-left:1.2em;"><span style="color:#8B7CF6;">readonly</span> value = <span style="color:#7CC4FF;">model</span>(<span style="color:#2FD8B4;">''</span>);</div> <div style="padding-left:1.2em;"><span style="color:#8B7CF6;">readonly</span> touch = <span style="color:#7CC4FF;">output</span>&lt;<span style="color:#8B7CF6;">void</span>&gt;();</div> <div>}</div> </div> <div style="display:flex;flex-direction:column;gap:24px;"> <div style="background:#0A0D12;border:1px solid #2FD8B4;border-radius:14px;padding:24px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#2FD8B4;margin-bottom:10px;">REQUIRED SURFACE</div> <p style="font-size:27px;line-height:1.4;margin:0;color:#C9D4E2;">A <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">value</code> model signal. Checkbox-style controls implement <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">FormCheckboxControl</code> with <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">checked</code> instead - never both.</p> </div> <div style="background:#0A0D12;border:1px solid #4A5568;border-radius:14px;padding:24px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#8B7CF6;margin-bottom:10px;">OPTIONAL STATE INPUTS</div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;line-height:1.6;color:#C9D4E2;"> <div>errors  invalid  pending</div> <div>disabled  disabledReasons  readonly  hidden</div> <div>touched  dirty  name</div> <div>required  min  max  minLength  maxLength  pattern</div> </div> <p style="font-size:25px;line-height:1.4;margin:14px 0 0;color:#8A97A8;">Declare only the ones the control uses. There is also <span style="color:#C9D4E2;">focus()</span> and <span style="color:#C9D4E2;">reset()</span> - no <span style="color:#FF7A6B;">valid</span>, so declaring one silently never updates.</p> </div> <p style="font-size:27px;line-height:1.4;margin:0;color:#8A97A8;">The schema validates. The control displays the result.</p> </div> </div>
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 22px;max-width:1660px;">Same control, both ways. The <code style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#2FD8B4;">[formField]</code> directive finds the interface and binds the field's value to your model.</p>
+
+````md magic-move
+```ts
+@Component({
+  providers: [{ provide: NG_VALUE_ACCESSOR, multi: true,
+    useExisting: forwardRef(() => CustomInput) }],
+})
+export class CustomInput implements ControlValueAccessor {
+  value = '';
+  private onChange = (v: string) => {};
+  onTouched = () => {};
+
+  writeValue(v: string) { this.value = v; }
+  registerOnChange(fn: (v: string) => void) { this.onChange = fn; }
+  registerOnTouched(fn: () => void) { this.onTouched = fn; }
+}
+```
+
+```ts
+@Component({
+  template: `
+    <input [value]="value()"
+           (input)="value.set($any($event.target).value)"
+           (blur)="touch.emit()" />
+  `,
+})
+export class CustomInput implements FormValueControl<string> {
+  readonly value = model('');
+  readonly touch = output<void>();
+}
+```
+````
+
+<div style="display:grid;grid-template-columns:auto 1fr;gap:32px;align-items:start;margin-top:24px;" v-click="1"> <div style="font-family:'JetBrains Mono',monospace;font-size:23px;letter-spacing:0.12em;color:#8B7CF6;white-space:nowrap;padding-top:4px;">OPTIONAL<br>STATE INPUTS</div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;line-height:1.6;color:#8A97A8;">errors&nbsp; invalid&nbsp; pending&nbsp; disabled&nbsp; disabledReasons&nbsp; readonly&nbsp; hidden&nbsp; touched&nbsp; dirty&nbsp; name&nbsp; required&nbsp; min&nbsp; max&nbsp; minLength&nbsp; maxLength&nbsp; pattern<div style="font-size:24px;font-family:'Barlow',sans-serif;color:#C9D4E2;margin-top:12px;line-height:1.4;">Declare only what the control renders. There is no <span style="color:#FF7A6B;">valid</span> - declare one and it never updates.</div> </div> </div>
 
 <!--
-Same custom input component, now written against Signal Forms. You implement FormValueControl, and you declare a value model signal. That is the required surface - one property. The formField directive detects the interface on your component and two-way binds the field's value to that model. No provider, no forwardRef, no ControlValueAccessor callbacks to write. If you want blur tracking, add a touch output and emit it on blur, and the field will mark itself touched for you. Everything in the box underneath is optional: errors, invalid, pending, disabled, disabled reasons, readonly, hidden, touched, dirty, name, and the constraint values - required, min, max, min length, max length and pattern. Declare the ones your control actually renders and ignore the rest. There are also focus and reset methods you can implement if focusing the host element isn't the right behaviour for your control. Two rules to remember. A FormValueControl must not have a checked property, and a checkbox-style control - which implements FormCheckboxControl and has checked instead - must not have a value. Never both. And one trap I want you to see coming: there is no valid input. TypeScript will happily let you declare one, because implementing an interface doesn't stop you adding extra members, and it will then sit there for the rest of its life never updating. Use invalid. Last thing, and it's a design point rather than an API point: don't put validation logic inside the control. The schema validates. The control displays the result.
--->
+This is the same control written twice, and the point is the volume.
 
+On the left, ControlValueAccessor. A multi-provider with a forwardRef pointing at the class you are in the middle of declaring. A private copy of the value, because the control owns its own state. Two callbacks you store and call later. And four interface methods - write, change, touch, disable - none of which describe anything about your control. That is the tax we have all been paying, and none of it is about being an input.
+
+On the right, the whole contract is one property. Implement FormValueControl and declare a value model signal. The formField directive detects the interface and two-way binds the field's value to that model. No provider, no forwardRef, no callbacks to store. Add a touch output if you want blur tracking, and the field marks itself touched for you.
+
+Everything in that strip along the bottom is optional - errors, invalid, pending, disabled, readonly, and the constraint values like required and maxLength. Declare the ones your control actually renders and ignore the rest.
+
+Two rules to remember. A FormValueControl must not have a checked property, and a checkbox-style control implements FormCheckboxControl with checked instead. Never both - the types enforce it.
+
+And one trap I want you to see coming: there is no valid input. TypeScript will happily let you declare one, because implementing an interface does not stop you adding extra members, and it will then sit there for the rest of its life never updating. Use invalid.
+
+Last thing, and it is a design point rather than an API point. Do not put validation logic in the control. The schema validates. The control displays the result.
+-->
 ---
 layout: content
 eyebrow: 'Footguns'
