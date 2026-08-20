@@ -792,6 +792,18 @@ Two more from the same window, if anyone asks: customError() went in 21.1, and t
 The only public exports actually removed in 22.0 are WithField, WithoutField and WithOptionalField, each replaced by its WithFieldTree-style name.
 -->
 ---
+layout: section
+number: '09'
+transition: fade
+---
+## Testing
+
+<p class="lead" style="margin-top:40px">What you can assert without rendering anything.</p>
+
+<!--
+Short chapter, but worth its own beat. The point I want to land: most of what we have covered - validation, conditional rules, cross-field logic - is plain function calls over a signal, so it tests without a fixture, without a DOM, and without change detection.
+-->
+---
 layout: content
 eyebrow: 'Testing'
 heading: 'Most form logic needs no DOM'
