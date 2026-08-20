@@ -958,14 +958,46 @@ layout: content
 eyebrow: 'States'
 heading: 'Four states, not two'
 ---
-<div class="compare" style="grid-template-columns:0.6fr 1fr 1fr;margin-bottom:40px;"> <div class="head">STATE</div> <div class="head teal">MEANS</div> <div class="head">GETS RENDERED AS</div> <div class="row-label">loading&nbsp;/&nbsp;reloading</div> <div>The answer is not known yet</div> <div>A skeleton - though a reload keeps the old value on screen</div> <div class="row-label">resolved</div> <div>The answer is known, and may be empty</div> <div>Content, or a real empty state</div> <div class="row-label">error</div> <div>The answer is unknown and will not arrive</div> <div>An error, with a way to retry</div> <div class="row-label last">idle</div> <div class="last">Nothing has been asked for yet</div> <div class="last">Usually the same as loading</div> </div>
-<p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:0 0 20px;max-width:1600px;">Collapsing any two of these produces a bug that testers cannot reproduce and users report as "it showed nothing".</p>
-<p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:0;max-width:1600px;">The value survives <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">reload()</code>, but any parameter change discards it - including a change to <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">undefined</code>, which goes <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">idle</code> rather than loading.</p>
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">The <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">users</code> resource from two slides ago. Six statuses, four things to render - and the order you branch in is most of the job.</p>
+<div style="display:grid;grid-template-columns:0.82fr 1.18fr;gap:44px;align-items:start;">
+<div>
+<div class="compare" style="grid-template-columns:0.85fr 1fr;font-size:26px;"> <div class="head">STATUS</div> <div class="head teal">MEANS</div> <div class="row-label">loading<br>reloading</div> <div>Not known yet.<br>Reloading still has the old value</div> <div class="row-label">resolved<br>local</div> <div>Known, and may be empty</div> <div class="row-label">error</div> <div>Unknown, and not coming</div> <div class="row-label last">idle</div> <div class="last">Nothing has been asked for yet</div> </div>
+</div>
+<div>
+
+```html
+@if (users.error()) {
+  <app-error (retry)="users.reload()" />
+} @else if (users.hasValue()) {
+  <app-user-list [users]="users.value()" />
+} @else if (users.isLoading()) {
+  <app-skeleton />
+} @else {
+  <p>Pick a team to see its members.</p>
+}
+```
+
+</div>
+</div>
+<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:28px 0 0;max-width:1660px;">Error first, so a failed reload never renders as stale data. Then <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">hasValue()</code>, so a reload keeps what is on screen instead of flashing a skeleton. Collapse any two of these and you get a bug testers cannot reproduce.</p>
 
 <!--
-Four things to render, and the API gives you six statuses to get there. Loading and reloading both mean you are waiting; the difference is that reloading keeps the previous value on screen while it waits. Resolved and local both mean you have a value - local just means somebody called set on it. And the one I would underline is idle, because that is what you get when the parameters function returns undefined, and it is not the same as loading. Nothing is in flight, and nothing is coming. Collapse any two of these and you get a bug testers cannot reproduce and users report as "it showed nothing". Which brings me to the line at the bottom. The value survives a reload, but it is discarded the moment the parameters change, and a change to undefined is still a change. So if a transient gap in your parameters is reachable, the list empties itself on the way through - and because the resource goes idle rather than loading, a template that shows a skeleton while loading will show you an empty state instead. We filed exactly this, and it was then correctly argued down, because that intermediate state could not actually be reached in that flow. The mechanism is real either way. Whether it bites you is a question about your flow, and that is a question to answer in review rather than something to patch defensively.
--->
+This is the resource we set up two slides ago, and this is the part people get wrong - not creating it, rendering it.
 
+There are six statuses in the API and four things you actually put on screen. Loading and reloading both mean you are waiting; the difference is that reloading still has the previous value, which matters in a second. Resolved and local both mean you have a value - local just means somebody called set on it. Error means the answer is not coming. And idle is the one people forget: it is what you get when the params function returns undefined, and it is not the same as loading, because nothing is in flight and nothing is coming.
+
+Now look at the order of that template, because the order is most of the job.
+
+Error is checked first. If you check hasValue first, then a reload that fails renders the old data with no indication anything went wrong - the user is looking at stale rows and has no idea. Error first means a failure always wins.
+
+hasValue comes before isLoading, and that is deliberate too. During a reload you are both loading and holding a value. If you check isLoading first, every refresh blows away the list and flashes a skeleton, which is the flicker everybody complains about. Checking hasValue first means the old rows stay put while the new ones are fetched.
+
+Then isLoading, which at that point means a genuine first load with nothing to show. And the final else is idle - nothing has been asked for yet, so prompt for it rather than pretending to load.
+
+One detail worth knowing: hasValue is a type guard, so inside that branch value() is properly typed and you are not fighting undefined.
+
+Collapse any two of these and you get the classic bug report: "it showed nothing." Nobody can reproduce it, because it depends on which of the four you were actually in.
+-->
 ---
 layout: content
 eyebrow: 'The silent failure'
