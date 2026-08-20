@@ -173,56 +173,53 @@ There is also a longer form that takes a source and a computation, and the compu
 layout: content
 eyebrow: 'Lesser known'
 heading: 'A linkedSignal can write back to its source'
+clicks: 1
 ---
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 28px;max-width:1650px;">A write is local by default - the next recomputation throws it away. <code style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;">set</code> sends it to whoever owns the value instead.</p>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">Both boxes are bound. Somebody types 212 into Fahrenheit - what happens to Celsius?</p>
+<div style="display:grid;grid-template-columns:1.25fr 0.75fr;gap:44px;align-items:start;">
 <div>
 
+````md magic-move
 ```ts
-// local override, the default
 const tempC = signal(0);
+
 const tempF = linkedSignal(
   () => (tempC() * 9) / 5 + 32,
 );
 
-tempF.set(212);
-tempC();            // still 0
-// next write to tempC and 212 is gone
+// the write is local, and temporary
 ```
 
-</div>
-<div>
-
 ```ts
-// write-through to the owner
 const tempC = signal(0);
+
 const tempF = linkedSignal(
   () => (tempC() * 9) / 5 + 32,
   { set: (f) => tempC.set(((f - 32) * 5) / 9) },
 );
 
-tempF.set(212);
-tempC();            // 100
-tempF();            // 212, via the recomputation
+// the write goes to tempC and comes back
 ```
+````
 
 </div>
+<div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:34px 36px;"> <div style="font-size:24px;color:#8A97A8;margin-bottom:12px;">Celsius</div> <div style="background:#0A0D12;border:1px solid #4A5568;border-radius:8px;padding:0 20px;height:62px;display:flex;align-items:center;font-family:'JetBrains Mono',monospace;font-size:28px;color:#E8ECF2;"><span v-click.hide="1" style="color:#FF7A6B;">0</span><span v-click="1" style="color:#2FD8B4;">100</span></div> <div style="font-size:24px;color:#8A97A8;margin:26px 0 12px;">Fahrenheit</div> <div style="background:#0A0D12;border:1px solid #2FD8B4;border-radius:8px;padding:0 20px;height:62px;display:flex;align-items:center;font-family:'JetBrains Mono',monospace;font-size:28px;color:#E8ECF2;">212</div> <div style="font-size:25px;line-height:1.4;margin-top:24px;"><span v-click.hide="1" style="color:#FF7A6B;">Celsius never moved. Next write to it and the 212 is gone.</span><span v-click="1" style="color:#2FD8B4;">Celsius took the write. Fahrenheit came back through the computation.</span></div> </div>
 </div>
-<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:32px 0 0;max-width:1650px;">The write only reaches <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">tempF</code> by going through <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">tempC</code>. One owner, so the two can never disagree.</p>
-<p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:18px 0 0;max-width:1650px;">The last case where an effect was doing plumbing by hand.</p>
 
 <!--
-This one is genuinely lesser known, and it takes a plumbing job off you that people currently do by hand.
+Two bound inputs, and somebody types two hundred and twelve into the Fahrenheit box. Hold that question for a second, because the answer is not the one most people expect.
 
-Start on the left, because the default behaviour catches people out. Fahrenheit is derived from Celsius, and you can write to it - linkedSignal is writable, that is the whole point of it. So you set it to two hundred and twelve, and it holds two hundred and twelve. But Celsius is still sitting at zero, because nothing told it anything, and the moment something writes to Celsius your edit is gone. That is what "local override" means: the write is real, and it is temporary.
+On the left is the default. Fahrenheit is derived from Celsius, and you can absolutely write to it - linkedSignal is writable, that is the whole point of it. So it holds two hundred and twelve. But look at the Celsius box: still zero. Nothing told it anything. And the moment anything writes to Celsius, that two hundred and twelve is gone, because the computation reruns and overwrites it. That is what a local override means - the write is real, and it is temporary.
 
-The set hook fixes that by intercepting the write. Somebody sets Fahrenheit, your hook converts it back and writes Celsius instead - and then Fahrenheit updates, because the computation reruns off the new Celsius. So you set two hundred and twelve, Celsius becomes one hundred, and Fahrenheit reads two hundred and twelve again. Same number, but it went all the way round and came back, which means the two can never disagree.
+Now the set hook. Somebody writes Fahrenheit, your hook intercepts it, converts back, and writes Celsius instead. Celsius becomes one hundred. And then Fahrenheit updates - not because anybody set it, but because the computation reran off the new Celsius and produced two hundred and twelve again. Same number on screen, but it went all the way round and came back, which means the two can never disagree.
 
-The important bit is what is missing: the hook completely replaces the default write, so nothing sets tempF directly. It only ever gets its value from the computation. That is what gives you exactly one owner. There is a second argument to the hook called rawSet, which writes the linked signal directly, and it exists for the cases where the source will not reflect your write straight away - an async save you do not want to wait on - or where the derivation is expensive and you already know what it is going to produce. Most of the time you want to leave it alone.
+The important bit is what is missing from that code: nothing sets tempF directly. The hook completely replaces the default write, so the only way tempF ever gets a value is out of the computation. That is what gives you exactly one owner.
+
+There is a second argument to the hook called rawSet, which writes the linked signal directly. It is there for the cases where the source will not reflect your write straight away - an async save you do not want to wait on - or where the derivation is expensive and you already know what it is going to produce. Most of the time, leave it alone.
 
 And update goes through the same hook. It reads the current value untracked before handing it to you, so you do not pick up a dependency by accident.
 
-The real-world shape of this is a value owned by a parent object or a store - a preference, a field on an order - where the write belongs to the owner rather than to you. Without this hook, that is a local linked signal plus something pushing edits back, and in practice that something is an effect.
+The real-world shape of this is not temperature, it is a value owned by a parent object or a store - a preference, a field on an order - where the write belongs to somebody else. Without this hook that is a local linked signal plus something pushing edits back, and in practice that something is an effect.
 -->
 ---
 layout: content
