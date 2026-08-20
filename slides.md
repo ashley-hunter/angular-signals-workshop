@@ -16,7 +16,9 @@ eyebrow: 'Workshop'
 The patterns we reach for, and the pitfalls we keep shipping.
 
 <!--
-Signals aren't new to anyone in this room, and adoption isn't our problem - the codebase is overwhelmingly signal-based already. What keeps happening instead is a small set of mistakes, made over and over, in code that looks completely reasonable when you read it. That's what I want to spend our time on: those mistakes, and the shape of the fix in each case.
+- Signals aren't new here. Adoption isn't our problem - the codebase is already overwhelmingly signal-based
+- What keeps happening: a small set of mistakes, repeated, in code that reads as perfectly reasonable
+- That's the session - those mistakes, and the shape of each fix
 -->
 
 ---
@@ -29,17 +31,15 @@ heading: 'Adoption is done. Fluency is not.'
 <p style="font-size:30px;color:#5E6B7D;line-height:1.45;margin:44px 0 0;max-width:1600px;">A dependency problem, an identity problem and a state-modelling problem. Every chapter after this one is one of the three.</p>
 
 <!--
-Let me tell you where these three come from, because I do not want you taking them on trust.
-
-I pulled about four thousand pull request review comments from our own repository and narrowed them to the ones that talk about reactivity - signals, computed, effects, change detection. That left two hundred and ninety. Then I sorted those by what had actually gone wrong rather than by which API was mentioned, and they land in a very small number of shapes. Stale is the biggest at forty-four. Wasteful is close behind at thirty-eight. Silent failure is third at twenty-seven.
-
-Two caveats so the numbers are honest. They are comment-level and multi-label, so they do not add up to two hundred and ninety. And this is the reactivity slice specifically - I am not claiming these are the most common findings in our review process overall, because they are not. Across every comment we write, the big categories are guideline violations, logical bugs, missing test coverage, and comments that no longer match the code. Reactivity is a large and expensive slice of that pile, not the majority of it.
-
-There is a fourth shape, and it is worth mentioning because somebody always asks: races, ordering and lifetime problems. Eleven comments, so a long way behind the other three, which is why it is not up here.
-
-And that number has a story attached that I will tell you because it is a good warning about this kind of analysis. My first pass counted a hundred and twenty-four race comments, which would have put it second. It was wrong - the pattern was also matching the word traces, and this codebase has a lot of tracing functionality. With proper word boundaries it is eleven, and the phrase "race condition" appears exactly zero times. So one of my headline findings was an artefact of a sloppy regex, and if it happened once it could be hiding in the other counts too.
-
-One thing about the word silent, since it is doing a lot of work on this slide: all three of these are silent in the sense that nothing throws. What is specifically silent about the third one is the failure itself - the request failed and nothing anywhere said so.
+- Where these come from, so nobody takes them on trust
+- ~4,000 PR comments, narrowed to reactivity = 290. Sorted by what went wrong, not which API
+- **Stale 44, wasteful 38, silent failure 27**
+- Caveat: comment-level and multi-label, so they don't sum to 290
+- Caveat: reactivity slice only. Overall our big categories are guideline violations, logic bugs, missing tests, stale comments
+- Fourth shape if asked - races/ordering/lifetime, 11. Far behind, hence not up here
+- Warning story on that number: first pass said 124, which would have put it second. The regex was also matching "traces", and we have a lot of tracing. With word boundaries: 11. "race condition" appears zero times
+- A headline finding was a regex artefact. If it happened once it could be hiding in the others
+- On "silent": all three are silent in that nothing throws. What's silent in the third is the failure itself
 -->
 
 ---
@@ -52,7 +52,8 @@ transition: fade
 <p class="lead" style="margin-top:40px">Where the largest share of review findings live.</p>
 
 <!--
-This chapter is the biggest cluster in the review comments I looked at, and it isn't close. If we only change one habit as a team when we walk out of here, I'd want it to be this one.
+- Biggest cluster in the review comments, not close
+- If we change one habit as a team today, this is it
 -->
 
 ---
@@ -73,11 +74,10 @@ heading: 'When to use each primitive'
 <p style="font-size:29px;color:#8A97A8;line-height:1.45;margin:32px 0 0;max-width:1600px;">Most of us stop at the middle card. The one on the right is where our largest cluster of findings comes from.</p>
 
 <!--
-Everybody in this room reaches for signal correctly, and everybody reaches for computed correctly. Where we fall down is the third card. We use linkedSignal about a third as often as we use the workaround it replaces - so when a value is derived but also has to stay writable, what we reach for instead is an effect, and that is precisely where the largest cluster of our review findings comes from.
-
-So the way I'd use this slide is left to right. Is anything deriving this value? No - then it's a signal, and you're done. Yes, and nothing else is allowed to overwrite the answer - that's a computed. Yes, but the user can also overwrite it - that's linkedSignal, and that's the card I want you to actually remember, because it's the one we forget exists.
-
-And effect is deliberately not in that row. It isn't a fourth option in the same list, because it doesn't hold a value at all. It's the exit from the graph into something that isn't reactive, and we'll come back to what it's genuinely good for in a few slides.
+- We all get signal right, and computed right. The third card is where we fall down
+- linkedSignal used ~1/3 as often as the workaround it replaces - so "derived but writable" becomes an effect, and that's our largest cluster of findings
+- Left to right: nothing derives it → signal. Derived, nothing else may overwrite → computed. Derived, user can overwrite → linkedSignal
+- effect is deliberately not in the row - it holds no value. It's the exit from the graph. Coming back to what it's good for
 -->
 
 ---
@@ -116,7 +116,12 @@ readonly visible = computed(() =>
 <p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:40px 0 0;max-width:1600px;">The left lands after the view has already been checked and forces a second check. Anything can write to it, and it rebuilds the array either way.</p>
 
 <!--
-Let me actually say why the left is worse, because "the rule says so" has never changed anybody's habits. There are four things going wrong here. First, it lands late - the effect runs after the view that triggered it has already been checked, so everything that read the value during that pass read the old one, and Angular has to come back round before the screen agrees with itself. Second, it's a writable signal, so anything in the class can set it, and the invariant you think you have isn't enforced anywhere. Third, there's no cached identity: the array gets rebuilt whether or not the answer actually changed, so everything downstream reruns. And fourth, that catch-up pass costs you real work every single time the input changes. The version on the right can't drift, because there is nothing to keep in sync.
+- Say why the left is worse - "the rule says so" changes nobody's habits. Four things:
+- **Late.** Runs after the view that triggered it was checked, so everything that read the value that pass got the old one. Angular comes round again before the screen agrees with itself
+- **Writable.** Anything in the class can set it - the invariant isn't enforced
+- **No cached identity.** Array rebuilt whether or not the answer changed, so downstream reruns
+- **The catch-up pass costs work** on every input change
+- The right can't drift. Nothing to keep in sync
 -->
 
 ---
@@ -160,13 +165,13 @@ prev() { this.page.update((p) => p - 1); }
 <p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:40px 0 0;max-width:1600px;">Same paging on both sides. On the right the reset and the writes are one signal, so there is nothing to keep in sync.</p>
 
 <!--
-Look at what the pager methods do to this. If page were only ever derived from the filter, a computed would be the end of the story - but next and prev have to write to it, and a computed will not let you. So people reach for a plain signal, and now nothing resets it when the filter changes, so they add an effect to do the resetting by hand. That is how you end up with the version on the left, and every step of that reasoning is sensible.
-
-linkedSignal is the answer to exactly this shape. It is derived, so the filter changing resets it to page one for free. And it is writable, so next and prev work on it like any other signal. Notice the two methods are identical on both sides - the only thing that changes is where the reset lives.
-
-The tell, when you are reading your own code, is a sentence with "but" in it. It is derived, but the user can change it. Selected row, current page, active tab, a form field seeded from whatever you loaded. All the same shape, and this is the slide I would most like you to remember, because we have around three hundred instances of the left-hand version in the codebase and about ninety-five of the right-hand one.
-
-There is also a longer form that takes a source and a computation, and the computation gets handed the previous source and the previous value. That is what you want when you would like to keep the current selection if it still exists in the new data, and fall back to something sensible when it does not.
+- The pager methods force it. Derived from the filter alone → computed, done. But next/prev must write, and computed won't allow it
+- So: plain signal → nothing resets it on filter change → add an effect to reset by hand. That's the left, and every step of it is sensible
+- linkedSignal fits exactly: derived, so the filter resets to page one for free; writable, so next/prev just work
+- The methods are identical on both sides. Only the reset location changes
+- The tell in your own code is a sentence with "but": derived, **but** the user can change it. Selected row, current page, active tab, a field seeded from what you loaded
+- ~300 instances of the left in our codebase against ~95 of the right
+- If asked: a longer form takes source + computation, and the computation gets previous source and previous value. Use it to keep the selection if it still exists in the new data
 -->
 
 ---
@@ -207,20 +212,15 @@ const tempF = linkedSignal(
 </div>
 
 <!--
-Two bound inputs, and somebody types two hundred and twelve into the Fahrenheit box. Hold that question for a second, because the answer is not the one most people expect.
-
-On the left is the default. Fahrenheit is derived from Celsius, and you can absolutely write to it - linkedSignal is writable, that is the whole point of it. So it holds two hundred and twelve. But look at the Celsius box: still zero. Nothing told it anything. And the moment anything writes to Celsius, that two hundred and twelve is gone, because the computation reruns and overwrites it. That is what a local override means - the write is real, and it is temporary.
-
-Now the set hook. Somebody writes Fahrenheit, your hook intercepts it, converts back, and writes Celsius instead. Celsius becomes one hundred. And then Fahrenheit updates - not because anybody set it, but because the computation reran off the new Celsius and produced two hundred and twelve again. Same number on screen, but it went all the way round and came back, which means the two can never disagree.
-
-The important bit is what is missing from that code: nothing sets tempF directly. The hook completely replaces the default write, so the only way tempF ever gets a value is out of the computation. That is what gives you exactly one owner.
-
-There is a second argument to the hook called rawSet, which writes the linked signal directly. It is there for the cases where the source will not reflect your write straight away - an async save you do not want to wait on - or where the derivation is expensive and you already know what it is going to produce. Most of the time, leave it alone.
-
-And update goes through the same hook. It reads the current value untracked before handing it to you, so you do not pick up a dependency by accident.
-
-The real-world shape of this is not temperature, it is a value owned by a parent object or a store - a preference, a field on an order - where the write belongs to somebody else. Without this hook that is a local linked signal plus something pushing edits back, and in practice that something is an effect.
+- Two bound inputs. Somebody types 212 into Fahrenheit - hold the question, the answer surprises people
+- **Default:** write lands, F holds 212, Celsius still 0. Next write to C wipes it. A local override is real, and temporary
+- **With set:** hook intercepts, converts, writes C. C becomes 100. F updates because the computation reran off the new C - went round and came back, so the two can't disagree
+- The important bit is what's missing: nothing sets tempF directly. The hook replaces the default write, so tempF only ever gets a value from the computation. One owner
+- rawSet (2nd arg) writes the linked signal directly - async save you won't wait on, or expensive derivation you can already predict. Mostly leave alone
+- update goes through the same hook, reading the current value untracked
+- Real shape isn't temperature: a value owned by a parent or store, where the write belongs to somebody else. Without the hook that's a linked signal plus an effect pushing edits back
 -->
+
 ---
 layout: content
 eyebrow: 'Reactive context'
@@ -231,18 +231,15 @@ heading: 'Not every callback you pass Angular is tracked'
 <p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:26px 0 0;max-width:1660px;">The <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">resource</code> row is the one to keep: <code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#2FD8B4;">params</code> decides <em>when</em> to fetch, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#FF7A6B;">loader</code> only decides <em>how</em>. A signal read in the loader will never cause a refetch. And nothing after an <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">await</code> is tracked anywhere.</p>
 
 <!--
-This is the fact underneath most of the last few slides, and I have never seen it written down in one place, so here it is.
-
-A read only becomes a dependency if it happens somewhere Angular is watching. Not "inside a component", not "inside a signal-based API" - specifically inside a reactive consumer. And look at the two rows in the middle, because that is the part you cannot guess from the shape of the API: linkedSignal and resource each take two callbacks and only watch one of them.
-
-The resource row is the one I would have people memorise. params is tracked, so it decides when to fetch. The loader is explicitly wrapped in untracked in the framework source, so it decides only how. If you read a signal in your loader because it was convenient, that signal will never cause a refetch, and the request will quietly keep using whatever it read the first time. That is a stale bug with no visible cause at all.
-
-linkedSignal is the same trap in a smaller package. The computation is tracked - that is what makes it derived state. The set hook is not a reactive computation of its own; it runs wherever somebody called set from. So do not put a read in there expecting it to keep anything up to date.
-
-And the two render rows are the ones where the names actively mislead you. They take the same four phase names, but afterRenderEffect gives each phase its own reactive node, which is exactly why it reruns when something changes, while afterNextRender phases are plain callbacks that run once.
-
-The reason this matters more than it sounds is that every one of these mistakes produces a value that is correct the first time. You fetch, it works, you demo it, it ships. It only goes wrong on the second change, when the thing you read in the wrong place changes and nothing happens.
+- The fact underneath the last few slides, rarely written down in one place
+- A read is only a dependency inside a reactive consumer. Not "in a component", not "in a signals API"
+- The two middle rows are unguessable from the API shape: linkedSignal and resource each take two callbacks and watch one
+- **resource is the row to memorise.** params tracked = decides *when*. loader wrapped in untracked in the source = decides only *how*. A read in the loader never refetches, and the request keeps whatever it read first time. Stale with no visible cause
+- linkedSignal, same trap smaller: computation tracked, set hook isn't its own reactive computation - it runs wherever set was called
+- Render rows are where the names mislead: same four phase names, but afterRenderEffect gives each phase a reactive node (hence reruns), afterNextRender phases are plain one-shot callbacks
+- Why it bites: every one of these is correct the first time. It works, it demos, it ships. It fails on the second change
 -->
+
 ---
 layout: content
 eyebrow: 'Legitimate use'
@@ -261,7 +258,11 @@ heading: 'What an effect is actually for'
 <p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:40px 0 0;max-width:1600px;">Effects that pass review are the ones that name the non-reactive driver.</p>
 
 <!--
-I need to strike a balance here, otherwise you'll all leave thinking effects are banned. They aren't, and the genuine bridge cases are everywhere in our codebase - grid libraries, editors, charts, anything driven from an event stream we don't own. The difference between an effect that survives review and one that doesn't is almost always whether the author could name the thing outside the graph. So that's the question I'd ask of your own code before you push it: what is the non-reactive thing this effect is driving? If you can't name it, there probably isn't one, and what you've actually written is a computed. Two habits that help: one effect per side effect, and put it in a named class field rather than burying it in the constructor.
+- Balance needed here or everyone leaves thinking effects are banned
+- They aren't. Genuine bridges are everywhere in our codebase - grids, editors, charts, event streams we don't own
+- What separates an effect that survives review: whether the author could name the thing outside the graph
+- So ask it of your own code before pushing - what non-reactive thing is this driving? Can't name it, and you've written a computed
+- Two habits: one effect per side effect, and a named class field rather than buried in the constructor
 -->
 
 ---
@@ -305,16 +306,15 @@ readonly #render = effect(() => {
 <p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:34px 0 0;max-width:1660px;">Tracking covers the synchronous run only. Everything read after the <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">await</code> is invisible to the graph.</p>
 
 <!--
-The team loads, the grid renders, everything looks fine. Then somebody changes the format, and nothing happens.
-
-Here is why. The effect is async. The first read, teamId, happens synchronously, so that one is a real dependency. Then we await. And the moment we come back from that await we are no longer inside the reactive consumer - Angular stopped watching when the synchronous run finished. So format gets read, gets used, and never gets registered. It is on screen, it is in the render call, and it is not in the graph.
-
-That is the panel on the right. One of the two dependencies made it. Which is worse than none making it, because the effect does still fire when the team changes, so the wiring looks correct. You will demo this and it will work. Somebody will only find it later, changing the format and watching nothing happen, and then spend an afternoon looking for a bug in the render path where there isn't one.
-
-The fix is to stop doing the async work in the effect at all. Move the fetch into a resource, where params is the tracked part and the loader is the untracked part - which is exactly the split from a few slides ago. Now the effect is fully synchronous. It reads the resource value, it reads the format, both are real dependencies, and it reruns on either.
-
-And you get cancellation for free. If the team changes twice quickly, the resource abandons the superseded request. The async effect will happily let both land and render whichever finishes last.
+- Team loads, grid renders, all fine. Change the format and nothing happens
+- teamId is read synchronously, so it's tracked. After the await we're outside the reactive consumer - Angular stopped watching when the sync run finished
+- So format is read, used, and never registered. On screen, in the render call, not in the graph
+- Panel: one of two dependencies made it. **Worse than none** - it still fires on team change, so the wiring looks right and demos fine
+- Found later by somebody changing the format, watching nothing happen, and hunting a render-path bug that doesn't exist
+- Fix: get the async work out of the effect. resource = tracked params + untracked loader, the same split as a few slides ago. The effect goes fully synchronous and both reads count
+- Cancellation free: resource abandons superseded requests. The async effect lets both land and renders whichever finishes last
 -->
+
 ---
 layout: content
 eyebrow: 'Cleanup'
@@ -349,14 +349,15 @@ readonly poll = effect((onCleanup) => {
 <p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:34px 0 0;max-width:1660px;"><code style="font-family:'JetBrains Mono',monospace;font-size:25px;">onCleanup</code> runs before <em>every</em> rerun, not just on destroy. Nothing errors - the app just does more work, forever.</p>
 
 <!--
-Same effect, keyed on an order id. Every time the id changes the effect reruns and starts an interval. Change the id three times and you have three intervals, and two of them are polling an order nobody is looking at any more.
-
-Notice what this failure looks like from the outside, which is: fine. Nothing throws. The screen is correct, because the newest interval is checking the right order. You have just quietly signed up for permanent background work that grows every time somebody clicks around, and you will find it as a performance complaint weeks later, or on a server bill.
-
-The fix is one parameter. Take onCleanup, hold on to the handle, and clear it. And the important word in that callback is not destroy - it is rerun. onCleanup runs before every single rerun of the effect, and then once more when the component goes away. So the mental model is not teardown, it is undo the previous run. Which, when your effect is keyed on something that changes, is exactly what you want.
-
-Anything you start inside an effect belongs in here - intervals, subscriptions, listeners, an in-flight request. And if it is DOM listeners rather than timers, use an AbortController: pass its signal to every addEventListener, then abort it in the cleanup and the whole set goes at once.
+- Keyed on an order id. Every change reruns and starts an interval. Three changes = three intervals, two polling an order nobody's looking at
+- From outside, this failure looks like: fine. Nothing throws, screen is correct, newest interval has the right order
+- You've signed up for permanent background work that grows every time somebody clicks around. Surfaces weeks later as a perf complaint or a server bill
+- Fix is one parameter: take onCleanup, hold the handle, clear it
+- The key word isn't destroy, it's **rerun**. Runs before every rerun, then once on destroy. Not teardown - undo the previous run
+- Everything started in an effect belongs here: intervals, subscriptions, listeners, in-flight requests
+- DOM listeners: one AbortController, pass its signal to every addEventListener, abort in cleanup, whole set goes at once
 -->
+
 ---
 layout: section
 number: '02'
@@ -367,15 +368,12 @@ transition: fade
 <p class="lead" style="margin-top:40px">The set is observed, not declared. That is where stale comes from.</p>
 
 <!--
-This chapter is the stale family, and every bug in it comes down to the same sentence: something changed, and nobody was listening.
-
-The thing to hold onto before we start is that a dependency set is observed, not declared. You never write down what a computed depends on. Angular watches which signals you actually read while the function runs, and that set of reads is the dependency set - for that run, and only that run.
-
-Two things follow from that, and we keep coming back to both. A value you read behind a condition is only a dependency on the runs where the condition let you reach it. And a value you read outside a reactive context - or after the function has already handed control back, which is the await case we just looked at - is not a dependency at all.
-
-If somebody asks whether that first one is a bug - whether an if statement can hide a dependency from you - the answer is no, and it is worth being able to say why. The dependency list is rebuilt from scratch on every single run, so anything you did not read this time is dropped. But the condition itself is a read, so it is tracked, and the moment it flips the whole thing recomputes and picks up whatever the new branch reads. Conditional reads are self-correcting. Where it does go wrong is when the condition is not a signal at all, and that is the next slide but one.
-
-Nobody writes that set down, nothing checks it, and the compiler cannot help you. That is where stale comes from, and it is why every bug in this chapter looks like working software right up until it does not.
+- The stale family. Every bug in it is one sentence: something changed, and nobody was listening
+- Hold this first - a dependency set is **observed, not declared**. You never write down what a computed depends on. Angular watches what you actually read during the run, and that's the set. For that run only
+- Two consequences we keep returning to: a read behind a condition only counts on runs that reach it; a read outside a reactive context - or after an await - isn't a dependency at all
+- If asked whether an if can hide a dependency: no. The list is rebuilt from scratch every run, but the condition itself is a tracked read, so flipping it recomputes and picks up the new branch. Self-correcting
+- It goes wrong when the condition isn't a signal. That's two slides away
+- Nobody writes the set down, nothing checks it, the compiler can't help. Hence stale, and hence code that looks like working software until it isn't
 -->
 
 ---
@@ -426,19 +424,16 @@ readonly rows = resource({
 <p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:26px 0 0;max-width:1660px;">The read is the dependency, and the request is compared by <em>reference</em>. Split the signals - or feed <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">params</code> a <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">computed</code> with an <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">equal</code> when you cannot.</p>
 
 <!--
-Both directions turn up in review about as often as each other, and both are normally written by somebody with exactly the right intention. Too narrow is the stale family from the last chapter - the read goes through a helper, or sits inside an untracked block, and the tracking quietly gets skipped. Too wide is this one.
-
-Everything is in one state object here: team ID, page, and the column you are sorting by. Sorting is client-side - the server returns the same rows either way - but params reads the whole object, so changing the sort fires a network request. Nobody wrote that on purpose, but that is what the code says.
-
-So you do the obvious thing. Pull out just the two fields the request needs, and hand those over instead.
-
-And it changes nothing at all. Watch what is still there: params still calls this.state(), so it still depends on the whole state signal, so it still reruns when sortBy changes. And now it returns a brand new object literal each time it runs. Nothing diffs that for you - Angular compares the new request against the previous one by reference - so a fresh object is never equal, and you refetch exactly as often as before. This is the version I want you to recognise, because it looks like a fix and it is not one, and it is the one you will write.
-
-The read is the dependency. Once that lands, the real fix is obvious: hold the values as separate signals, and let params touch only the two the request is actually made of. Now sortBy changing does not invalidate params at all, because params never read it.
-
-If somebody asks what to do when the state genuinely cannot be split - it comes from a store, or a parent owns it - the answer is to put a computed in front with a custom equal comparing the fields you care about. The comparator returning true makes the computed keep its old value without bumping its version, so nothing downstream hears about it and the resource never re-requests.
-
-And one small mercy: if your params function returns a primitive rather than an object, a string ID or a number, the reference check is a value check and none of this applies to you.
+- Both directions turn up about equally, both written with exactly the right intention
+- Too narrow = last chapter: the read goes through a helper or sits in untracked, and tracking gets skipped
+- Too wide = this. One state object: team id, page, sort column. Sorting is client-side, but params reads the whole object, so changing the sort fires a request. Nobody wrote that on purpose - it's what the code says
+- Obvious fix: pull out the two fields the request needs
+- **It changes nothing.** params still calls this.state(), so it still depends on the whole signal, so sortBy still reruns it. And now it returns a fresh object literal each run
+- Nothing diffs that. Angular compares request to previous **by reference**, so a new object is never equal - same refetch rate as before
+- That's the version to recognise: it looks like a fix, it isn't, and it's the one you'll write
+- The read is the dependency. So the real fix: separate signals, params touching only what the request is made of. sortBy never invalidates params because params never read it
+- If state genuinely can't be split (a store, a parent owns it): a computed in front with a custom equal on the fields you care about. Returning true keeps the old value without bumping the version, so nothing downstream hears
+- Mercy: params returning a primitive makes the reference check a value check, and none of this applies
 -->
 
 ---
@@ -492,20 +487,17 @@ send(page: string) {
 <p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:24px 0 0;max-width:1660px;">Nothing in the effect changed. Wrap the call, not just the read - you are declaring that this effect reacts to <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">page()</code> and to nothing the callee happens to touch.</p>
 
 <!--
-This is the untracked case I most want you to leave with, because it is the one you cannot see coming from your own file.
-
-Start on the left. An effect reads the page and calls a service to record it. The service does an HTTP post. Nothing reactive in there, everything works, and it works for months.
-
-Then somebody improves the service. They add a recently-viewed list - read the current value, append, write it back. Completely reasonable change, made by somebody who has never opened your component and has no idea an effect calls this.
-
-And now look at what happened to your effect, without a single character of it changing. The call happens inside the effect's reactive context, so the read of recent inside send is a read inside your effect. That makes recent a dependency of your effect. And the very next line writes recent. So the effect runs, writes, invalidates itself, runs again. You have an infinite loop, and the change that caused it is in a file you have never touched.
-
-The fix is on the right, and notice what it is not - it is not a change to the service. Wrap the call. What untracked is saying there is a genuine statement about design: this effect reacts to the page changing, and to nothing that the thing it calls happens to touch. That is almost always what you meant.
-
-So the rule I would take from this: when an effect calls out to something you do not own - a service, a library, anything with its own state - wrap the call. Not because it reads signals today, but because it might tomorrow, and you will not be the one who adds them.
-
-Two things to keep in the back of your mind. update does not track - it reads the current value directly - so a service using update rather than a read plus a set would not have caused this. And if you are reaching for untracked because your own effect is looping, that is different: an effect that reads state and writes state is usually derived state in disguise, and the fix is a computed, not a wrapper.
+- The untracked case to leave with - the one you can't see coming from your own file
+- Left: effect reads the page, calls a service to record it, service does an HTTP post. Nothing reactive. Works for months
+- Then somebody adds a recently-viewed list to the service - read, append, write back. Reasonable change, by somebody who's never opened your component
+- Your effect now loops, with not one character changed. The call runs inside your effect's reactive context, so the read of recent is a read inside your effect, so recent is your dependency. The next line writes it
+- Runs, writes, invalidates itself, runs again. Infinite loop, caused by a file you've never touched
+- Notice what the fix is **not** - not a change to the service. Wrap the call
+- untracked there is a design statement: this effect reacts to the page, not to whatever its callees happen to touch. Almost always what you meant
+- Rule: when an effect calls something you don't own, wrap it. Not because it reads signals today - because it might tomorrow, and you won't be the one adding them
+- Two asides: update doesn't track (reads the value directly), so a service using update wouldn't have caused this. And if your **own** effect loops, that's different - read-state-write-state is derived state in disguise, and the fix is a computed
 -->
+
 ---
 layout: content
 eyebrow: 'The invisible dependency'
@@ -543,7 +535,12 @@ readonly rows = computed(() =>
 <p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:36px 0 0;max-width:1600px;">Same shape: a service getter, storage, the current time, the URL, the DOM. None of them notify.</p>
 
 <!--
-This is the highest-volume single bug in our whole review history, and I want to spend a moment on it, because the symptom looks like an i18n bug rather than a signals bug. Somebody changes language, half the screen updates because it went through a pipe, and the other half stays stubbornly in the old language, because those strings were snapshotted into a computed and have been frozen ever since. Five separate findings turned out to be that same instance. But the translation case is just the one we happened to hit - the rule underneath it is what I want you to take away. If the source cannot notify you, do not read it inside derived state. Either bring it into the graph as a signal so it can tell you when it changes, or push the read down to the point of render, where it gets re-evaluated anyway. And the list along the bottom is not exhaustive. An imperative getter on a service, something out of storage, the current time, the current URL, the contents of a DOM node - none of them can tell you they changed, so all of them behave exactly the same way.
+- Highest-volume single bug in our whole review history
+- Symptom looks like i18n, not signals: change language, pipes update, and the rest stays in the old language - those strings were snapshotted into a computed and frozen since
+- Five separate findings were the same instance
+- Translation is just where we hit it. The rule underneath: **if the source can't notify you, don't read it in derived state**
+- Two ways out: bring it into the graph as a signal, or push the read down to render where it's re-evaluated anyway
+- The list isn't exhaustive - imperative getters, storage, current time, current URL, DOM contents. None can tell you they changed
 -->
 
 ---
@@ -556,7 +553,9 @@ transition: fade
 <p class="lead" style="margin-top:40px">When your code runs relative to inputs and to render.</p>
 
 <!--
-This chapter is the one people find most surprising, because every example in it is code that is completely correct when you read it on its own, and wrong because of when it runs. There is no logic error to find in any of it. It is all about where your code sits in the sequence - relative to your inputs being set, and relative to the DOM actually being there.
+- The chapter people find most surprising: every example is correct read on its own, and wrong because of *when* it runs
+- No logic error to find in any of it
+- It's about where your code sits in the sequence - relative to inputs being set, and to the DOM being there
 -->
 
 ---
@@ -600,17 +599,14 @@ readonly #observe = effect((onCleanup) => {
 <p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:36px 0 0;max-width:1600px;">It hides well, because the default is usually the common case. And an input is not set once - a hook that runs at startup only catches the first value.</p>
 
 <!--
-We have shipped this more than once, and both times it took a careful reviewer to catch it, because there is nothing about it that looks wrong.
-
-The reason it happens is just ordering. Angular constructs your class first and sets the template-bound inputs afterwards, so at constructor time the signal is still sitting on its default. And look at the second-order damage in the case on the slide: that guard existed to avoid allocating observers for the cheap layouts, it never once fired, so every instance paid for machinery that the comment directly above it promised it would skip. We had another one where test fixtures were seeded from an input in the constructor and rendered empty in every case that mattered.
-
-Now, the obvious fix is to move it into ngOnInit, and I want to be careful here because that is only half right. ngOnInit runs once. If mode is bound to something that can change - and inputs usually are - then you have swapped a decision that always saw the default for a decision that only ever saw the first real value. The bug gets rarer, which is worse, not better.
-
-So the fix on the right is an effect. It runs once the inputs are set, and it runs again whenever mode changes, which is what you actually wanted. And because it is starting something non-reactive, it cleans up after itself - that is the cleanup rule from chapter one, and here it means the old observer is torn down before a new one starts.
-
-If somebody asks whether lifecycle hooks are on the way out: no, ngOnInit is not deprecated and Angular's style guide still tells you how to use it well. What has been replaced is the ones that existed to observe change. ngOnChanges has a signals equivalent for every shape it had - we have a slide on that. View queries are signals now. DOM timing has the render phases. If your hook exists to react to something, there is a signal-shaped answer. If it is genuinely one-time imperative setup that depends on nothing reactive, ngOnInit is still perfectly fine.
-
-The rule I would take away is simpler than any of that: if a decision depends on an input, it does not belong in the constructor, and it probably does not belong in a hook that only runs once either.
+- We've shipped this more than once. Both times a careful reviewer caught it, because nothing looks wrong
+- Just ordering: Angular constructs the class, then sets template-bound inputs. At constructor time the signal is on its default
+- Second-order damage here: the guard existed to skip observers for cheap layouts. It never fired once, so every instance paid for machinery the comment above it promised to skip
+- Another: test fixtures seeded from an input in the constructor, rendering empty in every case that mattered
+- ngOnInit is only half right. **It runs once.** If mode can change - and inputs usually do - you've swapped "always saw the default" for "only saw the first real value". Rarer, which is worse
+- So: an effect. Runs once inputs are set, again whenever mode changes. And it starts something non-reactive, so it cleans up - chapter one's rule, tearing down the old observer before the new one starts
+- If asked whether lifecycle hooks are going away: no. ngOnInit isn't deprecated, style guide still covers it. What's replaced is hooks that existed to **observe change** - ngOnChanges (next slide), view queries, DOM timing. One-time imperative setup with no reactive dependency is still fine
+- Takeaway: a decision that depends on an input doesn't belong in the constructor, and probably not in a once-only hook either
 -->
 
 ---
@@ -624,12 +620,16 @@ heading: 'Every ngOnChanges has a signals shape'
 <p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:0;max-width:1600px;"><code style="font-family:'JetBrains Mono',monospace;font-size:26px;">ng generate @angular/core:signals</code> converts inputs, outputs and queries for you. It does not touch <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">ngOnChanges</code>, so this table is the part you do by hand.</p>
 
 <!--
-This one is worth a slide because of where we found it. There are still a hundred and forty-odd ngOnChanges implementations in the codebase, and thirty-nine of those are in files that already use input(). So this is not people who haven't caught up. It's people who converted their inputs, looked at ngOnChanges, and couldn't see what it turns into - which is fair, because the schematic converts inputs and outputs and queries and then leaves ngOnChanges exactly where it is.
-
-So here is the translation. Nearly every one you'll meet is one of these four. If it recomputes something from one input, it was never a change handler at all, it was a formula, and it's a computed. If it recomputes from several inputs, it is still a computed - you just read all of them, and the dependency set assembles itself from the reads. If it resets some local state when an input changes, that's the derived-but-writable shape from chapter one, and it's a linkedSignal. And only the fourth case is genuinely a lifecycle concern: it's driving something outside the graph, and that is what an effect is for.
-
-The line about firstChange is the one people trip on. There is no signals equivalent, and I'd argue that's deliberate rather than an omission. If the first run has to be different from the rest, what you're describing is initialisation, and initialisation belongs somewhere that runs once - not inside something that reruns.
+- Worth a slide because of where we found it: ~140 ngOnChanges implementations, and **39 in files that already use input()**
+- Not people who haven't caught up - people who converted inputs and couldn't see what ngOnChanges becomes. Fair: the schematic converts inputs, outputs and queries, then leaves it alone
+- Nearly every one is one of four:
+- From one input → never a change handler, a formula. **computed**
+- From several inputs → still **computed**. Read them all, and the dependency set assembles from the reads
+- Resets local state on input change → chapter one's derived-but-writable. **linkedSignal**
+- Drives something outside the graph → genuinely lifecycle. **effect**
+- firstChange is the trip-up. No equivalent, and deliberately: if the first run must differ, that's initialisation, and initialisation belongs somewhere that runs once - not inside something that reruns
 -->
+
 ---
 layout: content
 eyebrow: 'Render phases'
@@ -668,17 +668,14 @@ readonly #scroll = afterRenderEffect({
 </div>
 
 <!--
-Let me be precise about why the version on the left is wrong, because I checked this in the framework source and the reason is not quite the one people give.
-
-A component effect runs inside change detection. Angular updates this component's own template first, then runs the effects attached to this view, and only after that does it refresh embedded views - your if blocks and for loops - and then child components. So the element you are reaching for is only guaranteed to be there if it is a plain part of this template. Put it behind an if, or inside a child component, and on the pass where it first appears, your effect has already run.
-
-The other half is that even when the element does exist, you are writing to it in the middle of a change detection pass, not at a point anybody scheduled for DOM work. afterRenderEffect gives you that point, and the write phase specifically means write - no reading layout back.
-
-I want to correct something you might have heard, including possibly from me: it is not that view queries have not resolved yet. Signal queries are lazy - reading one materialises the results right there - so a viewChild read inside an effect will find the element if the element exists. The failure is about whether the element exists, not about query timing. And if you use viewChild.required and it does not exist, you get NG0951 rather than silence, which is a good reason to prefer required.
-
-A raw requestAnimationFrame is worse than either, because that steps outside Angular's render coordination entirely and puts you back to guessing.
-
-Then there is the case at the bottom, which I have never seen anybody predict in advance. Your effect tracks the anchor and it tracks the content, both settle, you position the overlay against what is on screen - and then a deferred block swaps its placeholder out for the real content, and the height you measured is now wrong. Nothing in your dependency set changed, so nothing reran, and the overlay just sits there in the wrong place. You either observe the size of the thing you measured, or you track whatever signals the swap.
+- Be precise about why the left is wrong. I checked the framework source, and the reason isn't the one people give
+- A component effect runs **inside** change detection: this template updates, then this view's effects, then embedded views (if/for), then child components
+- So the element is only guaranteed present if it's plain in this template. Behind an if, or in a child, and on the pass where it first appears your effect has already run
+- Other half: even when it exists, you're writing mid-change-detection, not at a point scheduled for DOM work. afterRenderEffect gives you that point, and write means write - no reading layout back
+- **Correction to something you may have heard, possibly from me:** it is not that view queries haven't resolved. Signal queries are lazy - reading one materialises results there - so viewChild in an effect finds the element if it exists. The failure is existence, not query timing
+- viewChild.required gives NG0951 rather than silence. Good reason to prefer required
+- Raw requestAnimationFrame is worse than either - outside Angular's render coordination entirely, back to guessing
+- The bottom case nobody predicts: effect tracks anchor and content, both settle, you position the overlay - then a deferred block swaps placeholder for real content and your measured height is wrong. No dependency changed, nothing reran, overlay sits in the wrong place. Observe the size of what you measured, or track whatever signals the swap
 -->
 
 ---
@@ -690,7 +687,11 @@ heading: 'Pick the phase, do not take the default'
 <p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:0 0 20px;max-width:1600px;">A read after a write in the same phase forces layout. The phases run in a fixed order, so splitting them is usually a two-line change.</p>
 
 <!--
-The default is the trap on this slide. If you hand these APIs a plain callback instead of a phase object, you land in mixedReadWrite, and it works - which is why nobody ever goes back and changes it - and you pay a forced synchronous layout on every single run. Angular's own guidance is to reach for read and write first, and only use earlyRead when you genuinely have to measure before something writes, and only use mixedReadWrite when you cannot split the work at all. The four phases always run in that order, top to bottom, so once you have named them the data just flows down the list. And then there is a second thing this catches people out with, which is nothing to do with phases: a measurement you take inside one of these is a number, not a subscription. You read the element's height at that moment and that is all you get. If the element can change size without any signal changing - content loads, a font arrives, the user drags the window - you will never hear about it. That is what a resize observer is for, and torn down properly when the component goes.
+- The default is the trap. A plain callback instead of a phase object lands in mixedReadWrite - and it works, which is why nobody revisits it - and costs a forced synchronous layout every run
+- Angular's guidance: read and write first. earlyRead only when you must measure before something writes. mixedReadWrite only when the work can't be split at all
+- The four always run in that order, so once named, the data flows down the list
+- Separate catch, nothing to do with phases: **a measurement is a number, not a subscription**. You get the height at that moment, that's all
+- Element resizes with no signal changing - content loads, a font arrives, the window is dragged - and you never hear about it. That's a resize observer, torn down when the component goes
 -->
 
 ---
@@ -734,19 +735,13 @@ afterNextRender({
 <p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:20px 0 0;max-width:1650px;">Calls that force layout: <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">offsetHeight</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">clientWidth</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">scrollTop</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">getBoundingClientRect()</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">getComputedStyle()</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">scrollIntoView()</code>, even <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">focus()</code>. Cheap once, and multiplied by every row, cell or widget on the page.</p>
 
 <!--
-This is the phase table made concrete. The thing I want you to hold onto is that the cost here is not the read - you almost always need that number - the cost is entirely the ordering. So batching is the whole fix. Read everything, then write everything, and the browser does one layout instead of one per row.
-
-Two details about how the phases actually run, because they are better than people assume.
-
-The order is fixed by the framework, not by you. Angular takes your spec object and drops the four functions into fixed positions - early read, write, mixed, read - and then walks those positions in order. So it does not matter which order you write the keys in; early read always runs before write. Writing them in firing order like this is just courtesy to whoever reads the code next.
-
-And the batching is global, not per callback. The outer loop is the phase and the inner loop is every registered sequence, so every early read in the entire application runs before any write does. Your component is not just batching against itself, it is batching against everything else that registered. That is really why these phases exist.
-
-The value threading is simple: whatever a phase returns gets handed to the next phase that actually exists. Here early read returns the array of heights and write receives it. If you skip a phase, the value carries past it rather than being lost.
-
-Where the code lives decides how much any of this matters. An unbatched read in something that renders once on a settings page costs you nothing you could measure. The same line in a per-row component becomes one forced reflow per instance, and on a page with a few hundred rows that is the difference between smooth and visibly janky.
-
-One last thing while we are on it: if a resize observer has already handed you the box, use the number it gave you rather than asking the DOM again, because that second question costs you exactly what the first one did.
+- The phase table made concrete. The cost isn't the read - you need that number - it's entirely the ordering. Batching is the whole fix
+- Two details, both better than people assume
+- **Order is fixed by the framework.** Your four functions go into fixed positions - earlyRead, write, mixed, read - and Angular walks the positions in order. Key order is irrelevant; writing them in firing order is courtesy to the next reader
+- **Batching is global, not per callback.** Outer loop is the phase, inner loop is every registered sequence - so every earlyRead in the application runs before any write. You're batching against everything else that registered. That's really why the phases exist
+- Value threading: whatever a phase returns goes to the next phase that exists. earlyRead returns the heights, write receives them. Skipped phases pass it through
+- Where the code lives decides the stakes. An unbatched read on a settings page costs nothing measurable. The same line per-row is one forced reflow per instance, and a few hundred rows is the difference between smooth and visibly janky
+- One more: if a resize observer already handed you the box, use its number. Asking the DOM again costs exactly what the first question did
 -->
 
 ---
@@ -759,7 +754,8 @@ transition: fade
 <p class="lead" style="margin-top:40px">Derived state is read often, and at unpredictable times.</p>
 
 <!--
-Chapter four. Everything in this section is correct the first time it runs. That is exactly why it survives review and why it reaches production - the first render looks right, and the bill arrives later, on the second change, or under load, or on the slowest machine in the building.
+- Chapter four. Everything here is correct the first time it runs
+- Which is exactly why it survives review and reaches production - the first render looks right, and the bill arrives later. On the second change, under load, or on the slowest machine in the building
 -->
 
 ---
@@ -801,16 +797,16 @@ readonly #worker = effect((onCleanup) => {
 <p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:26px 0 0;max-width:1660px;">Sockets, observers, subscriptions, timers - same shape. If it needs disposing, it needs an owner, and a <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">computed</code> cannot be one.</p>
 
 <!--
-This one is invisible until the source changes twice, which is why it survives review.
-
-First evaluation builds the worker. Fine. Something in the config changes, the computed reevaluates, and it builds another worker - and the first one is still running, with nobody holding a reference to stop it. There is no hook you could have used: a computed takes exactly two options, equal and debugName. No cleanup, nothing. Under load that shows up as memory climbing and CPU you cannot account for, and you will go looking in completely the wrong place.
-
-When we filed this, the author pushed back, and I think the pushback is fair, so let me give you both sides. Their argument was that purity is a rule about mutating state outside the graph - and constructing an object is not mutating anything. That is right as far as it goes. My answer is that the problem is not the allocation, it is that the thing has a lifetime and a computed has no lifecycle to hang it on. Build a plain object in a computed all day. Build something that needs stopping, and you have made the computed responsible for something it has no way to do.
-
-The version on the right splits those two jobs. The computed derives the configuration, which is genuinely derived state. The effect owns the worker, and because it is an effect it has onCleanup - so when the config changes, the old worker is terminated before the new one starts, and when the component goes away, so does the worker.
-
-Same shape for anything else with an off switch: sockets, resize observers, subscriptions, intervals. If you would have to write code to dispose of it, it does not belong in derived state.
+- Invisible until the source changes twice. That's why it survives review
+- First evaluation builds the worker, fine. Config changes, it builds another - and the first is still running, with nobody holding a reference to stop it
+- There's no hook you could have used: computed takes exactly two options, equal and debugName
+- Under load: memory climbing and CPU you can't account for, and you'll look in completely the wrong place
+- The author pushed back when we filed it, and the pushback is fair - purity is about mutating state outside the graph, and constructing an object mutates nothing. True as far as it goes
+- The answer: the problem isn't the allocation, it's the **lifetime**. A computed has no lifecycle to hang it on. Build plain objects all day; build something that needs stopping and you've made the computed responsible for something it can't do
+- The right splits the jobs: computed derives the config (genuinely derived state), effect owns the worker - and being an effect it has onCleanup, so the old worker is terminated before the new one starts, and goes on destroy
+- Same for anything with an off switch: sockets, resize observers, subscriptions, intervals. If you'd write code to dispose of it, it isn't derived state
 -->
+
 ---
 layout: content
 eyebrow: 'Identity'
@@ -859,16 +855,17 @@ protected readonly visibleRows = computed(
 </div>
 
 <!--
-Start with the binding, because it is the part that does not change and the part that pays.
-
-A method in a template runs on every check of that view. Not when rows change - every check. So a resource resolving somewhere else in this component, a click handler firing, anything at all that marks the view dirty, and this filter runs again and hands the grid a brand new array. The grid has no way to know the contents are identical, because signals compare with Object.is and two arrays are never the same object. So it rebuilds. Every check. For a value nobody changed.
-
-Move it to a computed and two things improve at once. It only recomputes when rows actually changes, and between those changes it hands back the exact same array reference, so the grid sees no change and does nothing. That is the bit I want to land: moving this to a computed is not tidying up. The caching is the entire feature.
-
-Then the third step, which is a real case rather than a flourish. Your rows come back from a refetch. Same data, but they are new objects, so rows() has a new identity, so the computed reruns and produces a new filtered array - and the grid rebuilds even though nothing the user can see has changed. A custom equal lets you say what actually counts as different. Here it is the ids. When your comparator returns true, the computed puts the old value back and does not bump its version, so nothing downstream is ever notified.
-
-Two cautions on that last one. The comparator runs on every recomputation, so it has to be cheaper than the work it prevents - comparing ids to avoid rebuilding a grid is a good trade, deep-comparing a thousand objects to avoid a cheap map is not. And it is rare in our codebase, sixteen uses against eight thousand computeds, so treat it as something you reach for after measuring rather than by default.
+- Start with the binding - the part that doesn't change, and the part that pays
+- A method in a template runs on **every check** of that view. Not when rows change - every check. So a resource resolving elsewhere in the component, a click handler, anything marking the view dirty, and the filter runs and hands the grid a brand new array
+- The grid can't know the contents are identical: signals compare with Object.is, and two arrays are never the same object. So it rebuilds. Every check. For a value nobody changed
+- A computed improves two things at once - recomputes only when rows changes, and returns the same reference in between, so the grid sees no change and does nothing
+- The bit to land: moving this to a computed **isn't tidying up. The caching is the entire feature**
+- Third step is a real case, not a flourish. Refetch returns the same data as new objects → new identity → computed reruns → grid rebuilds with nothing visibly changed
+- A custom equal says what counts as different. Here, the ids. Comparator returns true → old value restored, version not bumped, nothing downstream notified
+- Two cautions: it runs on every recomputation, so it must be cheaper than the work it prevents - ids to avoid a grid rebuild is a good trade, deep-comparing a thousand objects to avoid a cheap map isn't
+- And it's rare: **16 uses against 8,000 computeds**. Reach for it after measuring
 -->
+
 ---
 layout: content
 eyebrow: 'Templates'
@@ -913,18 +910,16 @@ readonly rowViews = computed(() =>
 ````
 
 <!--
-The word I want you to notice on this slide is "unrelated".
-
-A method call in a binding runs on every check of that view. Not when the row changes - every check. So a resource resolving in a completely different corner of this component marks the view dirty, Angular re-checks the template, and your date formatting runs again for every visible row. The rows did not ask for that work. Something else did, and the rows paid for it.
-
-Watch what actually happens between these two versions, because it is not a redesign. Both calls are still there. buildUrl still runs, formatNextRun still runs, once per row. All that changed is where they live. In the first version they live in the template, so they run on every check. In the second they live in a computed, so they run when rows changes and not otherwise.
-
-That is why I call this the cheapest fix on the list. You are not rewriting anything, you are moving two lines and binding to fields instead of calling functions.
-
-And the shape it leaves behind is worth having a name for - a view model. One computed that turns your domain objects into exactly what the template needs, so the template does no work at all beyond reading properties. It also makes the template much easier to read, which is a nice side effect.
-
-One related thing while we are here: at-let is the tool for the same problem at a smaller scale. If you have got the same three-level dereference in six bindings, name it once with at-let. And it is how you subscribe to an async pipe once instead of once per usage, because every pipe instance in a template is its own subscription.
+- The word to notice is "unrelated"
+- A method call in a binding runs on every check. So a resource resolving in a completely different corner of this component marks the view dirty, and your date formatting runs again for every visible row
+- The rows didn't ask for that work. Something else did, and the rows paid for it
+- This isn't a redesign. Both calls are still there - buildUrl still runs, formatNextRun still runs, once per row
+- All that changed is **where they live**. Template = every check. Computed = when rows changes, and not otherwise
+- Hence the cheapest fix on the list: move two lines, bind to fields instead of calling functions
+- The shape it leaves is worth naming - a **view model**. One computed turning domain objects into exactly what the template needs, so the template only reads properties. Easier to read, as a bonus
+- Related, smaller scale: @let. Same three-level dereference in six bindings, name it once. Also how you subscribe to an async pipe once rather than once per usage, since every pipe instance is its own subscription
 -->
+
 ---
 layout: section
 number: '05'
@@ -935,13 +930,14 @@ transition: fade
 <p class="lead" style="margin-top:40px">Loading, empty, error, and the difference between them.</p>
 
 <!--
-Chapter five. This is where the damage becomes user-visible, and it is the part of the research I found least comfortable to read back. Every finding in this section shipped, or came within a review of shipping, something that looked completely fine on screen and was lying to whoever was looking at it.
+- Chapter five. Where the damage becomes user-visible, and the part of the research least comfortable to read back
+- Every finding here shipped, or came within a review of shipping, something that looked completely fine on screen and was lying to whoever was looking at it
 -->
 
 ---
 layout: content
 eyebrow: 'Resources'
-heading: 'Signal-driven reads belong in a resource'
+heading: 'Signal-driven fetches belong in a resource'
 ---
 <p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 24px;max-width:1660px;">The left is what we write by hand. Everything it is missing, the right gets for free.</p>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
@@ -978,18 +974,15 @@ readonly users = httpResource<User[]>(
 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin:28px 0 0;font-size:26px;line-height:1.4;color:#C9D4E2;"> <div style="border-top:2px solid #2FD8B4;padding-top:14px;"><code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#2FD8B4;">httpResource</code><br>an HTTP GET</div> <div style="border-top:2px solid #4A5568;padding-top:14px;"><code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#8A97A8;">rxResource</code><br>an observable pipeline you already have</div> <div style="border-top:2px solid #4A5568;padding-top:14px;"><code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#8A97A8;">resource</code><br>a promise, or a stream you own</div> </div>
 
 <!--
-The version on the left is not a strawman - it is the shape we all wrote for years, and there are plenty of them in the codebase still. And notice it manages to be every mistake from the last two chapters at once. An effect that writes signals, which is chapter one. An async effect, so the teamId read after the await is not even tracked. And two pieces of state, users and loading, that have to be kept in step by hand.
-
-The right-hand side is one expression. You give it a function that returns the request, it reads whatever signals it needs, and that is the whole wiring. The team ID changing is the trigger - you do not subscribe to anything and you do not write the cancellation.
-
-The comments underneath are the part that matters, because they are all things the left-hand version does not do and would be tedious to add. You get value, isLoading, error, status and reload as signals. Superseded requests are cancelled, so if the user clicks three teams quickly you are not left with whichever response happens to land last. And there is no race between two in-flight responses, which is the bug you would only find in production on a slow connection.
-
-One thing to watch inside that function: it reruns when the signals it reads change, so key it on the few values the request is genuinely made of. Hand it a whole state object and every unrelated field becomes a refetch - that is the slide we did in chapter two.
-
-The row along the bottom is how you choose, because you will see all three in our code. Plain HTTP GET, httpResource, and you never touch HttpClient. Already got an observable pipeline, rxResource, hand it the stream. Anything else - a promise, something you are driving yourself - resource with a loader. That last one is what the next few slides use, because their examples call a service function rather than a URL.
-
-And reads only. Nothing stops you setting method to POST, but a resource re-issues its request whenever the parameters change and again on every reload, and "send the delete a second time" is not something you want happening on a parameter change. A write is an action with a moment. It stays on the HTTP client.
+- The left isn't a strawman - it's what we all wrote for years, and plenty are still in the codebase
+- It manages to be every mistake from the last two chapters at once: an effect that writes signals (chapter one), an async effect so the teamId read after the await isn't tracked, and two pieces of state kept in step by hand
+- The right is one expression: a function returning the request, reading whatever signals it needs. That's the whole wiring. The team id changing is the trigger - no subscription, no cancellation code
+- The comments underneath are the point, because they're all things the left doesn't do and would be tedious to add: value, isLoading, error, status, reload as signals. Superseded requests cancelled, so three quick team clicks don't leave you with whichever lands last. No race between two in-flight responses - the bug you'd only find in production on a slow connection
+- Watch inside that function: it reruns on the signals it reads, so key it on the few values the request is made of. A whole state object makes every unrelated field a refetch - chapter two
+- Choosing, and you'll see all three in our code: plain GET → **httpResource**, never touch HttpClient. Existing observable pipeline → **rxResource**, hand it the stream. Anything else, a promise or something you drive → **resource** with a loader. That's what the next slides use, because they call a service rather than a URL
+- **Reads only.** Nothing stops you setting POST, but a resource re-issues on every parameter change and every reload, and "send the delete again" isn't something you want on a parameter change. A write is an action with a moment - it stays on the HTTP client
 -->
+
 ---
 layout: content
 eyebrow: 'Interop'
@@ -1025,18 +1018,17 @@ readonly user = toSignal(this.user$, { initialValue: GUEST });
 <p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:20px 0 0;max-width:1660px;">And <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">toObservable</code> is an <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">effect</code> feeding a <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">ReplaySubject</code> - so a signal, out to an observable and back is chapter one with extra steps.</p>
 
 <!--
-This is the biggest number in the whole research and we have not talked about it yet. There are close to fifteen hundred toSignal calls in our codebase, and around thirteen hundred and seventy of them look exactly like the first version on this slide - no initial value, no requireSync. Every one of those is typed T-or-undefined, and is genuinely undefined for at least one tick.
-
-Look at what that does to a template. You get undefined, the falsy branch runs, and you render "not signed in", or an empty list, or a dash, for a moment before the real value arrives. Most of the time nobody notices, because the gap is a frame. But this is the silent shape from the very first slide: an undefined that means "we do not know yet", rendered as though it means "there is nothing". And when the source is slower than a frame, it stops being invisible.
-
-So, the second option. If the observable genuinely emits when you subscribe - a BehaviorSubject, a ReplaySubject, a store selector - requireSync gives you a plain Signal of User with no undefined anywhere in the type. And that option is stronger than people expect. It is not a hint that gets checked later: toSignal subscribes, and if nothing arrived synchronously it throws NG0601 right there, at the point you created the signal. If you are wrong about your source you find out on the first render in development, not in production six months later.
-
-The third is for sources that genuinely cannot emit immediately. Give it an initial value, and the starting state becomes something you chose rather than something you inherited from the type system. If that value is a real User - a guest, an anonymous user - the type stays Signal of User and the whole undefined problem disappears from your template.
-
-And the fourth answer, which is not on the slide, is to keep undefined because it genuinely means something to you - the user has not loaded yet and you want a skeleton. That is completely fine. The bug is picking none of the four and hoping.
-
-The last line is a separate point and it is worth saying because people do this without thinking. toObservable is implemented as an effect writing into a ReplaySubject - that is not an analogy, it is the actual implementation. So if you take a signal, convert it to an observable, pipe it, and convert it back, you have reintroduced every problem from chapter one and paid for two conversions to do it. If the source is a signal, stay in signals: a computed, or if it is async, a resource.
+- Biggest number in the whole research, and we haven't touched it: close to **1,500 toSignal calls**, and around **1,370 look like the first version** - no initial value, no requireSync
+- Every one is typed T-or-undefined, and genuinely undefined for at least one tick
+- In a template: undefined → falsy branch → "not signed in", an empty list, or a dash, before the real value arrives
+- Usually nobody notices, because the gap is a frame. But it's the silent shape from slide one - "we don't know yet" rendered as "there is nothing". When the source is slower than a frame it stops being invisible
+- **requireSync**, if the observable emits on subscribe - BehaviorSubject, ReplaySubject, store selector - gives a plain Signal<User>, no undefined in the type
+- Stronger than people expect: not a hint checked later. toSignal subscribes, and throws NG0601 right there if nothing arrived synchronously. Wrong about your source and you find out on first render in dev, not in production six months later
+- **Initial value**, for sources that genuinely can't emit immediately. The starting state is something you chose, not something inherited from the type system. A real User - guest, anonymous - keeps the type Signal<User> and the undefined problem leaves the template
+- Fourth answer, not on the slide: keep undefined because it means something - not loaded yet, show a skeleton. Fine. **The bug is picking none of the four and hoping**
+- Last line, separate point people do without thinking: toObservable is implemented as an effect writing into a ReplaySubject - the actual implementation, not an analogy. Signal → observable → pipe → back reintroduces every chapter-one problem and pays for two conversions. Stay in signals: a computed, or a resource if it's async
 -->
+
 ---
 layout: content
 eyebrow: 'States'
@@ -1066,22 +1058,18 @@ heading: 'Four states, not two'
 <p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:28px 0 0;max-width:1660px;">Error first, so a failed reload never renders as stale data. Then <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">hasValue()</code>, so a reload keeps what is on screen instead of flashing a skeleton. Collapse any two of these and you get a bug testers cannot reproduce.</p>
 
 <!--
-This is the resource we set up two slides ago, and this is the part people get wrong - not creating it, rendering it.
-
-There are six statuses in the API and four things you actually put on screen. Loading and reloading both mean you are waiting; the difference is that reloading still has the previous value, which matters in a second. Resolved and local both mean you have a value - local just means somebody called set on it. Error means the answer is not coming. And idle is the one people forget: it is what you get when the params function returns undefined, and it is not the same as loading, because nothing is in flight and nothing is coming.
-
-Now look at the order of that template, because the order is most of the job.
-
-Error is checked first. If you check hasValue first, then a reload that fails renders the old data with no indication anything went wrong - the user is looking at stale rows and has no idea. Error first means a failure always wins.
-
-hasValue comes before isLoading, and that is deliberate too. During a reload you are both loading and holding a value. If you check isLoading first, every refresh blows away the list and flashes a skeleton, which is the flicker everybody complains about. Checking hasValue first means the old rows stay put while the new ones are fetched.
-
-Then isLoading, which at that point means a genuine first load with nothing to show. And the final else is idle - nothing has been asked for yet, so prompt for it rather than pretending to load.
-
-One detail worth knowing: hasValue is a type guard, so inside that branch value() is properly typed and you are not fighting undefined.
-
-Collapse any two of these and you get the classic bug report: "it showed nothing." Nobody can reproduce it, because it depends on which of the four you were actually in.
+- The resource from two slides ago. This is the part people get wrong - not creating it, rendering it
+- Six statuses, four things you put on screen. loading and reloading both mean waiting - reloading still holds the previous value, which matters in a second. resolved and local both mean you have a value; local just means somebody called set. error means it isn't coming
+- idle is the forgotten one: params returned undefined. Not the same as loading - nothing is in flight and nothing is coming
+- **The order of that template is most of the job**
+- Error first. Check hasValue first and a failed reload renders the old data with no indication - stale rows, and the user has no idea. Error first means a failure always wins
+- hasValue before isLoading, also deliberate. During a reload you're both. isLoading first blows the list away and flashes a skeleton on every refresh - the flicker everybody complains about. hasValue first keeps the old rows while the new ones fetch
+- Then isLoading, which now means a genuine first load with nothing to show
+- Final else is idle - nothing asked for yet, so prompt rather than pretending to load
+- Detail: hasValue is a type guard, so value() is properly typed inside the branch
+- Collapse any two and you get "it showed nothing". Unreproducible, because it depends which of the four you were in
 -->
+
 ---
 layout: content
 eyebrow: 'The silent failure'
@@ -1125,18 +1113,15 @@ readonly users = resource({
 <p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:18px 0 0;max-width:1660px;">With two resources behind one screen, the aggregate <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">error</code> and the retry both have to name both - and a resource lives only as long as its injector.</p>
 
 <!--
-We filed this one five separate times, and every one of them reads as defensive good practice when you meet it in a diff. Somebody added a catch so the page would not blow up. That is a reasonable instinct. But look at what it actually does: the promise no longer rejects, so the resource never reaches its error state, so error() is never true, so the template on the last slide takes the hasValue branch and renders an empty list. The request failed and the user is told the team has no members.
-
-The fix is the version on the right, and I like this one because the fix is deleting code. Let the loader reject. The resource is built to handle that - it has an error state, and you already wrote the branch for it.
-
-The four costumes are worth knowing by sight. A catch to an empty array, which is this one. A default value supplied so the template does not have to branch. No-value quietly treated as no-data. And a ternary returning an empty string, which is the meanest of them, because the link does not break - it just is not there any more, and nobody files a bug about a button they never saw.
-
-Now, the pressure that produces all four is real, and it is worth being fair about it. If you read value() while the resource is in its error state, it throws. And if that read is inside a computed, the computed does not absorb it - it stores the error and rethrows it to every consumer, so one failed request takes out everything downstream of it. So people hit that, get scared, and reach for a fallback.
-
-The answer is to guard rather than swallow. hasValue() is reactive, it is already false in the error state, and it is a type guard so the value is properly typed inside the branch. Ask the question instead of suppressing the answer.
-
-And the line to leave with: an empty list, a zero, a dash, a missing button - those are all valid renderings of real data. Not one of them can carry the meaning "this failed".
+- Filed five separate times, and every one reads as defensive good practice in a diff. Somebody added a catch so the page wouldn't blow up. Reasonable instinct
+- What it does: the promise no longer rejects → the resource never reaches error → error() is never true → last slide's template takes hasValue and renders an empty list. **The request failed and the user is told the team has no members**
+- I like this fix because the fix is deleting code. Let the loader reject. The resource has an error state and you already wrote the branch
+- Four costumes, worth knowing by sight: catch to an empty array (this one), a default value so the template needn't branch, no-value quietly treated as no-data, and a ternary returning an empty string - the meanest, because the link doesn't break, it just isn't there, and nobody files a bug about a button they never saw
+- Be fair about the pressure behind all four: reading value() in the error state throws. Inside a computed it isn't absorbed - the computed stores and rethrows to every consumer, so one failed request takes out everything downstream. People hit that and reach for a fallback
+- The answer is **guard, don't swallow**. hasValue() is reactive, already false in the error state, and a type guard. Ask the question instead of suppressing the answer
+- Line to leave with: an empty list, a zero, a dash, a missing button - all valid renderings of real data. None can carry "this failed"
 -->
+
 ---
 layout: section
 number: '06'
@@ -1147,7 +1132,10 @@ transition: fade
 <p class="lead" style="margin-top:40px">What a signal exposes, and to whom.</p>
 
 <!--
-This is chapter six, and it is the cheap one. Everything in it takes about a minute to fix, and that is exactly the problem - none of it is hard, nobody argues with any of it in review, and it turns up again in the next pull request anyway. So I would rather you took these three as habits you build than as things you catch. By the time review catches them you have already written them, and writing them is the part I want to change. It is about what a signal exposes, and who it exposes it to.
+- Chapter six, the cheap one. Everything in it takes about a minute to fix
+- Which is the problem: none of it is hard, nobody argues in review, and it's back in the next pull request
+- So take these three as habits you build, not things you catch. By the time review catches them you've already written them, and writing them is the part to change
+- It's about what a signal exposes, and who to
 -->
 
 ---
@@ -1159,7 +1147,11 @@ heading: 'Template-only state is not public API'
 <p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:0 0 20px;max-width:1600px;">A signal anything can reach is an invitation, and your invariant now has two owners. <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">protected</code> closes that door; <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">readonly</code> only stops reassignment.</p>
 
 <!--
-Angular templates can read protected members. That is not incidental, it is the whole reason protected is the right default here rather than public - your template is not an external consumer, so you do not owe it a public API. And the thing I find over and over when I look at this in review is not somebody deliberately exposing state. It is a signal that ended up public for no reason at all: nothing outside needs it, nothing outside reads it, that is just how it got typed the first time somebody wrote the line. Narrowing it costs you nothing while the change is still open. Once it has merged, narrowing it is a breaking change to somebody, and now you are having a conversation instead of pressing a key. So do it while it is free. The second card is our own rule rather than Angular's: for genuinely internal state, use a hash-private field, because that one is enforced at runtime and not just by the compiler, and nothing can reach past it. And on the last line - if the only reason you are widening visibility is that a test wants to see something, that is the test telling you it is asserting on the wrong thing. Bracket-indexing a protected signal to check it is not null is a smell, not an access strategy.
+- Angular templates can read protected members. Not incidental - it's why protected is the right default. Your template isn't an external consumer, so you don't owe it a public API
+- What I find in review isn't deliberate exposure. It's a signal that ended up public for no reason - nothing outside needs it, nothing outside reads it, that's just how the line got typed
+- Narrowing costs nothing while the change is open. After merge it's a breaking change to somebody, and now it's a conversation instead of a keystroke. **Do it while it's free**
+- Second card is our rule, not Angular's: for genuinely internal state use a #private field - enforced at runtime, not just by the compiler, and nothing can reach past it
+- Last line: if the only reason to widen visibility is that a test wants to see something, the test is asserting on the wrong thing. Bracket-indexing a protected signal is a smell, not an access strategy
 -->
 
 ---
@@ -1195,7 +1187,12 @@ service.items().pop();
 </div>
 
 <!--
-Everything else in this talk is a stale bug: something changed and nobody heard about it. This one is the exact opposite, which is what makes it so disorienting the first time you hit it. The moment a consumer pops that array, every single person who reads the cached value sees the edit immediately - it is not late, it is instant. And the reactive graph hears nothing at all, because the reference never changed. So your UI and your state genuinely disagree with each other, and there is no changed reference anywhere for anyone to notice. Nothing reruns, nothing recomputes, nothing looks wrong until a user tells you the count in the header does not match the rows in the table. Let me be precise about the fix, because it is easy to overclaim. Typing it as a readonly array stops them calling pop, and that is a compile error, which is what you want. It does not stop them reaching into an item and editing a field on it. If the objects themselves are shared, you need the elements readonly too. But start with the array, because the array is where this actually bites.
+- Everything else in this talk is stale: something changed and nobody heard. This is the opposite, which makes it disorienting the first time
+- The moment a consumer pops that array, everyone reading the cached value sees the edit immediately. Not late - instant
+- And the graph hears nothing, because the reference never changed. UI and state genuinely disagree, with no changed reference for anyone to notice
+- Nothing reruns, nothing looks wrong, until a user says the count in the header doesn't match the rows in the table
+- Be precise about the fix. A readonly array stops them calling pop, and it's a compile error, which is what you want
+- It does **not** stop them editing a field on an item. For that you need the elements readonly too. But start with the array - that's where it bites
 -->
 
 ---
@@ -1208,7 +1205,9 @@ transition: fade
 <p class="lead" style="margin-top:40px">The same ideas, applied to the one API built entirely on them.</p>
 
 <!--
-Last chapter, and I'll admit up front that it's shorter than it wants to be. Signal Forms really deserves a session of its own, and one day it will get one. The reason it's here at all is that it's the one API in Angular built entirely on the ideas we've spent the last six chapters on. So as we go through it, I want you to keep recognising things: derived state instead of synchronisation, rules that declare what they depend on instead of code that keeps things in step by hand, and one source of truth instead of two.
+- Last chapter, and it's shorter than it wants to be. Signal Forms deserves its own session and will get one
+- It's here because it's the one API in Angular built entirely on the ideas from the last six chapters
+- So keep recognising things: derived state instead of synchronisation, rules that declare their dependencies instead of code keeping things in step, one source of truth instead of two
 -->
 
 ---
@@ -1220,7 +1219,11 @@ heading: 'A third forms API, built on signals'
 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:28px;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#8B7CF6;margin-bottom:20px;">WHAT IT IS</div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">Your own data is the form's data, and everything the form knows about a field is a signal.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#8B7CF6;margin-bottom:20px;">WHAT IT IS NOT</div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">A migration. Reactive forms still work, and so do the controls we have already built - but new forms should use signal forms.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#8B7CF6;margin-bottom:20px;">WHAT CHANGES</div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">Validators stop being things you add and remove. They become rules that know when they apply.</p> </div> </div>
 
 <!--
-Before we go anywhere near the API, let me orient you. Signal Forms became stable in v22. That means it's public API, it's semver-protected, and it is still growing. What it is not is a migration. Reactive Forms are still supported and still perfectly fine for plenty of screens, and the custom controls you've already built keep working - we'll come back to exactly how in a few minutes. The difference is where the data lives. Your own data is the form's data: you keep it in a signal, you hand that signal to form(), and everything the form knows about a field - its value, whether it's valid, whether it's been touched - is itself a signal. There's no control tree to build and no control tree to keep in sync. And because the whole thing is signals underneath, validators stop being static objects that you add and remove by hand. They become rules that know when they apply and which fields they depend on.
+- Orientation before the API: stable in v22. Public API, semver-protected, still growing
+- What it is **not** is a migration. Reactive Forms are still supported and fine for plenty of screens, and your existing custom controls keep working - how, in a few minutes
+- The difference is where the data lives. Your data is the form's data: keep it in a signal, hand it to form(), and everything the form knows about a field - value, validity, touched - is itself a signal
+- No control tree to build, none to keep in sync
+- And because it's signals underneath, validators stop being static objects you add and remove by hand. They become rules that know when they apply and what they depend on
 -->
 
 ---
@@ -1233,7 +1236,11 @@ clicks: 4
 <div style="margin-top:48px;border-left:4px solid #2FD8B4;padding-left:28px;font-family:'Space Grotesk',sans-serif;font-size:36px;font-weight:500;color:#E8ECF2;" v-click="4">The model is the source of truth for the editable data.</div>
 
 <!--
-There are three pieces to this, and that is genuinely all of it. First, your data lives in an ordinary writable signal. Nothing special about it - it's the same signal call you'd write anywhere else in the component. Second, you pass that signal to form, and what you get back is a field tree shaped exactly like your data. Third, you bind a control with formField, pointing it at the field you want: loginForm dot email, loginForm dot password. And here is the part I want you to hold on to. loginModel is not a DTO sitting beside the form waiting to be filled in at the end. It is the form's editable data. When somebody types in that email box on the right, loginModel updates, because the form does not keep its own copy of anything.
+- Three pieces, and that's genuinely all of it
+- Data in an ordinary writable signal. Nothing special - the same signal call you'd write anywhere
+- Pass it to form, get back a field tree shaped exactly like your data
+- Bind a control with formField, pointing at the field: loginForm.email, loginForm.password
+- The part to hold on to: **loginModel isn't a DTO waiting to be filled in at the end. It is the form's editable data.** Type in that email box and loginModel updates, because the form keeps no copy of anything
 -->
 
 ---
@@ -1246,7 +1253,11 @@ heading: 'The same form in both APIs'
 <p style="font-size:30px;color:#5E6B7D;line-height:1.4;margin:40px 0 0;">And for a form this simple, there really isn't much wrong with this.</p>
 
 <!--
-Let's put that next to something familiar. On the left, Reactive Forms: we construct a separate control tree - a FormGroup of FormControls - and then bind controls out of that tree into the template. On the right, the signal form: a signal holding plain data, a call to form, and bindings that point straight at the fields. I've deliberately not marked anything red here, because I'm not trying to make Reactive Forms look bad. At this size the difference is architectural rather than dramatic, and for a form this simple there honestly isn't much wrong with the version on the left. The difference starts to matter when data has to move into and out of the form, or when one field's behaviour depends on what's in another field. Which is to say: if all our forms were two inputs with no real behaviour, this workshop would be very short.
+- Next to something familiar. Left, Reactive Forms: construct a separate control tree - a FormGroup of FormControls - then bind controls out of it
+- Right: a signal holding plain data, a call to form, bindings pointing straight at the fields
+- Deliberately nothing marked red - not trying to make Reactive Forms look bad. At this size the difference is architectural rather than dramatic, and for a form this simple there honestly isn't much wrong with the left
+- It starts to matter when data has to move into and out of the form, or when one field's behaviour depends on another
+- Which is to say: if all our forms were two inputs with no real behaviour, this workshop would be very short
 -->
 
 ---
@@ -1285,18 +1296,17 @@ readonly signupForm = form(this.signup, (p) => {
 <div style="display:grid;grid-template-columns:auto 1fr;gap:30px;align-items:start;margin-top:28px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:23px;letter-spacing:0.12em;color:#2FD8B4;white-space:nowrap;padding-top:4px;">BUILT&nbsp;IN</div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;line-height:1.6;color:#8A97A8;">required&nbsp; email&nbsp; min&nbsp; max&nbsp; minDate&nbsp; maxDate&nbsp; minLength&nbsp; maxLength&nbsp; pattern<div style="font-size:24px;font-family:'Barlow',sans-serif;color:#C9D4E2;margin-top:12px;line-height:1.4;">Anything else is <span style="color:#2FD8B4;">validate</span>, returning <span style="color:#2FD8B4;">{ kind, message }</span> or <span style="color:#2FD8B4;">null</span>. Async goes to <span style="color:#2FD8B4;">validateHttp</span>.</div> </div> </div>
 
 <!--
-Two halves to this, and they are deliberately separate.
-
-The rules go in the schema - the second argument to form. You are not attaching validators to controls one at a time; you are describing, in one place, what has to be true about this data. Required, email, min length. Each one takes a path and an options object.
-
-The errors come out on the field, as a signal. So the template asks the field what is wrong with it and renders whatever comes back.
-
-The bit worth pausing on is the message. Angular ships no default copy - if you do not give a rule a message, the error has a kind and nothing to display. That sounds like a chore, and it is the thing that makes the template on the right possible: because every rule carries its own message, one loop renders every field in your form. No branching on error kind, no template that has to know which rules were applied. Compare that to what we all write today, which is an if per error type per field, with the copy living in the template and getting rewritten every time the field is reused.
-
-Along the bottom are the built-ins. Anything they do not cover is validate, which takes the field context and returns an error object with a kind and a message, or null when it passes. And if the check has to leave the browser - a username availability check - that is validateHttp, which handles the debouncing and the stale responses for you, and exposes pending while it runs.
-
-One thing to know about ordering: async validation for a field only starts once that field's synchronous rules are passing. There is no point asking the server whether an email is taken if it is not a valid email yet.
+- Two halves, deliberately separate
+- **Rules go in the schema** - the second argument to form. Not attaching validators to controls one at a time; describing in one place what has to be true about this data. required, email, minLength, each taking a path and options
+- **Errors come out on the field**, as a signal. The template asks the field what's wrong and renders it
+- Pause on the message: Angular ships no default copy. No message on a rule, and the error has a kind and nothing to display
+- Sounds like a chore, and it's exactly what makes the template on the right possible - every rule carries its own message, so one loop renders every field. No branching on error kind, no template that knows which rules were applied
+- Against what we write today: an if per error type per field, copy living in the template, rewritten every time the field is reused
+- Built-ins along the bottom. Anything else is validate - takes the field context, returns an error with a kind and message, or null
+- Leaving the browser (username availability) is validateHttp, which handles debouncing and stale responses and exposes pending while it runs
+- Ordering: async validation for a field starts only once that field's synchronous rules pass. No point asking the server about an email that isn't valid yet
 -->
+
 ---
 layout: content
 eyebrow: 'Validation · conditional required'
@@ -1338,16 +1348,15 @@ readonly prefsForm = form(this.prefs, (p) => {
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-top:30px;" v-click="2"> <div style="background:#0F131A;border:1px solid #4A5568;border-radius:14px;padding:26px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#5E6B7D;margin-bottom:14px;">REACTIVE FORMS</div> <div style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#8A97A8;">listen → inspect → mutate → recalculate</div> </div> <div style="background:#0A0D12;border:1px solid #2FD8B4;border-radius:14px;padding:26px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#2FD8B4;margin-bottom:14px;">SIGNAL FORMS</div> <div style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#E8ECF2;">describe the relationship</div> </div> </div>
 
 <!--
-Here is the requirement, and you have all built this form. The checkbox is on, so email is required, and the field is showing its error. Turn the checkbox off and that requirement has to disappear.
-
-On the left is how we write that today. We subscribe to notify's value changes. We prime it with startWith so it also runs for the initial value. We take until destroyed so it does not outlive the component. And then on every change we inspect the value, we add a validator or we remove one, and finally we tell email to recalculate itself. Four steps, and every one of them is us doing bookkeeping by hand.
-
-Now watch what it becomes. Email is required, when notify is true. That is the whole thing. We do not subscribe. We do not add a validator. We do not remove one. We do not tell email to recalculate. We describe the relationship once, and the framework works out when it applies and when it stops applying.
-
-And notice the form on the right did not change. Same behaviour, same error, same checkbox - the only thing that changed is how much of it we had to say.
-
-This is the moment where the rest of the deck pays off, because it is exactly the move we made with computed at the very start: stop orchestrating the response, and describe the rule.
+- The requirement, and you've all built this: checkbox on, email required, field showing its error. Turn it off and the requirement disappears
+- Left is how we write it today. Subscribe to notify's valueChanges. startWith so it runs for the initial value. takeUntilDestroyed so it doesn't outlive the component. Then per change: inspect the value, add or remove a validator, tell email to recalculate
+- Four steps, every one of them bookkeeping by hand
+- Now watch: **email is required, when notify is true.** That's the whole thing
+- No subscription. No adding a validator, no removing one, no telling email to recalculate. Describe the relationship once, and the framework works out when it applies and when it stops
+- And the form on the right didn't change. Same behaviour, same error, same checkbox - only how much we had to say
+- This is where the rest of the deck pays off. Same move we made with computed at the very start: stop orchestrating the response, describe the rule
 -->
+
 ---
 layout: content
 eyebrow: 'Custom controls'
@@ -1398,20 +1407,16 @@ export class CustomInput implements FormValueControl<string> {
 </style>
 
 <!--
-This is the same control written twice, and the point is the volume.
-
-On the left, ControlValueAccessor. A multi-provider with a forwardRef pointing at the class you are in the middle of declaring. A private copy of the value, because the control owns its own state. Two callbacks you store and call later. And four interface methods - write, change, touch, disable - none of which describe anything about your control. That is the tax we have all been paying, and none of it is about being an input.
-
-On the right, the whole contract is one property. Implement FormValueControl and declare a value model signal. The formField directive detects the interface and two-way binds the field's value to that model. No provider, no forwardRef, no callbacks to store. Add a touch output if you want blur tracking, and the field marks itself touched for you.
-
-Everything in that strip along the bottom is optional - errors, invalid, pending, disabled, readonly, and the constraint values like required and maxLength. Declare the ones your control actually renders and ignore the rest.
-
-Two rules to remember. A FormValueControl must not have a checked property, and a checkbox-style control implements FormCheckboxControl with checked instead. Never both - the types enforce it.
-
-And one trap I want you to see coming: there is no valid input. TypeScript will happily let you declare one, because implementing an interface does not stop you adding extra members, and it will then sit there for the rest of its life never updating. Use invalid.
-
-Last thing, and it is a design point rather than an API point. Do not put validation logic in the control. The schema validates. The control displays the result.
+- The same control written twice, and the point is the volume
+- Left, ControlValueAccessor: a multi-provider with a forwardRef pointing at the class you're mid-declaration of. A private copy of the value, because the control owns its own state. Two callbacks you store to call later. Four interface methods - write, change, touch, disable - none of which describe anything about your control
+- That's the tax we've all been paying, and none of it is about being an input
+- Right: the whole contract is one property. Implement FormValueControl, declare a value model signal. formField detects the interface and two-way binds. No provider, no forwardRef, no callbacks. Add a touch output for blur tracking and the field marks itself touched
+- The strip along the bottom is all optional - errors, invalid, pending, disabled, readonly, and constraints like required and maxLength. Declare what your control renders, ignore the rest
+- Two rules: a FormValueControl must not have a checked property, and a checkbox-style control implements FormCheckboxControl with checked instead. Never both - the types enforce it
+- One trap to see coming: **there is no valid input.** TypeScript will let you declare one, because implementing an interface doesn't stop you adding members, and it will sit there forever never updating. Use invalid
+- Design point to finish on: don't put validation logic in the control. The schema validates, the control displays the result
 -->
+
 ---
 layout: content
 eyebrow: 'Guidance'
@@ -1421,7 +1426,12 @@ heading: 'What we do about it'
 <p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:48px 0 0;max-width:1600px;">Be careful with examples online. The API was renamed repeatedly before v22, so a lot of published material uses names that no longer exist.</p>
 
 <!--
-Let me answer the question I know at least half of you are holding, which is whether this is a migration mandate. It is not. New forms use Signal Forms - it's stable, it's semver-protected, and it is where the framework is heading. Existing forms stay exactly where they are. Reactive Forms are supported and they are fine, so migrate a form when you're already in there changing it, not as a project with its own ticket and its own risk. And your existing controls keep working: formField will bind to a component that provides a ControlValueAccessor, which is the backwards-compatibility path rather than the preferred one, and where you need more than that there are bridges in both directions. compatForm lets a signal form hold real reactive controls inside its model, and SignalFormControl is an AbstractControl you can drop straight into an existing FormGroup. One warning to finish on, and it's a practical one. Be careful with what you find online. This API was renamed repeatedly while it was experimental, so a lot of material published before v22 uses names that simply don't exist any more. If you're following a blog post and the thing it tells you to import isn't there, check the version before you assume you've done something wrong. The churn was real, and it's over.
+- Answer the question half the room is holding: **this is not a migration mandate**
+- New forms use Signal Forms - stable, semver-protected, where the framework is heading
+- Existing forms stay exactly where they are. Reactive Forms are supported and fine. Migrate a form when you're already in there changing it, not as a project with its own ticket and its own risk
+- Existing controls keep working: formField binds to a component providing a ControlValueAccessor - the backwards-compatibility path, not the preferred one
+- Bridges both ways where you need more: compatForm lets a signal form hold real reactive controls in its model, and SignalFormControl is an AbstractControl you can drop into an existing FormGroup
+- Practical warning to finish: be careful what you find online. The API was renamed repeatedly while experimental, so pre-v22 material uses names that don't exist any more. If an import isn't there, check the version before assuming you broke something. The churn was real, and it's over
 -->
 
 ---
@@ -1434,7 +1444,9 @@ transition: fade
 <p class="lead" style="margin-top:40px">The reactivity chapters, as questions you can ask about a diff.</p>
 
 <!--
-Right. If you were going to photograph one slide from today, it's the next one. Everything up to here has been the explanation - why these things happen and what's going on underneath. This is the part you can take back to a code review tomorrow morning and actually use.
+- If you photograph one slide today, it's the next one
+- Everything so far has been the explanation - why these happen, what's underneath
+- This is the part you can take to a code review tomorrow morning and actually use
 -->
 
 ---
@@ -1450,7 +1462,12 @@ heading: 'Symptom, and what to reach for'
 </style>
 
 <!--
-This is the whole deck compressed into things you can look for in a diff. Left-hand column is the symptom, the thing you can literally see on the screen; right-hand column is what to reach for instead. I'm not going to read all twelve at you, because you'll have the slide - but I do want to put a finger on two of them. The first row is the one you will hit most often, by a distance: an effect that reads signals and writes a signal. That is the single largest cluster in everything we looked at, and almost every instance of it wants to be a computed, or a linkedSignal if the value also has to stay writable. And the one I would most like you to catch is over on the right: an error mapped to an empty value. That's the row where the cost isn't a wasted render - it's a person being told there is nothing there, when the truth is that we don't know. Everything else on here we've been through together: effects reaching into another component, an await inside an effect, non-signal reads inside derived state, decisions taken in a constructor, DOM writes in a plain effect, a fresh array or object on every read, a method call in a binding, side effects in derived state, public writable signals, and public writable signals. The value of this slide isn't in me narrating it. It's in having it written down somewhere you'll see it again.
+- The whole deck compressed into things you can look for in a diff. Symptom left, what to reach for right
+- Not reading all twelve out - they'll have the slide - but a finger on two
+- **The first row, the one you'll hit most by a distance:** an effect that reads signals and writes a signal. Largest cluster in everything we looked at, and almost every instance wants to be a computed - or a linkedSignal if it also has to stay writable
+- **The one I'd most like caught**, over on the right: an error mapped to an empty value. That's the row where the cost isn't a wasted render - it's a person told there's nothing there, when the truth is we don't know
+- Everything else we've been through together
+- The value isn't in me narrating it. It's in having it written down somewhere you'll see it again
 -->
 
 ---
@@ -1462,7 +1479,13 @@ center: true
 <p style="font-size:32px;color:#8A97A8;line-height:1.5;margin:0;max-width:1500px;">A stale label, an empty list, a chart of zeroes, a form that says it is valid. All of it looks like working software - which is why the habit matters more than the review.</p>
 
 <!--
-I want to finish on this rather than on a summary. Every bug we have talked about today shares one property: not one of them throws. A stale label, an empty list, a chart full of zeroes, and a form that says it is valid - all four of those look exactly like working software. And the reason we keep shipping them isn't that they're hard to fix. Most of them are a one-line change once you can see them. It's that they're invisible when they work and invisible when they don't, so by the time the code reaches review, it already looks fine. That's why the habits matter more than the review does. Thank you - and I'm very happy to take questions.
+- Finishing here rather than on a summary
+- Every bug today shares one property: **not one of them throws**
+- A stale label, an empty list, a chart full of zeroes, a form that says it's valid - all four look exactly like working software
+- And we don't keep shipping them because they're hard to fix. Most are a one-line change once you can see them
+- It's that they're invisible when they work and invisible when they don't - so by the time the code reaches review, it already looks fine
+- That's why the habits matter more than the review does
+- Thank you - and very happy to take questions
 -->
 
 ---
@@ -1474,10 +1497,9 @@ center: true
 <div style="display:flex;gap:44px;font-family:'JetBrains Mono',monospace;font-size:26px;color:#5E6B7D;"> <div>angular.dev/guide/signals</div> <div>angular.dev/guide/forms/signals</div> </div>
 
 <!--
-Open it up here.
-
-If nothing comes straight away, the two questions I would prime the room with are: which of these have you actually hit, and is there one you disagree with? The second one is more useful to me than the first, because a couple of the findings in here were argued down when we filed them and the arguments were good.
-
-And if somebody asks the question I would ask - how do I find one of these in a running app, given none of them throw - the honest answer is that debugName plus the signal graph in Angular DevTools is the tooling, and it is genuinely better than it sounds. Name your signals when you create them and the graph becomes readable. A stale value is a missing edge, and the graph draws edges.
+- Open it up here
+- If nothing comes straight away, two to prime the room: which of these have you actually hit, and is there one you disagree with?
+- The second is more useful than the first - a couple of these findings were argued down when we filed them, and the arguments were good
+- If somebody asks the question I'd ask - how do I find one in a running app, given none of them throw - the honest answer is debugName plus the signal graph in Angular DevTools, and it's better than it sounds
+- Name your signals at creation and the graph becomes readable. A stale value is a missing edge, and the graph draws edges
 -->
-
