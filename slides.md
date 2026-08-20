@@ -917,39 +917,55 @@ Chapter five. This is where the damage becomes user-visible, and it is the part 
 ---
 layout: content
 eyebrow: 'Resources'
-heading: 'The default shape for a signal-driven read'
+heading: 'Signal-driven reads belong in a resource'
 ---
-<div style="display:grid;grid-template-columns:1.1fr 0.9fr;gap:44px;align-items:start;">
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 24px;max-width:1660px;">The left is what we write by hand. Everything it is missing, the right gets for free.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
 <div>
 
 ```ts
-readonly teamId = input.required<string>();
+// AVOID
+readonly users = signal<User[]>([]);
+readonly loading = signal(false);
 
-readonly users = httpResource<User[]>(
-  () => `/api/teams/${this.teamId()}/users`,
-);
+readonly #fetch = effect(async () => {
+  this.loading.set(true);
+  this.users.set(await api.users(this.teamId()));
+  this.loading.set(false);
+});
 ```
 
 </div>
 <div>
-<div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:32px 38px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#2FD8B4;margin-bottom:20px;">YOU GET, FOR FREE</div> <p style="font-size:28px;line-height:1.5;margin:0 0 14px;color:#C9D4E2;">Refetch when the parameters change</p> <p style="font-size:28px;line-height:1.5;margin:0 0 14px;color:#C9D4E2;">Cancellation of superseded requests</p> <p style="font-size:28px;line-height:1.5;margin:0 0 14px;color:#C9D4E2;">Loading, error and status as signals</p> <p style="font-size:28px;line-height:1.5;margin:0;color:#C9D4E2;">No race between two in-flight responses</p> </div>
+
+```ts
+// PREFER
+readonly users = httpResource<User[]>(
+  () => `/api/teams/${this.teamId()}/users`,
+);
+
+// value, isLoading, error, status, reload
+// superseded requests cancelled
+// no race between two responses
+```
+
 </div>
 </div>
-<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin:36px 0 0;font-size:26px;line-height:1.4;color:#C9D4E2;"> <div style="border-top:2px solid #2FD8B4;padding-top:16px;"><code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#2FD8B4;">httpResource</code><br>an HTTP GET</div> <div style="border-top:2px solid #4A5568;padding-top:16px;"><code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#8A97A8;">rxResource</code><br>an observable pipeline you already have</div> <div style="border-top:2px solid #4A5568;padding-top:16px;"><code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#8A97A8;">resource</code><br>a promise, or a stream you own</div> </div>
-<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:32px 0 0;max-width:1600px;">Reads driven by signals belong in a resource. Writes do not - a resource re-issues its request on every parameter change and every reload.</p>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin:28px 0 0;font-size:26px;line-height:1.4;color:#C9D4E2;"> <div style="border-top:2px solid #2FD8B4;padding-top:14px;"><code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#2FD8B4;">httpResource</code><br>an HTTP GET</div> <div style="border-top:2px solid #4A5568;padding-top:14px;"><code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#8A97A8;">rxResource</code><br>an observable pipeline you already have</div> <div style="border-top:2px solid #4A5568;padding-top:14px;"><code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#8A97A8;">resource</code><br>a promise, or a stream you own</div> </div>
 
 <!--
-The shape on the left is the one to have in your fingers. A function that returns the request, reading whatever signals it needs. Because it is a function of signals, the team ID changing is the trigger - you do not wire anything up, and you do not write the cancellation yourself. Everything in the green box comes with it.
+The version on the left is not a strawman - it is the shape we all wrote for years, and there are plenty of them in the codebase still. And notice it manages to be every mistake from the last two chapters at once. An effect that writes signals, which is chapter one. An async effect, so the teamId read after the await is not even tracked. And two pieces of state, users and loading, that have to be kept in step by hand.
 
-One thing to watch inside that function: it reruns when the signals it reads change, so key it on the few values the request is actually made of. Hand it a whole state object and every unrelated field on that object becomes a refetch. Also note there is no default value here, so the type of value is User array or undefined, and you will be branching on that.
+The right-hand side is one expression. You give it a function that returns the request, it reads whatever signals it needs, and that is the whole wiring. The team ID changing is the trigger - you do not subscribe to anything and you do not write the cancellation.
 
-The row underneath is how you choose between the three, because you will see all three in our codebase. If it is a plain HTTP GET, use httpResource - it builds the request for you and you never touch HttpClient. If what you have is already an observable pipeline, use rxResource and hand it the stream. And if it is a promise, or something you are driving yourself, use resource with a loader. That is the one you will see on the next few slides, because the examples are calling a service function rather than a URL.
+The comments underneath are the part that matters, because they are all things the left-hand version does not do and would be tedious to add. You get value, isLoading, error, status and reload as signals. Superseded requests are cancelled, so if the user clicks three teams quickly you are not left with whichever response happens to land last. And there is no race between two in-flight responses, which is the bug you would only find in production on a slow connection.
 
-Reads driven by signals go in a resource. Writes do not. Nothing stops you setting method to POST, the request type has method and body on it, but a resource re-issues its request whenever the parameters change and again every time you reload it, and "send the delete a second time" is not a thing you want happening on a parameter change. A write is an action with a moment. It stays on the HTTP client.
+One thing to watch inside that function: it reruns when the signals it reads change, so key it on the few values the request is genuinely made of. Hand it a whole state object and every unrelated field becomes a refetch - that is the slide we did in chapter two.
 
-And one design point that came up in review and was settled the right way: taking a resource as an input couples a shared component to one loading mechanism. Take the finished value, and let the consumer decide where it came from - it might be a resource, it might be three of them, it might be a constant in a test.
+The row along the bottom is how you choose, because you will see all three in our code. Plain HTTP GET, httpResource, and you never touch HttpClient. Already got an observable pipeline, rxResource, hand it the stream. Anything else - a promise, something you are driving yourself - resource with a loader. That last one is what the next few slides use, because their examples call a service function rather than a URL.
+
+And reads only. Nothing stops you setting method to POST, but a resource re-issues its request whenever the parameters change and again on every reload, and "send the delete a second time" is not something you want happening on a parameter change. A write is an action with a moment. It stays on the HTTP client.
 -->
-
 ---
 layout: content
 eyebrow: 'Interop'
