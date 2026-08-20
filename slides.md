@@ -177,14 +177,19 @@ eyebrow: 'Lesser known'
 heading: 'A linkedSignal can write back to its source'
 ---
 <p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 28px;max-width:1650px;">By default a write to a <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">linkedSignal</code> is local: it overrides the derived value until the computation next produces something different, at which point the edit is gone. The <code style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;">set</code> option intercepts that write, so the edit can go to whoever actually owns the value.</p>
-<div style="display:grid;grid-template-columns:0.85fr 1.15fr;gap:36px;">
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
 <div>
 
 ```ts
 // local override, the default
-readonly pageSize = linkedSignal(
-  () => this.prefs().pageSize,
+const tempC = signal(0);
+const tempF = linkedSignal(
+  () => (tempC() * 9) / 5 + 32,
 );
+
+tempF.set(212);
+tempC();            // still 0
+// next write to tempC and 212 is gone
 ```
 
 </div>
@@ -192,31 +197,41 @@ readonly pageSize = linkedSignal(
 
 ```ts
 // write-through to the owner
-readonly pageSize = linkedSignal(
-  () => this.prefs().pageSize,
-  {
-    set: (value) =>
-      this.prefs.update((prefs) =>
-        ({ ...prefs, pageSize: value })),
-  },
+const tempC = signal(0);
+const tempF = linkedSignal(
+  () => (tempC() * 9) / 5 + 32,
+  { set: (f) => tempC.set(((f - 32) * 5) / 9) },
 );
+
+tempF.set(212);
+tempC();            // 100
+tempF();            // 212, via the recomputation
 ```
 
 </div>
 </div>
-<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:36px 0 0;max-width:1650px;">Because the hook replaces the default write, the new value only reaches the signal through the recomputation - so the source stays the one place the value lives. The second argument, <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">rawSet</code>, is there for when the source will not reflect the write straight away, or when the derivation is expensive and you already know its result.</p>
-<p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:20px 0 0;max-width:1650px;">That removes the last case where an effect was doing the plumbing by hand.</p>
+<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:32px 0 0;max-width:1650px;">The hook replaces the default write, so the new value only reaches <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">tempF</code> by going through <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">tempC</code> and coming back out of the computation. There is exactly one place the temperature lives, and both signals agree about it.</p>
+<p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:18px 0 0;max-width:1650px;">That removes the last case where an effect was doing the plumbing by hand.</p>
 
 <!--
-This one is genuinely lesser known, and it takes a plumbing job off you that people currently do by hand. Without it, the pattern is a local linked signal plus something that pushes the edit back to whoever owns the value, and in practice that something is an effect or a method you wire up yourself. The hook replaces the default write completely, so if you never call rawSet, the only way the new value reaches the signal is through the recomputation - and that's usually what you want, because then there is exactly one place the value lives. Call rawSet when the source won't reflect your write straight away, like an async save you don't want to wait on, or when the derivation is expensive and you already know what it's going to produce. And update goes through the same hook: it reads the current value untracked before it hands it to you, so you don't pick up a dependency by accident.
--->
+This one is genuinely lesser known, and it takes a plumbing job off you that people currently do by hand.
 
+Start on the left, because the default behaviour catches people out. Fahrenheit is derived from Celsius, and you can write to it - linkedSignal is writable, that is the whole point of it. So you set it to two hundred and twelve, and it holds two hundred and twelve. But Celsius is still sitting at zero, because nothing told it anything, and the moment something writes to Celsius your edit is gone. That is what "local override" means: the write is real, and it is temporary.
+
+The set hook fixes that by intercepting the write. Somebody sets Fahrenheit, your hook converts it back and writes Celsius instead - and then Fahrenheit updates, because the computation reruns off the new Celsius. So you set two hundred and twelve, Celsius becomes one hundred, and Fahrenheit reads two hundred and twelve again. Same number, but it went all the way round and came back, which means the two can never disagree.
+
+The important bit is what is missing: the hook completely replaces the default write, so nothing sets tempF directly. It only ever gets its value from the computation. That is what gives you exactly one owner. There is a second argument to the hook called rawSet, which writes the linked signal directly, and it exists for the cases where the source will not reflect your write straight away - an async save you do not want to wait on - or where the derivation is expensive and you already know what it is going to produce. Most of the time you want to leave it alone.
+
+And update goes through the same hook. It reads the current value untracked before handing it to you, so you do not pick up a dependency by accident.
+
+The real-world shape of this is a value owned by a parent object or a store - a preference, a field on an order - where the write belongs to the owner rather than to you. Without this hook, that is a local linked signal plus something pushing edits back, and in practice that something is an effect.
+-->
 ---
 layout: content
-eyebrow: 'Boundaries'
-heading: 'Effects that reach into another component'
+eyebrow: 'Mirrors'
+heading: 'The copy an effect keeps in sync for somebody else'
 ---
-<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 28px;max-width:1600px;">The same mistake, one level up: an effect writes a signal that belongs to a child, a store, or a request.</p>
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 28px;max-width:1600px;">The same mistake, one level out: an effect keeps a second copy of state that already exists, so something else can read it - a child's signal, a field on a store, or the parameters of a request.</p>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-bottom:32px;">
 <div>
 
@@ -250,14 +265,22 @@ readonly users = resource({
 });
 ```
 
-<p style="font-size:26px;line-height:1.4;margin:24px 0 0;color:#8A97A8;">The child's derived work reruns on a schedule it cannot see, ownership becomes unclear, and two writers can disagree.</p>
+<p style="font-size:26px;line-height:1.4;margin:24px 0 0;color:#8A97A8;">The mirror is a frame behind, anything can write to it, and the request now reruns on a schedule it cannot see. Delete it and the request tracks the real values directly.</p>
 
 </div>
 </div>
-<p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:26px 0 0;max-width:1600px;">Who owns this value? If it is the child, pass it in with an <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">input()</code>. If it is the request, hand the request a computed of its own parameters.</p>
+<p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:26px 0 0;max-width:1600px;">The review question is always the same: who owns this value? Answer it, and the mirror has nowhere left to be.</p>
 
 <!--
-The question to ask in review is simply: who owns this value? If the answer is the child, then the parent should be passing it in, not writing it. If the answer is the request, then the request should take a computed of its parameters directly, instead of reading a mirror that an effect keeps up to date. Those mirrors are where the nastiest bugs come from, because you now have two writers and the order between them is decided by timing rather than by anything you wrote down.
+This is the same mistake as the last slide, just one level out. Before, the effect was deriving a value inside one component. Here it is keeping a whole second copy of state that already exists, so that something else can read it.
+
+The example is a request, because that is the version we file most often. Team ID and page already live in this component as signals. Somebody needs them shaped as a params object for the resource, so an effect assembles that object and writes it into a mirror signal, and the resource reads the mirror. Every step of that is reasonable and the whole thing is unnecessary - because params already takes a function, and a function of signals is exactly what we have.
+
+The costs are the ones you would expect by now. The mirror lands a frame behind whatever changed it. It is a writable signal, so anything in the class can set it and nobody is enforcing that the effect is the only writer. And the request now reruns on a schedule that is one hop removed from the values it actually depends on. Delete the mirror and all three go away at once.
+
+It shows up in two other shapes, and they are the same bug. An effect that writes a child's signal directly, instead of passing the value in through an input. And an effect that copies component state into a shared store so some other part of the app can read it from there.
+
+So the question I would ask in review, every time, is who owns this value. If the answer is the request, give the request a function of its own parameters. If the answer is the child, pass it in. If the answer is genuinely the store, then let the store be the one place it lives and stop keeping a component copy. In none of those cases does anybody need a mirror.
 -->
 
 ---
