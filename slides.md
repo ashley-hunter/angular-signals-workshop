@@ -910,53 +910,49 @@ And one design point that came up in review and was settled the right way: takin
 layout: content
 eyebrow: 'Interop'
 heading: 'An unguarded toSignal is a state you did not model'
+clicks: 2
 ---
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 32px;max-width:1600px;">Without an initial value, the signal is <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">T | undefined</code> until the first emission. That <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">undefined</code> means "not yet" - and it renders exactly like "none".</p>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
-<div>
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 30px;max-width:1660px;">Nearly every <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">toSignal</code> in our codebase takes the first of these. Three options, and the first one is a state you have to render.</p>
 
+````md magic-move
 ```ts
-// AVOID
 readonly user = toSignal(this.user$);
+
 // Signal<User | undefined>
-
-// reads as "no user"
-@if (!user()) { <p>Not signed in</p> }
+// undefined until the first emission - and it renders like "no user"
 ```
-
-</div>
-<div>
 
 ```ts
-// PREFER
-readonly user = toSignal(this.user$, {
-  requireSync: true,
-});
-// Signal<User>, never undefined
-// NG0601 at creation if it does not emit
+readonly user = toSignal(this.user$, { requireSync: true });
+
+// Signal<User>
+// no undefined at all - NG0601 at creation if it does not emit
 ```
 
-</div>
-</div>
-<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:36px 0 0;max-width:1600px;"><code style="font-family:'JetBrains Mono',monospace;font-size:26px;">requireSync</code> if it emits on subscribe, <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">initialValue</code> if it does not, or branch on <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">undefined</code> deliberately. Picking none of the three is the bug.</p>
-<p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:20px 0 0;max-width:1600px;">And a <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">toObservable</code> round trip back to a signal is an effect with extra steps.</p>
+```ts
+readonly user = toSignal(this.user$, { initialValue: GUEST });
+
+// Signal<User>
+// starts at a value you chose, rather than one you inherited
+```
+````
+
+<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:30px 0 0;max-width:1660px;">Keeping <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">undefined</code> is a fine answer too, as long as you branch on it. Picking none of the three is the bug.</p>
+<p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:20px 0 0;max-width:1660px;">And <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">toObservable</code> is an <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">effect</code> feeding a <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">ReplaySubject</code> - so a signal, out to an observable and back is chapter one with extra steps.</p>
 
 <!--
-This is the biggest number in the whole research and we have not talked about it yet. There are close to fifteen hundred toSignal calls in our codebase, and around thirteen hundred and seventy of them pass neither an initial value nor requireSync. Every one of those is typed T-or-undefined, and is genuinely undefined for at least one tick.
+This is the biggest number in the whole research and we have not talked about it yet. There are close to fifteen hundred toSignal calls in our codebase, and around thirteen hundred and seventy of them look exactly like the first version on this slide - no initial value, no requireSync. Every one of those is typed T-or-undefined, and is genuinely undefined for at least one tick.
 
-Look at what that does to a template. You get undefined, the falsy branch runs, and you render "not signed in" - or an empty list, or a dash - for a moment before the real value arrives. Most of the time nobody notices, because the gap is a frame. But this is the silent shape from the very first slide: an undefined that means "we do not know yet", rendered as though it means "there is nothing". And when the source is slower than a frame, it stops being invisible.
+Look at what that does to a template. You get undefined, the falsy branch runs, and you render "not signed in", or an empty list, or a dash, for a moment before the real value arrives. Most of the time nobody notices, because the gap is a frame. But this is the silent shape from the very first slide: an undefined that means "we do not know yet", rendered as though it means "there is nothing". And when the source is slower than a frame, it stops being invisible.
 
-There are three honest answers and you have to pick one.
+So, the second option. If the observable genuinely emits when you subscribe - a BehaviorSubject, a ReplaySubject, a store selector - requireSync gives you a plain Signal of User with no undefined anywhere in the type. And that option is stronger than people expect. It is not a hint that gets checked later: toSignal subscribes, and if nothing arrived synchronously it throws NG0601 right there, at the point you created the signal. If you are wrong about your source you find out on the first render in development, not in production six months later.
 
-If the observable genuinely emits synchronously when you subscribe - a BehaviorSubject, a ReplaySubject, a store selector - use requireSync. You get a plain Signal of T with no undefined anywhere in the type. And to be precise about what that option does, because it is stronger than people expect: it is not a hint or an assertion that gets checked later. toSignal subscribes, and if nothing arrived synchronously it throws NG0601 immediately, at the point you created the signal. So if you are wrong about your source, you find out on the first render in development, not in production six months later.
+The third is for sources that genuinely cannot emit immediately. Give it an initial value, and the starting state becomes something you chose rather than something you inherited from the type system. If that value is a real User - a guest, an anonymous user - the type stays Signal of User and the whole undefined problem disappears from your template.
 
-If it does not emit immediately, give it an initialValue. Now the starting state is something you chose rather than something you inherited.
+And the fourth answer, which is not on the slide, is to keep undefined because it genuinely means something to you - the user has not loaded yet and you want a skeleton. That is completely fine. The bug is picking none of the four and hoping.
 
-And if undefined genuinely means something distinct in your UI, keep it and branch on it deliberately. What you cannot do is pick none of the three and hope.
-
-The last line is a separate thing but it belongs here. If what you are starting from is already a signal, and you convert it to an observable, pipe it, and convert it back, that round trip is implemented with an effect underneath. So you have reintroduced every problem from chapter one and paid for two conversions to do it. If the source is a signal, stay in signals: a computed, or if it is async, a resource.
+The last line is a separate point and it is worth saying because people do this without thinking. toObservable is implemented as an effect writing into a ReplaySubject - that is not an analogy, it is the actual implementation. So if you take a signal, convert it to an observable, pipe it, and convert it back, you have reintroduced every problem from chapter one and paid for two conversions to do it. If the source is a signal, stay in signals: a computed, or if it is async, a resource.
 -->
-
 ---
 layout: content
 eyebrow: 'States'
