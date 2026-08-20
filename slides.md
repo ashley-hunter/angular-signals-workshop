@@ -60,14 +60,26 @@ This chapter is the biggest cluster in the review comments I looked at, and it i
 ---
 layout: content
 eyebrow: 'Picking one'
-heading: 'You know what they do. Which one owns the value?'
+heading: 'When to use each primitive'
 ---
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 40px;max-width:1600px;">Nothing here is news about the primitives. Every mistake in this deck is a mistake about which primitive a value belongs to. Ask these three questions in order and stop at the first yes.</p>
-<div style="display:flex;flex-direction:column;gap:20px;margin-bottom:40px;"> <div style="display:grid;grid-template-columns:1fr auto;gap:36px;align-items:center;background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:28px 36px;"> <p style="font-size:30px;line-height:1.35;margin:0;color:#C9D4E2;">Can you write it as a formula over other signals?</p> <div style="font-family:'JetBrains Mono',monospace;font-size:28px;color:#2FD8B4;white-space:nowrap;">computed()</div> </div> <div style="display:grid;grid-template-columns:1fr auto;gap:36px;align-items:center;background:#12171F;border:1px solid #8B7CF6;border-radius:14px;padding:28px 36px;"> <p style="font-size:30px;line-height:1.35;margin:0;color:#C9D4E2;">A formula, <em>and</em> something else is allowed to overwrite the result?</p> <div style="font-family:'JetBrains Mono',monospace;font-size:28px;color:#8B7CF6;white-space:nowrap;">linkedSignal()</div> </div> <div style="display:grid;grid-template-columns:1fr auto;gap:36px;align-items:center;background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:28px 36px;"> <p style="font-size:30px;line-height:1.35;margin:0;color:#C9D4E2;">Nothing derives it - a user or an external event decides?</p> <div style="font-family:'JetBrains Mono',monospace;font-size:28px;color:#2FD8B4;white-space:nowrap;">signal()</div> </div> </div>
-<div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:30px 38px;"> <p style="font-size:29px;line-height:1.45;margin:0;color:#C9D4E2;"><code style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#FF7A6B;">effect()</code> is not an answer to this question. It is the exit from the graph into something that is not reactive, and it is not a place to keep state.</p> </div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:28px;margin-bottom:36px;">
+
+<div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:32px 34px;display:flex;flex-direction:column;gap:18px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;">signal()</div> <p style="font-size:27px;line-height:1.4;margin:0;color:#C9D4E2;">Nothing derives it. A user, or an event from outside, decides what it is.</p> <div style="margin-top:auto;font-family:'JetBrains Mono',monospace;font-size:23px;line-height:1.5;color:#8A97A8;border-top:1px solid #2C3542;padding-top:18px;">query = signal('');</div> </div>
+
+<div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:32px 34px;display:flex;flex-direction:column;gap:18px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;">computed()</div> <p style="font-size:27px;line-height:1.4;margin:0;color:#C9D4E2;">It is a formula over other signals, and nothing else is allowed to overwrite the answer.</p> <div style="margin-top:auto;font-family:'JetBrains Mono',monospace;font-size:23px;line-height:1.5;color:#8A97A8;border-top:1px solid #2C3542;padding-top:18px;">total = computed(() =&gt;<br>&nbsp;&nbsp;rows().length);</div> </div>
+
+<div style="background:#12171F;border:1px solid #8B7CF6;border-radius:14px;padding:32px 34px;display:flex;flex-direction:column;gap:18px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#8B7CF6;">linkedSignal()</div> <p style="font-size:27px;line-height:1.4;margin:0;color:#C9D4E2;">A formula, <em>and</em> the user can overwrite the answer. Derived, but still writable.</p> <div style="margin-top:auto;font-family:'JetBrains Mono',monospace;font-size:23px;line-height:1.5;color:#B9A9FF;border-top:1px solid #3A3358;padding-top:18px;">selected = linkedSignal(() =&gt;<br>&nbsp;&nbsp;rows()[0]);</div> </div>
+
+</div>
+<div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:28px 36px;display:grid;grid-template-columns:auto 1fr;gap:32px;align-items:center;"> <div style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#FF7A6B;white-space:nowrap;">effect()</div> <p style="font-size:27px;line-height:1.45;margin:0;color:#C9D4E2;">Not on this list. It is the exit from the graph into something that is not reactive - and it is not a place to keep state.</p> </div>
+<p style="font-size:29px;color:#8A97A8;line-height:1.45;margin:32px 0 0;max-width:1600px;">Most of us stop at the middle card. The one on the right is the one we skip - and that is where the largest cluster of our review findings comes from.</p>
 
 <!--
-The middle row is the interesting one for a room like this. Everybody here reaches for computed correctly, and everybody reaches for signal correctly. Where we fall down is linkedSignal - we use it about a third as often as we use the workaround it replaces. So when a value is derived but also has to stay writable, the fallback ends up being an effect, and that is precisely where the largest cluster of our review findings comes from. The order matters as much as the answers do. Work down the list and stop at the first yes. Don't start from "what do I need to keep in sync", because that question has already assumed an effect.
+Everybody in this room reaches for signal correctly, and everybody reaches for computed correctly. Where we fall down is the third card. We use linkedSignal about a third as often as we use the workaround it replaces - so when a value is derived but also has to stay writable, what we reach for instead is an effect, and that is precisely where the largest cluster of our review findings comes from.
+
+So the way I'd use this slide is left to right. Is anything deriving this value? No - then it's a signal, and you're done. Yes, and nothing else is allowed to overwrite the answer - that's a computed. Yes, but the user can also overwrite it - that's linkedSignal, and that's the card I want you to actually remember, because it's the one we forget exists.
+
+And effect is deliberately not in that row. It isn't a fourth option in the same list, because it doesn't hold a value at all. It's the exit from the graph into something that isn't reactive, and we'll come back to what it's genuinely good for in a few slides.
 -->
 
 ---
@@ -84,13 +96,9 @@ heading: 'An effect that writes a signal is a computed you maintain by hand'
 readonly rows = input.required<Row[]>();
 readonly visible = signal<Row[]>([]);
 
-constructor() {
-  effect(() => {
-    this.visible.set(
-      this.rows().filter((r) => r.enabled),
-    );
-  });
-}
+readonly #sync = effect(() => {
+  this.visible.set(this.rows().filter((r) => r.enabled));
+});
 ```
 
 </div>
@@ -126,12 +134,10 @@ heading: 'When the user can override the derived value'
 // AVOID
 readonly page = signal(1);
 
-constructor() {
-  effect(() => {
-    this.filter();       // track
-    this.page.set(1);    // reset
-  });
-}
+readonly #reset = effect(() => {
+  this.filter();     // track
+  this.page.set(1);  // reset
+});
 ```
 
 </div>
@@ -174,14 +180,14 @@ readonly pageSize = linkedSignal(
 
 ```ts
 // write-through to the owner
-readonly pageSize = linkedSignal({
-  source: this.prefs,
-  computation: (p) => p.pageSize,
-  set: (value) => {
-    this.prefs.update((p) =>
-      ({ ...p, pageSize: value }));
+readonly pageSize = linkedSignal(
+  () => this.prefs().pageSize,
+  {
+    set: (value) =>
+      this.prefs.update((prefs) =>
+        ({ ...prefs, pageSize: value })),
   },
-});
+);
 ```
 
 </div>
@@ -198,9 +204,45 @@ layout: content
 eyebrow: 'Boundaries'
 heading: 'Effects that reach into another component'
 ---
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 36px;max-width:1600px;">The same mistake, one level up: an effect in the parent writes a signal that belongs to a child, a shared service, or the parameters of a request. Reactive state crosses a component boundary through the back door.</p>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-bottom:40px;"> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:32px 38px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:20px;">WHAT IT LOOKS LIKE</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">An effect calls <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">child.something.set(...)</code>, or mirrors state into a store purely so a request can read it.</p> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:32px 38px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:20px;">WHY IT HURTS</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">The child's own derived work reruns on a schedule the child cannot see, ownership of the value becomes unclear, and two writers can now disagree.</p> </div> </div>
-<div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:34px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#2FD8B4;margin-bottom:18px;">REACH FOR</div> <p style="font-size:29px;line-height:1.45;margin:0;color:#C9D4E2;">An <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">input()</code> on the child, so the value arrives through the declared contract. A <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">computed</code> handed straight to whatever consumes it. Or an explicit method on the child, called from the event that caused the change.</p> </div>
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 28px;max-width:1600px;">The same mistake, one level up: an effect writes a signal that belongs to a child, a store, or a request.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-bottom:32px;">
+<div>
+
+```ts
+// AVOID: a mirror kept current by an effect
+readonly #params = signal({ teamId: '', page: 1 });
+
+readonly #sync = effect(() => {
+  this.#params.set(
+    { teamId: this.teamId(), page: this.page() },
+  );
+});
+
+readonly users = resource({
+  params: this.#params,
+  loader: ({ params }) => loadUsers(params),
+});
+```
+
+</div>
+<div>
+
+```ts
+// PREFER: hand the request its own parameters
+readonly users = resource({
+  params: () => ({
+    teamId: this.teamId(),
+    page: this.page(),
+  }),
+  loader: ({ params }) => loadUsers(params),
+});
+```
+
+<p style="font-size:26px;line-height:1.4;margin:24px 0 0;color:#8A97A8;">The child's derived work reruns on a schedule it cannot see, ownership becomes unclear, and two writers can disagree.</p>
+
+</div>
+</div>
+<p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:26px 0 0;max-width:1600px;">Who owns this value? If it is the child, pass it in with an <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">input()</code>. If it is the request, hand the request a computed of its own parameters.</p>
 
 <!--
 The question to ask in review is simply: who owns this value? If the answer is the child, then the parent should be passing it in, not writing it. If the answer is the request, then the request should take a computed of its parameters directly, instead of reading a mirror that an effect keeps up to date. Those mirrors are where the nastiest bugs come from, because you now have two writers and the order between them is decided by timing rather than by anything you wrote down.
@@ -237,12 +279,11 @@ heading: 'An effect stops tracking the moment it goes async'
 
 ```ts
 // AVOID
-effect(async () => {
-  const id = this.teamId();      // tracked
-  const data = await load(id);
-  const fmt = this.format();     // NOT tracked
-  this.render(data, fmt);
-});
+readonly #render = effect(async () => {
+  const id = this.teamId();          // tracked
+  const rows = await loadUsers(id);
+  this.grid.render(rows, this.format());
+});                                  // format NOT tracked
 ```
 
 </div>
@@ -250,14 +291,13 @@ effect(async () => {
 
 ```ts
 // PREFER
-readonly params = computed(() => ({
-  id: this.teamId(),
-  fmt: this.format(),
-}));
+readonly users = resource({
+  params: this.teamId,
+  loader: ({ params }) => loadUsers(params),
+});
 
-readonly data = resource({
-  params: this.params,
-  loader: ({ params }) => load(params),
+readonly #render = effect(() => {
+  this.grid.render(this.users.value(), this.format());
 });
 ```
 
@@ -280,10 +320,7 @@ heading: 'Cleanup is not teardown. It is undo the previous run'
 ```ts
 readonly poll = effect((onCleanup) => {
   const id = this.orderId();
-  const handle = setInterval(
-    () => this.check(id),
-    5_000,
-  );
+  const handle = setInterval(() => this.check(id), 5_000);
 
   onCleanup(() => clearInterval(handle));
 });
@@ -318,8 +355,37 @@ layout: content
 eyebrow: 'Two failure modes'
 heading: 'A dependency set can be wrong in both directions'
 ---
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-bottom:44px;"> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:36px 42px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:22px;">TOO NARROW</div> <p style="font-size:30px;line-height:1.45;margin:0 0 20px;color:#C9D4E2;">Something the code genuinely uses is not tracked, so a real change never reruns the work.</p> <p style="font-size:28px;line-height:1.45;margin:0;color:#8A97A8;">Presents as: a stale label, or a panel that only updates once you touch something else.</p> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:36px 42px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:22px;">TOO WIDE</div> <p style="font-size:30px;line-height:1.45;margin:0 0 20px;color:#C9D4E2;">The work is keyed on more than it needs, so unrelated changes rerun expensive things.</p> <p style="font-size:28px;line-height:1.45;margin:0;color:#8A97A8;">Presents as: remeasuring on every keystroke, refetching on an unrelated toggle.</p> </div> </div>
-<div style="border-left:4px solid #2FD8B4;padding-left:28px;font-family:'Space Grotesk',sans-serif;font-size:36px;font-weight:500;color:#E8ECF2;line-height:1.3;">Key the work on what the result is actually made of. Not the whole object it came from, and not a convenient subset.</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-bottom:30px;"> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:28px 36px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:22px;">TOO NARROW</div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">Something the code uses is not tracked, so a real change never reruns the work. A stale label, or a panel that only updates once you touch something else.</p> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:28px 36px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:16px;">TOO WIDE</div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">The work is keyed on more than it needs, so unrelated changes rerun expensive things. Refetching on a toggle nobody touched.</p> </div> </div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-bottom:26px;">
+<div>
+
+```ts
+// TOO WIDE: any change to state refetches
+readonly rows = resource({
+  params: () => this.state(),
+  loader: ({ params }) =>
+    loadRows(params.teamId, params.page),
+});
+```
+
+</div>
+<div>
+
+```ts
+// KEYED ON WHAT THE RESULT IS MADE OF
+readonly rows = resource({
+  params: () => ({
+    teamId: this.state().teamId,
+    page: this.state().page,
+  }),
+  loader: ({ params }) =>
+    loadRows(params.teamId, params.page),
+});
+```
+
+</div>
+</div>
+<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:0;max-width:1600px;">The loader already tells you the answer: whatever it reads is what the params should be.</p>
 
 <!--
 Both of these turn up in review about as often as each other, and both are normally written by somebody who had exactly the right intention. Too narrow usually happens when the read goes through a helper or a service, and you never notice that the tracking got skipped somewhere along the way - or the read is sitting inside an untracked block that somebody added for an unrelated reason. Too wide usually happens when you key an effect on a whole state object, because that was easier at the time than sitting down and naming the four fields the measurement actually depends on. And the fix for both of them is the same question, which is what the line at the bottom is really asking: what is this result made of? Key the work on that. Not the object it happened to arrive in, and not whatever subset was convenient to type.
@@ -364,10 +430,9 @@ readonly rows = computed(() =>
 readonly rows = computed(() =>
   this.items().map((item) => ({
     ...item,
-    labelKey: item.key,
+    label: this.i18n.translate(item.key, this.lang()),
   })),
 );
-// translate in the template, reactively
 ```
 
 </div>
@@ -431,11 +496,12 @@ constructor() {
 // PREFER
 readonly mode = input<'tree' | 'flat'>('tree');
 
-readonly observing = computed(
-  () => this.mode() === 'tree',
-);
-// or act on it in ngOnInit or an effect,
-// both of which run after inputs are set
+ngOnInit() {
+  // inputs are set by now
+  if (this.mode() === 'tree') {
+    this.startObserving();
+  }
+}
 ```
 
 </div>
@@ -475,7 +541,7 @@ heading: 'DOM work belongs to a render phase'
 ```ts
 // AVOID
 effect(() => {
-  this.selectedId();
+  this.selectedId();          // track
   this.pane().scrollTop = 0;
 });
 ```
@@ -487,7 +553,7 @@ effect(() => {
 // PREFER
 afterRenderEffect({
   write: () => {
-    this.selectedId();
+    this.selectedId();          // track
     this.pane().scrollTop = 0;
   },
 });
@@ -524,9 +590,9 @@ heading: 'Read everything, then write everything'
 ```ts
 // AVOID: a reflow per row
 afterNextRender(() => {
-  for (const r of this.rows()) {
-    const h = r.el.offsetHeight;   // read
-    r.el.style.height = `${h + 8}px`; // write
+  for (const row of this.rows()) {
+    const height = row.el.offsetHeight;       // read
+    row.el.style.height = `${height + 8}px`;  // write
   }
 });
 ```
@@ -538,10 +604,10 @@ afterNextRender(() => {
 // PREFER: one read pass, one write pass
 afterNextRender({
   earlyRead: () =>
-    this.rows().map((r) => r.el.offsetHeight),
-  write: (h) => {
-    this.rows().forEach((r, i) => {
-      r.el.style.height = `${h[i] + 8}px`;
+    this.rows().map((row) => row.el.offsetHeight),
+  write: (heights) => {
+    this.rows().forEach((row, i) => {
+      row.el.style.height = `${heights[i] + 8}px`;
     });
   },
 });
@@ -605,7 +671,7 @@ protected held(): string[] {
 
 ```ts
 // PREFER: cached identity
-readonly held = computed(() =>
+protected readonly held = computed(() =>
   this.dragging() ? [this.dragged()] : [],
 );
 ```
@@ -630,9 +696,7 @@ heading: 'Templates call. Computeds cache.'
 ```html
 <!-- AVOID -->
 @for (row of rows(); track row.id) {
-  <a [href]="buildUrl(row.id, row.envs)">
-    {{ formatNextRun(row.nextRunAt) }}
-  </a>
+  <a [href]="buildUrl(row)">{{ formatNextRun(row.nextRunAt) }}</a>
 }
 ```
 
@@ -678,9 +742,9 @@ heading: 'The default shape for a signal-driven read'
 ```ts
 readonly teamId = input.required<string>();
 
-readonly users = httpResource<User[]>(() => ({
-  url: `/api/teams/${this.teamId()}/users`,
-}));
+readonly users = httpResource<User[]>(
+  () => `/api/teams/${this.teamId()}/users`,
+);
 ```
 
 </div>
@@ -761,9 +825,11 @@ heading: 'A failed request that renders as no data'
 
 ```ts
 // AVOID
-this.load().pipe(
-  catchError(() => of([])),
-);
+readonly users = resource({
+  params: this.teamId,
+  loader: ({ params }) =>
+    loadUsers(params).catch(() => []),
+});   // failure becomes "no users"
 ```
 
 </div>
@@ -837,15 +903,21 @@ heading: 'Signals do not make your data immutable'
 // AVOID
 readonly items: Signal<Item[]> = this.#items;
 
-// a consumer can do this:
-service.items().pop();
-service.items()[0].label = 'edited';
+service.items().pop();          // compiles fine
 ```
 
 </div>
 <div>
-<p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:0 0 24px;">The signal protects the reference, not the contents. Edit the cached array in place and every later reader sees it immediately, while the graph sees nothing change at all.</p>
-<p style="font-size:29px;color:#8A97A8;line-height:1.45;margin:0;">Type the boundary as <code style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#2FD8B4;">Signal&lt;readonly Item[]&gt;</code> and the array stops being editable. If the objects are shared too, you want <code style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#2FD8B4;">readonly Readonly&lt;Item&gt;[]</code> - <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">readonly Item[]</code> stops <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">pop()</code>, not editing an item in place.</p>
+
+```ts
+// PREFER
+readonly items: Signal<readonly Item[]> = this.#items;
+
+service.items().pop();          // Property 'pop' does not exist
+```
+
+<p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:24px 0 24px;">The signal protects the reference, not the contents. Edit the cached array in place and every later reader sees it immediately, while the graph sees nothing change at all.</p>
+<p style="font-size:29px;color:#8A97A8;line-height:1.45;margin:0;">It stops <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">pop()</code>. It does not stop <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">items()[0].label = 'edited'</code> - for that the elements need <code style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#2FD8B4;">Readonly&lt;Item&gt;</code> too.</p>
 </div>
 </div>
 
@@ -989,24 +1061,22 @@ clicks: 2
 
 ````md magic-move
 ```ts
+const { notify, email } = this.prefsForm.controls;
+
 notify.valueChanges
-  .pipe(
-    startWith(notify.value),
-    takeUntilDestroyed(),
-  )
+  .pipe(startWith(notify.value), takeUntilDestroyed())
   .subscribe((shouldNotify) => {
     if (shouldNotify) {
       email.addValidators(Validators.required);
     } else {
       email.removeValidators(Validators.required);
     }
-
     email.updateValueAndValidity();
   });
 ```
 
 ```ts
-const loginSchema = schema<Login>((p) => {
+readonly prefsForm = form(this.prefs, (p) => {
   required(p.email, {
     when: ({ valueOf }) => valueOf(p.notify),
   });
@@ -1027,7 +1097,7 @@ eyebrow: 'Custom controls'
 heading: 'One interface, one signal, no ControlValueAccessor'
 ---
 <p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 32px;max-width:1600px;">The <code style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;">[formField]</code> directive detects the interface and binds the field's value to your <code style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#C9D4E2;">value</code> model. No provider, no callbacks.</p>
-<div style="display:grid;grid-template-columns:1.2fr 0.8fr;gap:48px;align-items:center;"> <div style="background:#0A0D12;border:1px solid #2FD8B4;border-radius:14px;padding:32px 38px;font-family:&#x27;JetBrains Mono&#x27;,monospace;font-size:24px;line-height:1.65;color:#C9D4E2;"> <div>@Component({</div> <div style="padding-left:1.2em;">selector: <span style="color:#2FD8B4;">'app-custom-input'</span>,</div> <div style="padding-left:1.2em;">template: <span style="color:#2FD8B4;">`</span></div> <div style="padding-left:2.4em;">&lt;input [value]=<span style="color:#2FD8B4;">"value()"</span></div> <div style="padding-left:3.6em;">(input)=<span style="color:#2FD8B4;">"value.set($event.target.value)"</span></div> <div style="padding-left:3.6em;">(blur)=<span style="color:#2FD8B4;">"touch.emit()"</span> /&gt;</div> <div style="padding-left:1.2em;"><span style="color:#2FD8B4;">`</span>,</div> <div>})</div> <div><span style="color:#8B7CF6;">export class</span> <span style="color:#7CC4FF;">CustomInput</span> <span style="color:#8B7CF6;">implements</span> FormValueControl&lt;string&gt; {</div> <div style="padding-left:1.2em;">value = <span style="color:#7CC4FF;">model</span>(<span style="color:#2FD8B4;">''</span>);</div> <div style="padding-left:1.2em;">touch = <span style="color:#7CC4FF;">output</span>&lt;<span style="color:#8B7CF6;">void</span>&gt;();</div> <div>}</div> </div> <div style="display:flex;flex-direction:column;gap:24px;"> <div style="background:#0A0D12;border:1px solid #2FD8B4;border-radius:14px;padding:24px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#2FD8B4;margin-bottom:10px;">REQUIRED SURFACE</div> <p style="font-size:27px;line-height:1.4;margin:0;color:#C9D4E2;">A <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">value</code> model signal. Checkbox-style controls implement <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">FormCheckboxControl</code> with <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">checked</code> instead - never both.</p> </div> <div style="background:#0A0D12;border:1px solid #4A5568;border-radius:14px;padding:24px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#8B7CF6;margin-bottom:10px;">OPTIONAL STATE INPUTS</div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;line-height:1.6;color:#C9D4E2;"> <div>errors  invalid  pending</div> <div>disabled  disabledReasons  readonly  hidden</div> <div>touched  dirty  name</div> <div>required  min  max  minLength  maxLength  pattern</div> </div> <p style="font-size:25px;line-height:1.4;margin:14px 0 0;color:#8A97A8;">Declare only the ones the control uses. There is also <span style="color:#C9D4E2;">focus()</span> and <span style="color:#C9D4E2;">reset()</span> - no <span style="color:#FF7A6B;">valid</span>, so declaring one silently never updates.</p> </div> <p style="font-size:27px;line-height:1.4;margin:0;color:#8A97A8;">The schema validates. The control displays the result.</p> </div> </div>
+<div style="display:grid;grid-template-columns:1.2fr 0.8fr;gap:48px;align-items:center;"> <div style="background:#0A0D12;border:1px solid #2FD8B4;border-radius:14px;padding:32px 38px;font-family:&#x27;JetBrains Mono&#x27;,monospace;font-size:24px;line-height:1.65;color:#C9D4E2;"> <div>@Component({</div> <div style="padding-left:1.2em;">selector: <span style="color:#2FD8B4;">'app-custom-input'</span>,</div> <div style="padding-left:1.2em;">template: <span style="color:#2FD8B4;">`</span></div> <div style="padding-left:2.4em;">&lt;input [value]=<span style="color:#2FD8B4;">"value()"</span></div> <div style="padding-left:3.6em;">(input)=<span style="color:#2FD8B4;">"value.set($any($event.target).value)"</span></div> <div style="padding-left:3.6em;">(blur)=<span style="color:#2FD8B4;">"touch.emit()"</span> /&gt;</div> <div style="padding-left:1.2em;"><span style="color:#2FD8B4;">`</span>,</div> <div>})</div> <div><span style="color:#8B7CF6;">export class</span> <span style="color:#7CC4FF;">CustomInput</span> <span style="color:#8B7CF6;">implements</span> FormValueControl&lt;string&gt; {</div> <div style="padding-left:1.2em;"><span style="color:#8B7CF6;">readonly</span> value = <span style="color:#7CC4FF;">model</span>(<span style="color:#2FD8B4;">''</span>);</div> <div style="padding-left:1.2em;"><span style="color:#8B7CF6;">readonly</span> touch = <span style="color:#7CC4FF;">output</span>&lt;<span style="color:#8B7CF6;">void</span>&gt;();</div> <div>}</div> </div> <div style="display:flex;flex-direction:column;gap:24px;"> <div style="background:#0A0D12;border:1px solid #2FD8B4;border-radius:14px;padding:24px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#2FD8B4;margin-bottom:10px;">REQUIRED SURFACE</div> <p style="font-size:27px;line-height:1.4;margin:0;color:#C9D4E2;">A <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">value</code> model signal. Checkbox-style controls implement <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">FormCheckboxControl</code> with <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">checked</code> instead - never both.</p> </div> <div style="background:#0A0D12;border:1px solid #4A5568;border-radius:14px;padding:24px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#8B7CF6;margin-bottom:10px;">OPTIONAL STATE INPUTS</div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;line-height:1.6;color:#C9D4E2;"> <div>errors  invalid  pending</div> <div>disabled  disabledReasons  readonly  hidden</div> <div>touched  dirty  name</div> <div>required  min  max  minLength  maxLength  pattern</div> </div> <p style="font-size:25px;line-height:1.4;margin:14px 0 0;color:#8A97A8;">Declare only the ones the control uses. There is also <span style="color:#C9D4E2;">focus()</span> and <span style="color:#C9D4E2;">reset()</span> - no <span style="color:#FF7A6B;">valid</span>, so declaring one silently never updates.</p> </div> <p style="font-size:27px;line-height:1.4;margin:0;color:#8A97A8;">The schema validates. The control displays the result.</p> </div> </div>
 
 <!--
 Same custom input component, now written against Signal Forms. You implement FormValueControl, and you declare a value model signal. That is the required surface - one property. The formField directive detects the interface on your component and two-way binds the field's value to that model. No provider, no forwardRef, no ControlValueAccessor callbacks to write. If you want blur tracking, add a touch output and emit it on blur, and the field will mark itself touched for you. Everything in the box underneath is optional: errors, invalid, pending, disabled, disabled reasons, readonly, hidden, touched, dirty, name, and the constraint values - required, min, max, min length, max length and pattern. Declare the ones your control actually renders and ignore the rest. There are also focus and reset methods you can implement if focusing the host element isn't the right behaviour for your control. Two rules to remember. A FormValueControl must not have a checked property, and a checkbox-style control - which implements FormCheckboxControl and has checked instead - must not have a value. Never both. And one trap I want you to see coming: there is no valid input. TypeScript will happily let you declare one, because implementing an interface doesn't stop you adding extra members, and it will then sit there for the rest of its life never updating. Use invalid. Last thing, and it's a design point rather than an API point: don't put validation logic inside the control. The schema validates. The control displays the result.
@@ -1038,8 +1108,8 @@ layout: content
 eyebrow: 'Footguns'
 heading: 'The ones that catch everybody'
 ---
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;"> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:32px 38px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:18px;">THE SCHEMA IS NOT AN EFFECT</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">The callback builds the rules once. A plain <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">if</code> around a rule is evaluated at construction and never again. Conditions belong inside the rule.</p> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:32px 38px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:18px;">MISSING MEANS ABSENT</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">A field left out of the model - or initialised to <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">undefined</code> - is not in the tree. The rule type-checks, never runs, and the form reports itself valid.</p> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:32px 38px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:18px;">SHAPE IS STRUCTURE</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">The tree follows the model, so swapping one object shape for another destroys field state. Keep a stable shape and switch behaviour with rules. Arrays of objects are the exception - those items are tracked by identity, not position.</p> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:32px 38px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:18px;">VALIDATION IS NOT THE BROWSER'S</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">Validity lives in the field tree, not in native validity, and the old status classes are opt-in. CSS keyed on them stops applying, silently.</p> </div> </div>
-<p style="font-size:29px;color:#8A97A8;line-height:1.45;margin:40px 0 0;max-width:1600px;">Three smaller ones: <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">required</code> treats an empty array as present, class instances lose their prototype on the first write, and hidden, disabled or readonly fields do not validate and do not count towards the parent.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:26px;"> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:26px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:18px;">THE SCHEMA IS NOT AN EFFECT</div> <p style="font-size:27px;line-height:1.4;margin:0 0 18px;color:#C9D4E2;">The callback builds the rules once. A plain <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">if</code> is evaluated at construction and never again.</p> <div style="font-family:'JetBrains Mono',monospace;font-size:22px;line-height:1.55;color:#8A97A8;"> <div><span style="color:#FF7A6B;">if</span> (this.order().express) {</div> <div style="padding-left:1.2em;"><span style="color:#7CC4FF;">disabled</span>(p.pickupTime);</div> <div>}</div> <div style="height:0.5em;"></div> <div style="color:#2FD8B4;"><span style="color:#7CC4FF;">disabled</span>(p.pickupTime, ({ valueOf }) =&gt;</div> <div style="padding-left:1.2em;color:#2FD8B4;">valueOf(p.express));</div> </div> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:26px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:14px;">MISSING MEANS ABSENT</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">A field left out of the model - or initialised to <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">undefined</code> - is not in the tree. The rule type-checks, never runs, and the form reports itself valid.</p> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:26px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:14px;">SHAPE IS STRUCTURE</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">The tree follows the model, so swapping one object shape for another destroys field state. Keep a stable shape and switch behaviour with rules. Arrays of objects are the exception - those items are tracked by identity, not position.</p> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:26px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:14px;">VALIDATION IS NOT THE BROWSER'S</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">Validity lives in the field tree, not in native validity, and the old status classes are opt-in. CSS keyed on them stops applying, silently.</p> </div> </div>
+<p style="font-size:28px;color:#8A97A8;line-height:1.4;margin:28px 0 0;max-width:1600px;">Three smaller ones: <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">required</code> treats an empty array as present, class instances lose their prototype on the first write, and hidden, disabled or readonly fields do not validate and do not count towards the parent.</p>
 
 <!--
 Four of these catch everybody, and two of them are lessons from earlier in this deck wearing different clothes. First: the schema callback is not an effect. It builds the rules once, when the form is constructed, and it never runs again. So if you wrap a rule in a plain if, that condition is evaluated exactly once and then frozen forever. That is the constructor-sees-defaults problem all over again - code that runs once, sitting in a place that looks reactive. The condition belongs inside the rule, in a when. Second: if a field isn't in the model, it isn't in the tree. Your rule still type-checks against the type, it just never runs. No error, no warning, and the form cheerfully reports itself valid - which is the silent-failure shape from chapter one. Initialise every field you actually want, and be aware that a field initialised to undefined counts as absent too. Third: the tree follows the shape of the model, so if you swap one object shape for another, the fields underneath are destroyed and rebuilt, and their touched and dirty state goes with them. Keep the shape stable and switch behaviour with rules instead. Arrays of objects are the exception there - items in an array are tracked by identity rather than by position. And fourth: validity lives in the field tree, not in the browser's native validity, and the old ng-valid and ng-invalid classes are opt-in now. So if you have CSS keyed on those class names, it stops applying, and it stops applying quietly. Three smaller ones to take away. Required treats an empty array as present, so an empty multi-select passes. Class instances lose their prototype the first time any field is written, because the write spreads the object into a plain one. And hidden, disabled and readonly fields don't validate at all, and don't count towards their parent's validity.
