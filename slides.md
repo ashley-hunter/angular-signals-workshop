@@ -392,7 +392,7 @@ This chapter is the stale family, and every bug in it comes down to the same sen
 layout: content
 eyebrow: 'Two failure modes'
 heading: 'A dependency set can be wrong in both directions'
-clicks: 2
+clicks: 3
 ---
 <p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">Too narrow and a real change never reruns the work. Too wide and unrelated changes rerun expensive things - here, a sort toggle that fires a network request.</p>
 
@@ -431,6 +431,20 @@ readonly rows = resource({
 
 // params never reads sortBy, so changing it does nothing
 ```
+
+```ts
+readonly state = signal({ teamId: 'a1', page: 1, sortBy: 'name' });
+
+readonly key = computed(
+  () => ({ teamId: this.state().teamId, page: this.state().page }),
+  { equal: (a, b) => a.teamId === b.teamId && a.page === b.page },
+);
+readonly rows = resource({
+  params: this.key,
+  loader: ({ params }) => loadRows(params.teamId, params.page),
+});
+// equal says nothing changed, so the version never bumps, so no refetch
+```
 ````
 
 <p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:26px 0 0;max-width:1660px;">The read is the dependency, and the request is compared by <em>reference</em>. Split the signals - or feed <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">params</code> a <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">computed</code> with an <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">equal</code> when you cannot.</p>
@@ -446,10 +460,11 @@ And it changes nothing at all. Watch what is still there: params still calls thi
 
 The read is the dependency. Once that lands, the real fix is obvious: hold the values as separate signals, and let params touch only the two the request is actually made of. Now sortBy changing does not invalidate params at all, because params never read it.
 
-If you genuinely cannot split the state up - and sometimes you cannot - the other route is a computed in front of it with a custom equal comparing the fields you care about. When your comparator says equal, the computed keeps its previous value and never notifies, so the resource never sees a change. Same outcome, more machinery.
+And then the last step, because sometimes you genuinely cannot split the state up - it arrives from a store, or a parent owns it, or it is thirty fields and you are not refactoring that today. Put a computed in front of it with a custom equal that compares the fields you actually care about. Toggling sortBy still reruns that computed, but the comparator says the result is equal, so the computed keeps its previous value and never bumps its version - and because nothing downstream ever hears about it, the resource never re-requests. Same outcome as splitting the signals, more machinery, and it is the escape hatch rather than the first thing to reach for.
 
-And one small mercy: if your params function returns a primitive rather than an object, a string ID or a number, the reference check is a value check and all of this goes away.
+One small mercy to finish on: if your params function returns a primitive rather than an object, a string ID or a number, then the reference check is a value check and none of this applies to you.
 -->
+
 ---
 layout: content
 eyebrow: 'Escape hatch'
