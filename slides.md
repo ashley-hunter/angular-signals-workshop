@@ -863,6 +863,9 @@ template: `
   }
 `,
 
+buildUrl(row: Row) { return `/runs/${row.id}`; }
+formatNextRun(at: string) { return this.fmt.format(at); }
+
 // two calls per row, on every check of this view
 ```
 
@@ -873,10 +876,13 @@ template: `
   }
 `,
 
+buildUrl(row: Row) { return `/runs/${row.id}`; }
+formatNextRun(at: string) { return this.fmt.format(at); }
+
 readonly rowViews = computed(() =>
   this.rows().map((row) => ({
-    id: row.id, url: buildUrl(row),
-    nextRun: formatNextRun(row.nextRunAt),
+    id: row.id, url: this.buildUrl(row),
+    nextRun: this.formatNextRun(row.nextRunAt),
   })),
 );   // two calls per row, per change to rows()
 ```
