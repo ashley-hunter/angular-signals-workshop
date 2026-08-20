@@ -393,40 +393,54 @@ layout: content
 eyebrow: 'Two failure modes'
 heading: 'A dependency set can be wrong in both directions'
 ---
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-bottom:30px;"> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:28px 36px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:22px;">TOO NARROW</div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">Something the code uses is not tracked, so a real change never reruns the work.</p> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:28px 36px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:16px;">TOO WIDE</div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">Keyed on more than it needs, so unrelated changes rerun expensive things.</p> </div> </div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-bottom:26px;">
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 22px;max-width:1600px;">Too narrow and a real change never reruns the work. Too wide and unrelated changes rerun expensive things. Here is too wide, with the state it is keyed on:</p>
+
+```ts
+readonly state = signal({ teamId: 'a1', page: 1, sidebarOpen: false, sortBy: 'name' });
+
+loader: ({ params }) => loadRows(params.teamId, params.page),   // same in both
+```
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-top:26px;">
 <div>
 
 ```ts
-// TOO WIDE: any change to state refetches
-readonly rows = resource({
-  params: () => this.state(),
-  loader: ({ params }) =>
-    loadRows(params.teamId, params.page),
-});
+// TOO WIDE
+params: () => this.state(),
+
+// opening the sidebar refetches
+// changing the sort refetches
 ```
 
 </div>
 <div>
 
 ```ts
-// KEYED ON WHAT THE RESULT IS MADE OF
-readonly rows = resource({
-  params: () => ({
-    teamId: this.state().teamId,
-    page: this.state().page,
-  }),
-  loader: ({ params }) =>
-    loadRows(params.teamId, params.page),
-});
+// KEYED ON WHAT THE RESULT USES
+params: () => ({
+  teamId: this.state().teamId,
+  page: this.state().page,
+}),
+
+// only these two refetch
 ```
 
 </div>
 </div>
-<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:0;max-width:1600px;">The loader already tells you the answer: whatever it reads is what the params should be.</p>
+<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:26px 0 0;max-width:1600px;">The loader is the answer key. It reads <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">teamId</code> and <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">page</code>, so those are the params - and nothing else is.</p>
 
 <!--
-Both of these turn up in review about as often as each other, and both are normally written by somebody who had exactly the right intention. Too narrow usually happens when the read goes through a helper or a service, and you never notice that the tracking got skipped somewhere along the way - or the read is sitting inside an untracked block that somebody added for an unrelated reason. Too wide usually happens when you key an effect on a whole state object, because that was easier at the time than sitting down and naming the four fields the measurement actually depends on. And the fix for both of them is the same question, which is what the line at the bottom is really asking: what is this result made of? Key the work on that. Not the object it happened to arrive in, and not whatever subset was convenient to type.
+Both of these turn up in review about as often as each other, and both are normally written by somebody who had exactly the right intention.
+
+Too narrow usually happens when the read goes through a helper or a service and you never notice the tracking got skipped along the way, or it is sitting inside an untracked block somebody added for an unrelated reason. Those are the stale bugs from the last chapter.
+
+Too wide is the one on this slide, and it is easier to do by accident. Look at the state signal at the top - four fields. Two of them, team ID and page, genuinely decide which rows come back. The other two are pure UI: whether the sidebar is open, and which column you are sorting by. Neither of those changes the answer the server gives you.
+
+So on the left, keying params on the whole state object means opening the sidebar fires a network request. Changing the sort fires a network request. Nobody wrote that, and nobody would defend it, but it is what the code says - because params reruns when anything it reads changes, and it read the entire object.
+
+On the right, params reads exactly the two fields the request is made of. Toggling the sidebar now does nothing at all, because the params function never touched it.
+
+And the way to find this in your own code is right there at the bottom. The loader is the answer key. Look at what it actually reads - here it is team ID and page - and that is your params list. If params contains something the loader never touches, you have a refetch waiting to happen.
 -->
 
 ---
