@@ -24,20 +24,22 @@ layout: content
 eyebrow: 'Framing'
 heading: 'Adoption is done. Fluency is not.'
 ---
-<p style="font-size:32px;color:#8A97A8;line-height:1.45;margin:0 0 44px;max-width:1600px;">290 reactivity findings from our own review history, sorted by what actually went wrong. Three shapes account for nearly all of them - and none of them are typos.</p>
-<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:28px;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:20px;">STALE<span style="float:right;color:#5E6B7D;letter-spacing:0;">44</span></div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">Something read a value once and never heard that it changed. The UI is simply wrong, and nothing errors.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:20px;">WASTEFUL<span style="float:right;color:#5E6B7D;letter-spacing:0;">38</span></div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">Correct, and doing the work again on every pass. Rebuilt objects, repeated formatting, the same request twice.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:20px;">DISHONEST<span style="float:right;color:#5E6B7D;letter-spacing:0;">27</span></div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">A request failed and the screen showed an empty list instead. It is not blank because it errored - it is blank because it is lying.</p> </div> </div>
+<p style="font-size:32px;color:#8A97A8;line-height:1.45;margin:0 0 44px;max-width:1600px;">The reactivity findings that come back in review are not typos. They are code that reads correctly and behaves incorrectly, and they come in three shapes.</p>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:28px;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:20px;">STALE</div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">Something read a value once and never heard that it changed. The UI is simply wrong, and nothing errors.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:20px;">WASTEFUL</div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">Correct, and doing the work again on every pass. Rebuilt objects, repeated formatting, the same request twice.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:20px;">SILENT</div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">A request failed and the screen showed an empty list. It is not blank because something went wrong - it is blank because nothing said so.</p> </div> </div>
 <p style="font-size:30px;color:#5E6B7D;line-height:1.45;margin:44px 0 0;max-width:1600px;">A dependency problem, an identity problem and a state-modelling problem. Every chapter after this one is one of the three.</p>
 
 <!--
 Let me tell you where these three come from, because I do not want you taking them on trust.
 
-I pulled about four thousand pull request review comments from our own repository and narrowed them to the ones that talk about reactivity - signals, computed, effects, change detection. That left two hundred and ninety. Then I sorted those by what had actually gone wrong rather than by which API was mentioned, and they land in a very small number of shapes. Forty-four stale, thirty-eight wasteful, twenty-seven where a failure got rendered as ordinary data.
+I pulled about four thousand pull request review comments from our own repository and narrowed them to the ones that talk about reactivity - signals, computed, effects, change detection. That left two hundred and ninety. Then I sorted those by what had actually gone wrong rather than by which API was mentioned, and they land in a very small number of shapes. Stale is the biggest at forty-four. Wasteful is close behind at thirty-eight. Silent failure is third at twenty-seven.
 
 Two caveats so the numbers are honest. They are comment-level and multi-label, so they do not add up to two hundred and ninety. And this is the reactivity slice specifically - I am not claiming these are the most common findings in our review process overall, because they are not. Across every comment we write, the big categories are guideline violations, logical bugs, missing test coverage, and comments that no longer match the code. Reactivity is a large and expensive slice of that pile, not the majority of it.
 
-There is a fourth shape, and it is worth mentioning because somebody always asks about it: races, ordering and lifetime problems. Eleven comments, so a long way behind the other three, which is why it is not on the slide.
+There is a fourth shape, and it is worth mentioning because somebody always asks: races, ordering and lifetime problems. Eleven comments, so a long way behind the other three, which is why it is not up here.
 
 And that number has a story attached that I will tell you because it is a good warning about this kind of analysis. My first pass counted a hundred and twenty-four race comments, which would have put it second. It was wrong - the pattern was also matching the word traces, and this codebase has a lot of tracing functionality. With proper word boundaries it is eleven, and the phrase "race condition" appears exactly zero times. So one of my headline findings was an artefact of a sloppy regex, and if it happened once it could be hiding in the other counts too.
+
+One thing about the word silent, since it is doing a lot of work on this slide: all three of these are silent in the sense that nothing throws. What is specifically silent about the third one is the failure itself - the request failed and nothing anywhere said so.
 -->
 
 ---
@@ -1011,7 +1013,7 @@ readonly user = toSignal(this.user$, { initialValue: GUEST });
 <!--
 This is the biggest number in the whole research and we have not talked about it yet. There are close to fifteen hundred toSignal calls in our codebase, and around thirteen hundred and seventy of them look exactly like the first version on this slide - no initial value, no requireSync. Every one of those is typed T-or-undefined, and is genuinely undefined for at least one tick.
 
-Look at what that does to a template. You get undefined, the falsy branch runs, and you render "not signed in", or an empty list, or a dash, for a moment before the real value arrives. Most of the time nobody notices, because the gap is a frame. But this is the dishonest shape from the very first slide: an undefined that means "we do not know yet", rendered as though it means "there is nothing". And when the source is slower than a frame, it stops being invisible.
+Look at what that does to a template. You get undefined, the falsy branch runs, and you render "not signed in", or an empty list, or a dash, for a moment before the real value arrives. Most of the time nobody notices, because the gap is a frame. But this is the silent shape from the very first slide: an undefined that means "we do not know yet", rendered as though it means "there is nothing". And when the source is slower than a frame, it stops being invisible.
 
 So, the second option. If the observable genuinely emits when you subscribe - a BehaviorSubject, a ReplaySubject, a store selector - requireSync gives you a plain Signal of User with no undefined anywhere in the type. And that option is stronger than people expect. It is not a hint that gets checked later: toSignal subscribes, and if nothing arrived synchronously it throws NG0601 right there, at the point you created the signal. If you are wrong about your source you find out on the first render in development, not in production six months later.
 
@@ -1068,7 +1070,7 @@ Collapse any two of these and you get the classic bug report: "it showed nothing
 -->
 ---
 layout: content
-eyebrow: 'Failure as data'
+eyebrow: 'The silent failure'
 heading: 'A failed request that renders as no data'
 ---
 <p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">Same resource, one line different. The fix is deleting something.</p>
