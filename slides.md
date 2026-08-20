@@ -453,13 +453,57 @@ layout: content
 eyebrow: 'Escape hatch'
 heading: 'untracked() is a claim you have to defend'
 ---
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 36px;max-width:1600px;"><code style="font-family:'JetBrains Mono',monospace;font-size:27px;">untracked</code> says: I read this, but do not rerun me when it changes. Sometimes right, and the easiest way there is to build a permanently stale value.</p>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;"> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:34px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#2FD8B4;margin-bottom:20px;">DEFENSIBLE</div> <p style="font-size:28px;line-height:1.5;margin:0 0 18px;color:#C9D4E2;">The rerun is driven by something outside the graph, and this read is only supplying context to it.</p> <p style="font-size:28px;line-height:1.5;margin:0;color:#C9D4E2;">A write is being wrapped so it does not participate in the read that caused it.</p> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:34px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:20px;">NOT DEFENSIBLE</div> <p style="font-size:28px;line-height:1.5;margin:0 0 18px;color:#C9D4E2;">It silences a loop you did not want to think about. The loop is the symptom, the shape is the cause.</p> <p style="font-size:28px;line-height:1.5;margin:0;color:#C9D4E2;">It was added to make a test settle.</p> </div> </div>
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 24px;max-width:1600px;">An effect that reads what it writes re-triggers itself. <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">untracked</code> says: I need this value, but a change to it is not why I should run.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
+<div>
+
+```ts
+// AVOID: reads summary, then writes it
+readonly #sync = effect(() => {
+  const rows = this.rows();
+
+  this.summary.set({
+    count: rows.length,
+    openedAt: this.summary().openedAt,
+  });
+});   // the write re-triggers the read
+```
+
+</div>
+<div>
+
+```ts
+// PREFER: the read is context, not a trigger
+readonly #sync = effect(() => {
+  const rows = this.rows();
+  const prev = untracked(this.summary);
+
+  this.summary.set({
+    ...prev,
+    count: rows.length,
+  });
+});   // only rows() re-triggers it
+```
+
+</div>
+</div>
+<p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:26px 0 0;max-width:1660px;">Ask: if this value changed right now and nothing reran, would that be correct? If yes, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">untracked</code> is right - say so in a comment. If the loop is really derived state living in an effect, the fix is a <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">computed</code>, not a wrapper.</p>
 
 <!--
-The question I use on every one of these is: if this value changed right now, and nothing reran, would that be correct? If the answer is yes, untracked is the right call, and you should say so in a comment right next to it. If you have to think about it for more than a few seconds, what you are looking at is a stale bug waiting for a customer to find it. Authors did successfully defend untracked three times in the review history I went through, and every single time they defended it the same way - by naming the thing outside the graph that was actually driving the rerun. That is the tell for a good one. The bad ones never have that answer, because the untracked was added to silence a loop nobody wanted to think about, or to make a test settle down. And we had one thread that went the other way, which I like: a shared helper wrapped a write in untracked, but every call site already wrapped its own write, so the wrapper inside the helper was not protecting anything. It was just a second place for the rule to drift out of sync, so we took it out.
--->
+This is the one legitimate use of untracked that everybody meets first, so let us do it properly.
 
+On the left, the effect reads summary and then writes summary. That read is a dependency, so the write immediately invalidates the effect, which runs again, which writes again. It loops. In practice you notice because the tab starts burning CPU, or because Angular tells you.
+
+untracked is the honest fix here, because look at what the read is actually for. It is not why the effect should run - rows changing is why the effect should run. It is just supplying a value the write needs. That is precisely the case untracked exists for: I need to read this, but do not treat it as a trigger.
+
+The question at the bottom is the one I use on every untracked I meet in review. If this value changed right now, and nothing reran, would that be correct? If the answer comes quickly and it is yes, it is the right call, and put a comment next to it saying why. If you have to think about it for more than a few seconds, what you have is a stale bug waiting for a customer to find it.
+
+And I want to be careful not to sell this too hard, because untracked is also the easiest way in the language to build something permanently stale. If the only reason you are reaching for it is that your effect is looping, stop and look at the shape first. An effect that reads state and writes state is usually derived state wearing a disguise, and the real fix is a computed or a linkedSignal - at which point there is no loop to break, because there is no write.
+
+One detail that surprises people, and it is worth knowing so you do not add untracked where it does nothing: update does not track. It reads the current value directly rather than through the reactive graph, so summary.update of some function is already safe inside an effect. It is only an explicit read - calling the signal - that creates the dependency.
+
+Last thing. In the review history I went through, authors successfully defended untracked three times, and every single time they defended it the same way: by naming the thing outside the graph that was actually driving the rerun. If you can name that, you are fine.
+-->
 ---
 layout: content
 eyebrow: 'The invisible dependency'
@@ -498,18 +542,6 @@ readonly rows = computed(() =>
 
 <!--
 This is the highest-volume single bug in our whole review history, and I want to spend a moment on it, because the symptom looks like an i18n bug rather than a signals bug. Somebody changes language, half the screen updates because it went through a pipe, and the other half stays stubbornly in the old language, because those strings were snapshotted into a computed and have been frozen ever since. Five separate findings turned out to be that same instance. But the translation case is just the one we happened to hit - the rule underneath it is what I want you to take away. If the source cannot notify you, do not read it inside derived state. Either bring it into the graph as a signal so it can tell you when it changes, or push the read down to the point of render, where it gets re-evaluated anyway. And the list along the bottom is not exhaustive. An imperative getter on a service, something out of storage, the current time, the current URL, the contents of a DOM node - none of them can tell you they changed, so all of them behave exactly the same way.
--->
-
----
-layout: content
-eyebrow: 'Discipline'
-heading: 'A comment about reactivity is a testable claim'
----
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-bottom:44px;"> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:34px 40px;"> <p style="font-size:29px;line-height:1.5;margin:0;color:#8A97A8;font-family:'JetBrains Mono',monospace;">// runs once per open</p> <p style="font-size:29px;line-height:1.5;margin:18px 0 0;color:#C9D4E2;">The dependency list said: every keystroke.</p> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:34px 40px;"> <p style="font-size:29px;line-height:1.5;margin:0;color:#8A97A8;font-family:'JetBrains Mono',monospace;">// reacts to the verified flag</p> <p style="font-size:29px;line-height:1.5;margin:18px 0 0;color:#C9D4E2;">The flag was read inside <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">untracked</code>.</p> </div> </div>
-<p style="font-size:31px;color:#C9D4E2;line-height:1.45;margin:0;max-width:1600px;">Read the comment, then check whether the code agrees. It is the one kind of comment you can verify line by line.</p>
-
-<!--
-So there are two things I would do with this. If you are the one writing that comment, check it before you commit it, because the moment you write it down you have made a claim that somebody can falsify. And if you are reviewing, go to those comments first, and read them as claims rather than as documentation you can trust. That is precisely where intent and implementation drift apart, and the drift is invisible in the diff, because what you see is a comment that reads perfectly well sitting above code that no longer does what it says. Of everything in this deck this is the cheapest habit to pick up, and it works because a comment about what something reacts to is the one kind of comment you can verify line by line, against the code right underneath it.
 -->
 
 ---
