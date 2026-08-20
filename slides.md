@@ -347,7 +347,9 @@ This chapter is the stale family, and every bug in it comes down to the same sen
 
 The thing to hold onto before we start is that a dependency set is observed, not declared. You never write down what a computed depends on. Angular watches which signals you actually read while the function runs, and that set of reads is the dependency set - for that run, and only that run.
 
-Two things follow from that, and we keep coming back to both. A value you read behind a condition is only a dependency on the runs where the condition let you reach it, so the set can change from one evaluation to the next. And a value you read outside a reactive context - or after the function has already handed control back, which is the await case we just looked at - is not a dependency at all.
+Two things follow from that, and we keep coming back to both. A value you read behind a condition is only a dependency on the runs where the condition let you reach it. And a value you read outside a reactive context - or after the function has already handed control back, which is the await case we just looked at - is not a dependency at all.
+
+If somebody asks whether that first one is a bug - whether an if statement can hide a dependency from you - the answer is no, and it is worth being able to say why. The dependency list is rebuilt from scratch on every single run, so anything you did not read this time is dropped. But the condition itself is a read, so it is tracked, and the moment it flips the whole thing recomputes and picks up whatever the new branch reads. Conditional reads are self-correcting. Where it does go wrong is when the condition is not a signal at all, and that is the next slide but one.
 
 Nobody writes that set down, nothing checks it, and the compiler cannot help you. That is where stale comes from, and it is why every bug in this chapter looks like working software right up until it does not.
 -->
