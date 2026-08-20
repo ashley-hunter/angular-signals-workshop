@@ -77,7 +77,7 @@ heading: 'When to use each primitive'
 - We all get signal right, and computed right. The third card is where we fall down
 - linkedSignal used ~1/3 as often as the workaround it replaces - so "derived but writable" becomes an effect, and that's our largest cluster of findings
 - Left to right: nothing derives it → signal. Derived, nothing else may overwrite → computed. Derived, user can overwrite → linkedSignal
-- effect is deliberately not in the row - it holds no value. It's the exit from the graph. Coming back to what it's good for
+- effect is deliberately not in the row - it holds no value. It's the exit from the graph into something non-reactive
 -->
 
 ---
@@ -231,7 +231,7 @@ heading: 'Not every callback you pass Angular is tracked'
 <p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:26px 0 0;max-width:1660px;">The <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">resource</code> row is the one to keep: <code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#2FD8B4;">params</code> decides <em>when</em> to fetch, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#FF7A6B;">loader</code> only decides <em>how</em>. A signal read in the loader will never cause a refetch. And nothing after an <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">await</code> is tracked anywhere.</p>
 
 <!--
-- The fact underneath the last few slides, rarely written down in one place
+- The fact underneath most of these mistakes, and rarely written down in one place
 - A read is only a dependency inside a reactive consumer. Not "in a component", not "in a signals API"
 - The two middle rows are unguessable from the API shape: linkedSignal and resource each take two callbacks and watch one
 - **resource is the row to memorise.** params tracked = decides *when*. loader wrapped in untracked in the source = decides only *how*. A read in the loader never refetches, and the request keeps whatever it read first time. Stale with no visible cause
@@ -311,7 +311,7 @@ readonly #render = effect(() => {
 - So format is read, used, and never registered. On screen, in the render call, not in the graph
 - Panel: one of two dependencies made it. **Worse than none** - it still fires on team change, so the wiring looks right and demos fine
 - Found later by somebody changing the format, watching nothing happen, and hunting a render-path bug that doesn't exist
-- Fix: get the async work out of the effect. resource = tracked params + untracked loader, the same split as a few slides ago. The effect goes fully synchronous and both reads count
+- Fix: get the async work out of the effect. resource splits it - params is tracked, the loader is not. The effect goes fully synchronous and both reads count
 - Cancellation free: resource abandons superseded requests. The async effect lets both land and renders whichever finishes last
 -->
 
@@ -372,7 +372,7 @@ transition: fade
 - Hold this first - a dependency set is **observed, not declared**. You never write down what a computed depends on. Angular watches what you actually read during the run, and that's the set. For that run only
 - Two consequences we keep returning to: a read behind a condition only counts on runs that reach it; a read outside a reactive context - or after an await - isn't a dependency at all
 - If asked whether an if can hide a dependency: no. The list is rebuilt from scratch every run, but the condition itself is a tracked read, so flipping it recomputes and picks up the new branch. Self-correcting
-- It goes wrong when the condition isn't a signal. That's two slides away
+- It goes wrong when the condition isn't a signal at all - nothing then re-triggers the read
 - Nobody writes the set down, nothing checks it, the compiler can't help. Hence stale, and hence code that looks like working software until it isn't
 -->
 
@@ -425,7 +425,7 @@ readonly rows = resource({
 
 <!--
 - Both directions turn up about equally, both written with exactly the right intention
-- Too narrow = last chapter: the read goes through a helper or sits in untracked, and tracking gets skipped
+- Too narrow = the stale case: the read goes through a helper or sits in untracked, and tracking gets skipped
 - Too wide = this. One state object: team id, page, sort column. Sorting is client-side, but params reads the whole object, so changing the sort fires a request. Nobody wrote that on purpose - it's what the code says
 - Obvious fix: pull out the two fields the request needs
 - **It changes nothing.** params still calls this.state(), so it still depends on the whole signal, so sortBy still reruns it. And now it returns a fresh object literal each run
@@ -604,8 +604,8 @@ readonly #observe = effect((onCleanup) => {
 - Second-order damage here: the guard existed to skip observers for cheap layouts. It never fired once, so every instance paid for machinery the comment above it promised to skip
 - Another: test fixtures seeded from an input in the constructor, rendering empty in every case that mattered
 - ngOnInit is only half right. **It runs once.** If mode can change - and inputs usually do - you've swapped "always saw the default" for "only saw the first real value". Rarer, which is worse
-- So: an effect. Runs once inputs are set, again whenever mode changes. And it starts something non-reactive, so it cleans up - chapter one's rule, tearing down the old observer before the new one starts
-- If asked whether lifecycle hooks are going away: no. ngOnInit isn't deprecated, style guide still covers it. What's replaced is hooks that existed to **observe change** - ngOnChanges (next slide), view queries, DOM timing. One-time imperative setup with no reactive dependency is still fine
+- So: an effect. Runs once inputs are set, again whenever mode changes. And it starts something non-reactive, so it cleans up - onCleanup tears down the old observer before the new one starts
+- If asked whether lifecycle hooks are going away: no. ngOnInit isn't deprecated, style guide still covers it. What's replaced is hooks that existed to **observe change** - ngOnChanges, view queries, DOM timing. One-time imperative setup with no reactive dependency is still fine
 - Takeaway: a decision that depends on an input doesn't belong in the constructor, and probably not in a once-only hook either
 -->
 
@@ -625,7 +625,7 @@ heading: 'Every ngOnChanges has a signals shape'
 - Nearly every one is one of four:
 - From one input → never a change handler, a formula. **computed**
 - From several inputs → still **computed**. Read them all, and the dependency set assembles from the reads
-- Resets local state on input change → chapter one's derived-but-writable. **linkedSignal**
+- Resets local state on input change → derived, but writable. **linkedSignal**
 - Drives something outside the graph → genuinely lifecycle. **effect**
 - firstChange is the trip-up. No equivalent, and deliberately: if the first run must differ, that's initialisation, and initialisation belongs somewhere that runs once - not inside something that reruns
 -->
@@ -938,11 +938,13 @@ transition: fade
 layout: content
 eyebrow: 'Resources'
 heading: 'Signal-driven fetches belong in a resource'
+clicks: 1
 ---
-<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 24px;max-width:1660px;">The left is what we write by hand. Everything it is missing, the right gets for free.</p>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 24px;max-width:1660px;">Fetch a team's members whenever the team changes. This is what we write by hand.</p>
+<div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:40px;align-items:start;">
 <div>
 
+````md magic-move
 ```ts
 // AVOID
 readonly users = signal<User[]>([]);
@@ -955,31 +957,26 @@ readonly #fetch = effect(async () => {
 });
 ```
 
-</div>
-<div>
-
 ```ts
 // PREFER
 readonly users = httpResource<User[]>(
   () => `/api/teams/${this.teamId()}/users`,
 );
-
-// value, isLoading, error, status, reload
-// superseded requests cancelled
-// no race between two responses
 ```
+````
 
 </div>
+<div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:28px 30px;"><div style="font-size:22px;color:#8A97A8;margin-bottom:10px;"><span v-click.hide="1">What you are maintaining</span><span v-click="1">What you get for free</span></div><div v-click.hide="1"><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid #1E252F;"><span style="color:#FF7A6B;font-size:20px;">&#9679;</span><span style="font-size:24px;color:#C9D4E2;line-height:1.3;">a <code style="font-family:'JetBrains Mono',monospace;font-size:22px;">loading</code> flag, set on both sides</span></div><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid #1E252F;"><span style="color:#FF7A6B;font-size:20px;">&#9679;</span><span style="font-size:24px;color:#C9D4E2;line-height:1.3;">nothing cancels a superseded request</span></div><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid #1E252F;"><span style="color:#FF7A6B;font-size:20px;">&#9679;</span><span style="font-size:24px;color:#C9D4E2;line-height:1.3;">two responses can land out of order</span></div><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid #1E252F;"><span style="color:#FF7A6B;font-size:20px;">&#9679;</span><span style="font-size:24px;color:#C9D4E2;line-height:1.3;">no error state anywhere</span></div></div><div v-click="1"><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid #1E252F;"><span style="color:#2FD8B4;font-size:20px;">&#9679;</span><span style="font-size:24px;color:#C9D4E2;line-height:1.3;"><code style="font-family:'JetBrains Mono',monospace;font-size:22px;">value</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:22px;">isLoading</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:22px;">error</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:22px;">status</code></span></div><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid #1E252F;"><span style="color:#2FD8B4;font-size:20px;">&#9679;</span><span style="font-size:24px;color:#C9D4E2;line-height:1.3;"><code style="font-family:'JetBrains Mono',monospace;font-size:22px;">reload()</code> when you need it</span></div><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid #1E252F;"><span style="color:#2FD8B4;font-size:20px;">&#9679;</span><span style="font-size:24px;color:#C9D4E2;line-height:1.3;">superseded requests cancelled</span></div><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid #1E252F;"><span style="color:#2FD8B4;font-size:20px;">&#9679;</span><span style="font-size:24px;color:#C9D4E2;line-height:1.3;">no race between two responses</span></div></div></div>
 </div>
-<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin:28px 0 0;font-size:26px;line-height:1.4;color:#C9D4E2;"> <div style="border-top:2px solid #2FD8B4;padding-top:14px;"><code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#2FD8B4;">httpResource</code><br>an HTTP GET</div> <div style="border-top:2px solid #4A5568;padding-top:14px;"><code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#8A97A8;">rxResource</code><br>an observable pipeline you already have</div> <div style="border-top:2px solid #4A5568;padding-top:14px;"><code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#8A97A8;">resource</code><br>a promise, or a stream you own</div> </div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin:30px 0 0;font-size:25px;line-height:1.4;color:#C9D4E2;"> <div style="border-top:2px solid #2FD8B4;padding-top:14px;"><code style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#2FD8B4;">httpResource</code><br>an HTTP GET</div> <div style="border-top:2px solid #4A5568;padding-top:14px;"><code style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#8A97A8;">rxResource</code><br>an observable pipeline you already have</div> <div style="border-top:2px solid #4A5568;padding-top:14px;"><code style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#8A97A8;">resource</code><br>a promise, or a stream you own</div> </div>
 
 <!--
 - The left isn't a strawman - it's what we all wrote for years, and plenty are still in the codebase
-- It manages to be every mistake from the last two chapters at once: an effect that writes signals (chapter one), an async effect so the teamId read after the await isn't tracked, and two pieces of state kept in step by hand
+- It manages to be three separate mistakes at once: an effect that writes signals, an async effect so the teamId read after the await isn't tracked, and two pieces of state kept in step by hand
 - The right is one expression: a function returning the request, reading whatever signals it needs. That's the whole wiring. The team id changing is the trigger - no subscription, no cancellation code
 - The comments underneath are the point, because they're all things the left doesn't do and would be tedious to add: value, isLoading, error, status, reload as signals. Superseded requests cancelled, so three quick team clicks don't leave you with whichever lands last. No race between two in-flight responses - the bug you'd only find in production on a slow connection
-- Watch inside that function: it reruns on the signals it reads, so key it on the few values the request is made of. A whole state object makes every unrelated field a refetch - chapter two
-- Choosing, and you'll see all three in our code: plain GET → **httpResource**, never touch HttpClient. Existing observable pipeline → **rxResource**, hand it the stream. Anything else, a promise or something you drive → **resource** with a loader. That's what the next slides use, because they call a service rather than a URL
+- Watch inside that function: it reruns on the signals it reads, so key it on the few values the request is made of. A whole state object makes every unrelated field a refetch
+- Choosing, and you'll see all three in our code: plain GET → **httpResource**, never touch HttpClient. Existing observable pipeline → **rxResource**, hand it the stream. Anything else, a promise or something you drive → **resource** with a loader - the general form, and it takes any promise
 - **Reads only.** Nothing stops you setting POST, but a resource re-issues on every parameter change and every reload, and "send the delete again" isn't something you want on a parameter change. A write is an action with a moment - it stays on the HTTP client
 -->
 
@@ -1015,13 +1012,13 @@ readonly user = toSignal(this.user$, { initialValue: GUEST });
 ````
 
 <p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:30px 0 0;max-width:1660px;">Keeping <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">undefined</code> is a fine answer too, as long as you branch on it. Picking none of the three is the bug.</p>
-<p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:20px 0 0;max-width:1660px;">And <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">toObservable</code> is an <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">effect</code> feeding a <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">ReplaySubject</code> - so a signal, out to an observable and back is chapter one with extra steps.</p>
+<p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:20px 0 0;max-width:1660px;">And <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">toObservable</code> is an <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">effect</code> feeding a <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">ReplaySubject</code> - so a signal, out to an observable and back is an effect writing a signal, with extra steps.</p>
 
 <!--
 - Biggest number in the whole research, and we haven't touched it: close to **1,500 toSignal calls**, and around **1,370 look like the first version** - no initial value, no requireSync
 - Every one is typed T-or-undefined, and genuinely undefined for at least one tick
 - In a template: undefined → falsy branch → "not signed in", an empty list, or a dash, before the real value arrives
-- Usually nobody notices, because the gap is a frame. But it's the silent shape from slide one - "we don't know yet" rendered as "there is nothing". When the source is slower than a frame it stops being invisible
+- Usually nobody notices, because the gap is a frame. But this is the silent failure - "we don't know yet" rendered as "there is nothing". When the source is slower than a frame it stops being invisible
 - **requireSync**, if the observable emits on subscribe - BehaviorSubject, ReplaySubject, store selector - gives a plain Signal<User>, no undefined in the type
 - Stronger than people expect: not a hint checked later. toSignal subscribes, and throws NG0601 right there if nothing arrived synchronously. Wrong about your source and you find out on first render in dev, not in production six months later
 - **Initial value**, for sources that genuinely can't emit immediately. The starting state is something you chose, not something inherited from the type system. A real User - guest, anonymous - keeps the type Signal<User> and the undefined problem leaves the template
@@ -1034,7 +1031,7 @@ layout: content
 eyebrow: 'States'
 heading: 'Four states, not two'
 ---
-<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">The <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">users</code> resource from two slides ago. Six statuses, four things to render - and the order you branch in is most of the job.</p>
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">The <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">users</code> resource below fetches a team's members. Six statuses, four things to render - and the order you branch in is most of the job.</p>
 <div style="display:grid;grid-template-columns:0.82fr 1.18fr;gap:44px;align-items:start;">
 <div>
 <div class="compare" style="grid-template-columns:0.85fr 1fr;font-size:26px;"> <div class="head">STATUS</div> <div class="head teal">MEANS</div> <div class="row-label">loading<br>reloading</div> <div>Not known yet.<br>Reloading still has the old value</div> <div class="row-label">resolved<br>local</div> <div>Known, and may be empty</div> <div class="row-label">error</div> <div>Unknown, and not coming</div> <div class="row-label last">idle</div> <div class="last">Nothing has been asked for yet</div> </div>
@@ -1058,7 +1055,7 @@ heading: 'Four states, not two'
 <p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:28px 0 0;max-width:1660px;">Error first, so a failed reload never renders as stale data. Then <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">hasValue()</code>, so a reload keeps what is on screen instead of flashing a skeleton. Collapse any two of these and you get a bug testers cannot reproduce.</p>
 
 <!--
-- The resource from two slides ago. This is the part people get wrong - not creating it, rendering it
+- A resource fetching a team's members. This is the part people get wrong - not creating it, rendering it
 - Six statuses, four things you put on screen. loading and reloading both mean waiting - reloading still holds the previous value, which matters in a second. resolved and local both mean you have a value; local just means somebody called set. error means it isn't coming
 - idle is the forgotten one: params returned undefined. Not the same as loading - nothing is in flight and nothing is coming
 - **The order of that template is most of the job**
@@ -1206,7 +1203,7 @@ transition: fade
 
 <!--
 - Last chapter, and it's shorter than it wants to be. Signal Forms deserves its own session and will get one
-- It's here because it's the one API in Angular built entirely on the ideas from the last six chapters
+- It's here because it's the one API in Angular built entirely on the ideas we have been through
 - So keep recognising things: derived state instead of synchronisation, rules that declare their dependencies instead of code keeping things in step, one source of truth instead of two
 -->
 
@@ -1354,7 +1351,7 @@ readonly prefsForm = form(this.prefs, (p) => {
 - Now watch: **email is required, when notify is true.** That's the whole thing
 - No subscription. No adding a validator, no removing one, no telling email to recalculate. Describe the relationship once, and the framework works out when it applies and when it stops
 - And the form on the right didn't change. Same behaviour, same error, same checkbox - only how much we had to say
-- This is where the rest of the deck pays off. Same move we made with computed at the very start: stop orchestrating the response, describe the rule
+- Same move as computed: stop orchestrating the response, describe the rule
 -->
 
 ---
@@ -1444,7 +1441,7 @@ transition: fade
 <p class="lead" style="margin-top:40px">The reactivity chapters, as questions you can ask about a diff.</p>
 
 <!--
-- If you photograph one slide today, it's the next one
+- If you photograph one slide today, make it the symptom-to-fix table coming up
 - Everything so far has been the explanation - why these happen, what's underneath
 - This is the part you can take to a code review tomorrow morning and actually use
 -->
