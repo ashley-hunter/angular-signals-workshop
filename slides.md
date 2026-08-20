@@ -216,61 +216,31 @@ The real-world shape of this is a value owned by a parent object or a store - a 
 -->
 ---
 layout: content
-eyebrow: 'Mirrors'
-heading: 'The copy an effect keeps in sync for somebody else'
+eyebrow: 'Reactive context'
+heading: 'Not every callback you pass Angular is tracked'
 ---
-<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 28px;max-width:1600px;">One level out: an effect keeps a second copy of state that already exists, so something else can read it.</p>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-bottom:32px;">
-<div>
-
-```ts
-// AVOID: a mirror kept current by an effect
-readonly #params = signal({ teamId: '', page: 1 });
-
-readonly #sync = effect(() => {
-  this.#params.set(
-    { teamId: this.teamId(), page: this.page() },
-  );
-});
-
-readonly users = resource({
-  params: this.#params,
-  loader: ({ params }) => loadUsers(params),
-});
-```
-
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">A read only becomes a dependency if it happens somewhere Angular is watching. Several of these helpers take two callbacks and watch exactly one of them.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
+<div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:30px 36px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#2FD8B4;margin-bottom:20px;">TRACKED</div> <div style="font-family:'JetBrains Mono',monospace;font-size:26px;line-height:1.9;color:#C9D4E2;"> <div>computed(<span style="color:#2FD8B4;">fn</span>)</div> <div>effect(<span style="color:#2FD8B4;">fn</span>)</div> <div>linkedSignal(<span style="color:#2FD8B4;">computation</span>)</div> <div>resource({ <span style="color:#2FD8B4;">params</span> })</div> <div>afterRenderEffect({ <span style="color:#2FD8B4;">write</span> })</div> </div> </div>
+<div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:30px 36px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:20px;">NOT TRACKED</div> <div style="font-family:'JetBrains Mono',monospace;font-size:26px;line-height:1.9;color:#C9D4E2;"> <div>resource({ <span style="color:#FF7A6B;">loader</span> })</div> <div>linkedSignal({ <span style="color:#FF7A6B;">set</span> })</div> <div>afterNextRender({ <span style="color:#FF7A6B;">write</span> })</div> <div>anything after an <span style="color:#FF7A6B;">await</span></div> <div>untracked(<span style="color:#FF7A6B;">fn</span>)</div> </div> </div>
 </div>
-<div>
-
-```ts
-// PREFER: hand the request its own parameters
-readonly users = resource({
-  params: () => ({
-    teamId: this.teamId(),
-    page: this.page(),
-  }),
-  loader: ({ params }) => loadUsers(params),
-});
-```
-
-<p style="font-size:26px;line-height:1.4;margin:24px 0 0;color:#8A97A8;">A frame behind, writable by anything, and the request reruns on a schedule it cannot see.</p>
-
-</div>
-</div>
-<p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:26px 0 0;max-width:1600px;">The review question is always the same: who owns this value? Answer it, and the mirror has nowhere left to be.</p>
+<p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:26px 0 0;max-width:1660px;">The two <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">resource</code> rows are the pair to remember: <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">params</code> decides <em>when</em> to fetch, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">loader</code> only decides <em>how</em>. A signal read in the loader will never cause a refetch.</p>
 
 <!--
-This is the same mistake as the last slide, just one level out. Before, the effect was deriving a value inside one component. Here it is keeping a whole second copy of state that already exists, so that something else can read it.
+This is the fact underneath most of the last few slides, and I have never seen it written down in one place, so here it is.
 
-The example is a request, because that is the version we file most often. Team ID and page already live in this component as signals. Somebody needs them shaped as a params object for the resource, so an effect assembles that object and writes it into a mirror signal, and the resource reads the mirror. Every step of that is reasonable and the whole thing is unnecessary - because params already takes a function, and a function of signals is exactly what we have.
+A read only becomes a dependency if it happens somewhere Angular is watching. Not "inside a component", not "inside a signal-based API" - specifically inside a reactive consumer. And several of these helpers take two callbacks and only watch one of them, which is not something you can guess from the shape of the API.
 
-The costs are the ones you would expect by now. The mirror lands a frame behind whatever changed it. It is a writable signal, so anything in the class can set it and nobody is enforcing that the effect is the only writer. And the request now reruns on a schedule that is one hop removed from the values it actually depends on. Delete the mirror and all three go away at once.
+The resource pair is the one I would have people memorise. params is tracked, so it decides when to fetch. The loader is explicitly wrapped in untracked in the framework source, so it decides only how. If you read a signal in your loader because it was convenient, that signal will never cause a refetch, and the request will quietly keep using whatever it read the first time. That is a stale bug with no visible cause at all.
 
-It shows up in two other shapes, and they are the same bug. An effect that writes a child's signal directly, instead of passing the value in through an input. And an effect that copies component state into a shared store so some other part of the app can read it from there.
+linkedSignal is the same trap in a smaller package. The computation is tracked - that is what makes it derived state. The set hook is not a reactive computation of its own; it runs wherever somebody called set from. So do not put a read in there expecting it to keep anything up to date.
 
-So the question I would ask in review, every time, is who owns this value. If the answer is the request, give the request a function of its own parameters. If the answer is the child, pass it in. If the answer is genuinely the store, then let the store be the one place it lives and stop keeping a component copy. In none of those cases does anybody need a mirror.
+Render phases split the same way, and the names actively mislead you. afterRenderEffect phases are reactive - each phase gets its own reactive node, which is exactly why it reruns when something changes. afterNextRender phases are plain callbacks that run once. Same four phase names, completely different behaviour.
+
+And effect has the asterisk from a couple of slides ago: tracked, but only up to the first await.
+
+The reason this matters more than it sounds is that every one of these mistakes produces a value that is correct the first time. You fetch, it works, you demo it, it ships. It only goes wrong on the second change, when the thing you read in the wrong place changes and nothing happens.
 -->
-
 ---
 layout: content
 eyebrow: 'Legitimate use'
