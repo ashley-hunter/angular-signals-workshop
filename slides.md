@@ -393,54 +393,59 @@ layout: content
 eyebrow: 'Two failure modes'
 heading: 'A dependency set can be wrong in both directions'
 ---
-<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 22px;max-width:1600px;">Too narrow and a real change never reruns the work. Too wide and unrelated changes rerun expensive things. Here is too wide, with the state it is keyed on:</p>
-
-```ts
-readonly state = signal({ teamId: 'a1', page: 1, sidebarOpen: false, sortBy: 'name' });
-
-loader: ({ params }) => loadRows(params.teamId, params.page),   // same in both
-```
-
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-top:26px;">
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 24px;max-width:1600px;">Too narrow and a real change never reruns the work. Too wide and unrelated changes rerun expensive things - here, a sort toggle that fires a network request.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
 <div>
 
 ```ts
 // TOO WIDE
-params: () => this.state(),
+readonly state = signal({
+  teamId: 'a1', page: 1, sortBy: 'name',
+});
 
-// opening the sidebar refetches
-// changing the sort refetches
+readonly rows = resource({
+  params: () => this.state(),
+  loader: ({ params }) =>
+    loadRows(params.teamId, params.page),
+});   // sortBy changes -> refetch
 ```
 
 </div>
 <div>
 
 ```ts
-// KEYED ON WHAT THE RESULT USES
-params: () => ({
-  teamId: this.state().teamId,
-  page: this.state().page,
-}),
+// NARROW
+readonly teamId = signal('a1');
+readonly page = signal(1);
+readonly sortBy = signal('name');
 
-// only these two refetch
+readonly rows = resource({
+  params: () => ({
+    teamId: this.teamId(), page: this.page(),
+  }),
+  loader: ({ params }) =>
+    loadRows(params.teamId, params.page),
+});   // sortBy changes -> nothing
 ```
 
 </div>
 </div>
-<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:26px 0 0;max-width:1600px;">The loader is the answer key. It reads <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">teamId</code> and <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">page</code>, so those are the params - and nothing else is.</p>
+<p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:26px 0 0;max-width:1660px;">Nothing diffs the params for you - the previous request is compared by <em>reference</em>. So reading the whole object and picking fields back out of it changes nothing: the read is the dependency. Split the signals, or feed <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">params</code> a <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">computed</code> with an <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">equal</code>.</p>
 
 <!--
-Both of these turn up in review about as often as each other, and both are normally written by somebody who had exactly the right intention.
+Both directions turn up in review about as often as each other, and both are normally written by somebody with exactly the right intention.
 
-Too narrow usually happens when the read goes through a helper or a service and you never notice the tracking got skipped along the way, or it is sitting inside an untracked block somebody added for an unrelated reason. Those are the stale bugs from the last chapter.
+Too narrow is the stale family from the last chapter - the read goes through a helper, or sits inside an untracked block, and the tracking quietly gets skipped.
 
-Too wide is the one on this slide, and it is easier to do by accident. Look at the state signal at the top - four fields. Two of them, team ID and page, genuinely decide which rows come back. The other two are pure UI: whether the sidebar is open, and which column you are sorting by. Neither of those changes the answer the server gives you.
+Too wide is the one on this slide. On the left, everything is in one state object: team ID, page, and the column you are sorting by. Sorting is a client-side concern - the server sends the same rows either way - but params reads the whole object, so changing the sort fires a network request. Nobody wrote that, and nobody would defend it, but that is what the code says.
 
-So on the left, keying params on the whole state object means opening the sidebar fires a network request. Changing the sort fires a network request. Nobody wrote that, and nobody would defend it, but it is what the code says - because params reruns when anything it reads changes, and it read the entire object.
+Now here is the part that catches people, and it is worth knowing precisely, because the obvious fix does not work. Nothing diffs your params for you. Angular runs the params function and compares what it returns against the previous request with a reference check. So if you keep the single state object and just pick the two fields back out of it into a new object literal, you have changed nothing: you still read the whole state signal, so params still reruns when sortBy changes, and it still hands back a brand new object, which is never reference-equal to the last one. Same refetch.
 
-On the right, params reads exactly the two fields the request is made of. Toggling the sidebar now does nothing at all, because the params function never touched it.
+The read is the dependency. That is the thing to hold on to. So on the right, the values are separate signals, and the params function only ever touches the two the request is actually made of. Changing sortBy does not invalidate params at all, because params never read it.
 
-And the way to find this in your own code is right there at the bottom. The loader is the answer key. Look at what it actually reads - here it is team ID and page - and that is your params list. If params contains something the loader never touches, you have a refetch waiting to happen.
+If you genuinely cannot split the state up - and sometimes you cannot - the other route is to put a computed in front of it with a custom equal that compares the fields you care about. When your comparator says equal, the computed keeps its previous value and never notifies, so the resource never sees a change. Same outcome, more machinery.
+
+And one small mercy: if your params function returns a primitive rather than an object - a string ID, a number - then the reference check is a value check, and all of this goes away.
 -->
 
 ---
