@@ -791,53 +791,60 @@ Same shape for anything else with an off switch: sockets, resize observers, subs
 layout: content
 eyebrow: 'Identity'
 heading: 'Reference equality is the notification boundary'
+clicks: 2
 ---
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 32px;max-width:1600px;">Signals compare with <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">Object.is</code>. Return a fresh array and every consumer is told it changed, contents identical or not.</p>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
-<div>
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 20px;max-width:1660px;">One binding, unchanged throughout. What changes is what it costs the grid.</p>
 
+```html
+<app-grid [rows]="visibleRows()" />
+```
+
+<div style="margin-top:22px;">
+
+````md magic-move
 ```ts
-// AVOID: new array every read
-protected held(): string[] {
-  return this.dragging()
-    ? [this.dragged()]
-    : [];
+// a method: runs on every check of this view
+protected visibleRows(): Row[] {
+  return this.rows().filter((r) => r.active);
 }
+
+// new array every check, so the grid rebuilds
+// even when nothing changed
 ```
 
-</div>
-<div>
-
 ```ts
-// PREFER: cached identity
-protected readonly held = computed(() =>
-  this.dragging() ? [this.dragged()] : [],
+// a computed: runs when rows() changes
+protected readonly visibleRows = computed(() =>
+  this.rows().filter((r) => r.active),
 );
-```
 
-</div>
-</div>
-<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:36px 0 0 0;max-width:1600px;">Bind that to a virtualiser or a chart and every check throws away work. The computed returns the same array until its inputs change.</p>
-<p style="font-size:28px;color:#8A97A8;line-height:1.4;margin:32px 0 16px;max-width:1600px;">When the contents matter more than the identity, say so with <code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#2FD8B4;">equal</code>:</p>
+// same array until rows() changes,
+// so the grid does nothing in between
+```
 
 ```ts
-readonly ids = computed(() => this.rows().map((r) => r.id), {
-  equal: (a, b) => a.length === b.length && a.every((x, i) => x === b[i]),
-});   // says equal -> the computed keeps the old value and never notifies
+// a refetch makes new Row objects with the same ids
+protected readonly visibleRows = computed(
+  () => this.rows().filter((r) => r.active),
+  { equal: (a, b) => a.length === b.length
+      && a.every((r, i) => r.id === b[i].id) },
+);   // equal -> old value kept, grid still does nothing
 ```
+````
+
+</div>
 
 <!--
-If you have ever chased a performance problem you could not explain, there is a good chance it was this one. A virtualiser recalculating its ranges on every check. A chart rebuilding its series. A grid recreating its column definitions. In every case something upstream is handing out a brand new array each time it is asked, and everything downstream believes it, because the default comparison is Object.is - two arrays with identical contents are always different.
+Start with the binding, because it is the part that does not change and the part that pays.
 
-I want you to notice which way the fix points. Moving this to a computed is not about tidiness. The caching is the entire feature: the computed hands back the same array reference until its inputs actually change, so the work downstream stops rerunning.
+A method in a template runs on every check of that view. Not when rows change - every check. So a resource resolving somewhere else in this component, a click handler firing, anything at all that marks the view dirty, and this filter runs again and hands the grid a brand new array. The grid has no way to know the contents are identical, because signals compare with Object.is and two arrays are never the same object. So it rebuilds. Every check. For a value nobody changed.
 
-The bottom of the slide is the other half, for when a computed alone is not enough - when the inputs do change but the answer does not. Mapping rows to their IDs is the classic: the rows are new objects, so the computed reruns and produces a new array, but the IDs are identical and nothing downstream needed to know. A custom equal lets you say that.
+Move it to a computed and two things improve at once. It only recomputes when rows actually changes, and between those changes it hands back the exact same array reference, so the grid sees no change and does nothing. That is the bit I want to land: moving this to a computed is not tidying up. The caching is the entire feature.
 
-The mechanism is worth knowing because it is what makes it work. When your comparator returns true, the computed puts the old value back and does not bump its version, and consumers decide whether they changed by looking at that version. So nothing downstream ever hears about it. It is not that they hear about it and ignore it - the notification never happens.
+Then the third step, which is a real case rather than a flourish. Your rows come back from a refetch. Same data, but they are new objects, so rows() has a new identity, so the computed reruns and produces a new filtered array - and the grid rebuilds even though nothing the user can see has changed. A custom equal lets you say what actually counts as different. Here it is the ids. When your comparator returns true, the computed puts the old value back and does not bump its version, so nothing downstream is ever notified.
 
-Two cautions. The comparator runs on every recomputation, so it has to be cheaper than the work it is preventing. Comparing two IDs to avoid rebuilding a chart is a good trade; deep-comparing a thousand objects to avoid a cheap map is not. And this is genuinely rare in our codebase - sixteen uses against eight thousand computeds - so treat it as the tool you reach for when you have measured something, not as a default.
+Two cautions on that last one. The comparator runs on every recomputation, so it has to be cheaper than the work it prevents - comparing ids to avoid rebuilding a grid is a good trade, deep-comparing a thousand objects to avoid a cheap map is not. And it is rare in our codebase, sixteen uses against eight thousand computeds, so treat it as something you reach for after measuring rather than by default.
 -->
-
 ---
 layout: content
 eyebrow: 'Templates'
