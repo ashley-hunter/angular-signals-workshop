@@ -126,7 +126,7 @@ layout: content
 eyebrow: 'Derived, and writable'
 heading: 'When the user can override the derived value'
 ---
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 32px;max-width:1600px;">The reason people reach for an effect is usually legitimate: the value is derived, but it also has to be writable. That is not a gap in the API. That is <code style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;">linkedSignal</code>.</p>
+<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 32px;max-width:1600px;">The page resets to one whenever the filter changes - so it is derived. The pager buttons also move it - so it is writable. Both of those have to be true at once, and that is not a gap in the API. That is <code style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;">linkedSignal</code>.</p>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
 <div>
 
@@ -138,6 +138,9 @@ readonly #reset = effect(() => {
   this.filter();     // track
   this.page.set(1);  // reset
 });
+
+next() { this.page.update((p) => p + 1); }
+prev() { this.page.update((p) => p - 1); }
 ```
 
 </div>
@@ -149,14 +152,23 @@ readonly page = linkedSignal(() => {
   this.filter();  // track
   return 1;       // reset
 });
+
+next() { this.page.update((p) => p + 1); }
+prev() { this.page.update((p) => p - 1); }
 ```
 
 </div>
 </div>
-<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:40px 0 0;max-width:1600px;">Selected row, current page, a form field seeded from loaded data. All the same shape.</p>
+<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:40px 0 0;max-width:1600px;">Both versions page the same way. The difference is that on the right, the reset and the writes are the same signal - so there is nothing to keep in sync.</p>
 
 <!--
-This is the highest-leverage slide in the deck for us. We have around three hundred instances of the left-hand shape in the codebase and about ninety-five of the right-hand one, so this is a straight swap we already know how to make. The tell for linkedSignal is a sentence with "but" in it - it's derived, but the user can change it. There's also a longer form that takes a source and a computation, where the computation gets handed the previous source and the previous value. That's what you want when you'd like to keep the current selection if it still exists in the new data, and fall back to something sensible when it doesn't.
+Look at what the pager methods do to this. If page were only ever derived from the filter, a computed would be the end of the story - but next and prev have to write to it, and a computed will not let you. So people reach for a plain signal, and now nothing resets it when the filter changes, so they add an effect to do the resetting by hand. That is how you end up with the version on the left, and every step of that reasoning is sensible.
+
+linkedSignal is the answer to exactly this shape. It is derived, so the filter changing resets it to page one for free. And it is writable, so next and prev work on it like any other signal. Notice the two methods are identical on both sides - the only thing that changes is where the reset lives.
+
+The tell, when you are reading your own code, is a sentence with "but" in it. It is derived, but the user can change it. Selected row, current page, active tab, a form field seeded from whatever you loaded. All the same shape, and this is the slide I would most like you to remember, because we have around three hundred instances of the left-hand version in the codebase and about ninety-five of the right-hand one.
+
+There is also a longer form that takes a source and a computation, and the computation gets handed the previous source and the previous value. That is what you want when you would like to keep the current selection if it still exists in the new data, and fall back to something sensible when it does not.
 -->
 
 ---
