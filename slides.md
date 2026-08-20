@@ -456,42 +456,30 @@ layout: content
 eyebrow: 'Escape hatch'
 heading: 'untracked() is a claim you have to defend'
 ---
-<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 24px;max-width:1600px;">This effect should fire when the page changes. It also reads the current user - not as a reason to run, just as a value the call needs.</p>
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 28px;max-width:1660px;">This should fire when the page changes. It needs the user too - but switching user is not a page view.</p>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
 <div>
 
 ```ts
-// AVOID: user is now a trigger
+// AVOID: user is a trigger too
 readonly #track = effect(() => {
-  const page = this.route.page();
-
-  analytics.pageView(
-    page,
-    this.user().id,
-  );
-});   // switching user logs a page
-      // view nobody navigated to
+  track(this.page(), this.user().id);
+});
 ```
 
 </div>
 <div>
 
 ```ts
-// PREFER: user is context
+// PREFER: user is only context
 readonly #track = effect(() => {
-  const page = this.route.page();
-  const user = untracked(this.user);
-
-  analytics.pageView(
-    page,
-    user.id,
-  );
-});   // only a page change fires it
+  track(this.page(), untracked(this.user).id);
+});
 ```
 
 </div>
 </div>
-<p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:26px 0 0;max-width:1660px;">Ask: if this value changed right now and nothing reran, would that be correct? Here, yes - nobody navigated. If the answer takes more than a few seconds, you are building a stale value on purpose.</p>
+<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:30px 0 0;max-width:1660px;">A value you need but should not rerun on is context. <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">untracked</code> is how you say so.</p>
 
 <!--
 Here is the case where untracked is genuinely the right tool, and it is worth being precise about why, because it is easy to reach for it when something else is wrong.
