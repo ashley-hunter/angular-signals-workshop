@@ -1287,14 +1287,17 @@ clicks: 1
 ````md magic-move
 ```ts
 @Component({
-  providers: [{ provide: NG_VALUE_ACCESSOR, multi: true,
-    useExisting: forwardRef(() => CustomInput) }],
+  template: `
+    <input [value]="value"
+           (input)="onChange($any($event.target).value)"
+           (blur)="onTouched()" />
+  `,
+  providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => CustomInput), multi: true }],
 })
 export class CustomInput implements ControlValueAccessor {
   value = '';
   private onChange = (v: string) => {};
   onTouched = () => {};
-
   writeValue(v: string) { this.value = v; }
   registerOnChange(fn: (v: string) => void) { this.onChange = fn; }
   registerOnTouched(fn: () => void) { this.onTouched = fn; }
@@ -1317,6 +1320,10 @@ export class CustomInput implements FormValueControl<string> {
 ````
 
 <div style="display:grid;grid-template-columns:auto 1fr;gap:32px;align-items:start;margin-top:24px;" v-click="1"> <div style="font-family:'JetBrains Mono',monospace;font-size:23px;letter-spacing:0.12em;color:#8B7CF6;white-space:nowrap;padding-top:4px;">OPTIONAL<br>STATE INPUTS</div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;line-height:1.6;color:#8A97A8;">errors&nbsp; invalid&nbsp; pending&nbsp; disabled&nbsp; disabledReasons&nbsp; readonly&nbsp; hidden&nbsp; touched&nbsp; dirty&nbsp; name&nbsp; required&nbsp; min&nbsp; max&nbsp; minLength&nbsp; maxLength&nbsp; pattern<div style="font-size:24px;font-family:'Barlow',sans-serif;color:#C9D4E2;margin-top:12px;line-height:1.4;">Declare only what the control renders. There is no <span style="color:#FF7A6B;">valid</span> - declare one and it never updates.</div> </div> </div>
+
+<style>
+.shiki-magic-move-container, .shiki-magic-move-container code { font-size: 24px !important; line-height: 1.62 !important; }
+</style>
 
 <!--
 This is the same control written twice, and the point is the volume.
