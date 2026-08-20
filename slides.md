@@ -1175,83 +1175,8 @@ Everything else in this talk is a stale bug: something changed and nobody heard 
 -->
 
 ---
-layout: content
-eyebrow: 'Restraint'
-heading: 'Fewer signals, better named'
----
-<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:28px;margin-bottom:40px;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:32px 36px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#8B7CF6;margin-bottom:18px;">FIXED AT CREATION</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">Data that cannot change while the view is alive does not need to be writable. Making it writable invents a state transition nobody handles.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:32px 36px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#8B7CF6;margin-bottom:18px;">A RENAME, NOT A DERIVATION</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">A computed that just renames another signal is a second place to read from, and a chance for the two to disagree.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:32px 36px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#8B7CF6;margin-bottom:18px;">NAME THE MEANING</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">Derived state names a concept, so name the concept and not the mechanism. Reviewers read the name before the formula.</p> </div> </div>
-<p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:0;max-width:1600px;">Ask of any new signal: what writes this, and when? "Only the thing it came from" is a computed. "Nothing, ever" is a constant.</p>
-
-<!--
-Let me make the first card concrete, because "fixed at creation" sounds abstract until it costs you something. Say you have a dialog, and it is seeded once from whatever the user had selected at the moment they opened it. If you turn that seed into live writable state, you have just invented a moment that did not exist before: the thing changes halfway through the interaction, while the dialog is still open, and now the request you send is built from a shape nobody wrote code for. That is a bug that happens to one real user, once, and you never reproduce it. On the change this came from, three separate review comments pushed the same value back from live writable state to derived state for exactly that reason. And the other two cards are smaller but they come from the same instinct - reaching for a signal because signals are what we reach for. A computed that only renames another signal has not derived anything, it has just given you a second place to read the same value from and a chance for the two of them to drift. And when you do genuinely need derived state, name the concept it represents rather than the mechanism that produces it, because in review people read the name long before they read the formula.
--->
-
----
 layout: section
 number: '07'
-transition: fade
----
-## Testing
-
-<p class="lead" style="margin-top:40px">Reactive code fails in ways that make tests pass.</p>
-
-<!--
-Chapter seven, and it is a short one. The point of it is this: a signals bug can hide behind a green test exactly as easily as it hides behind a screen that looks like it is working. It is the same property that lets these things get through review in the first place - none of them throw. A stale value, an empty list, a chart of zeroes, all of it looks like working software, and it looks like a passing test too. So neither of the next two slides is really about a signals API. Both are about what your test is actually waiting for, and whether it can tell the difference between finished and not started.
--->
-
----
-layout: content
-eyebrow: 'Settling'
-heading: 'Wait for a state, not for a number of ticks'
----
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
-<div>
-
-```ts
-// AVOID
-for (let i = 0; i < 6; i++) {
-  TestBed.tick();
-  await Promise.resolve();
-}
-expect(state.error()).toBeUndefined();
-```
-
-</div>
-<div>
-
-```ts
-// PREFER
-await vi.waitFor(() =>
-  expect(state.status()).toBe('resolved'),
-);
-expect(state.error()).toBeUndefined();
-```
-
-</div>
-</div>
-<p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:40px 0 0;max-width:1600px;">A fixed number of flushes encodes today's scheduling. One delayed response and the assertion runs against the initial state - and passes.</p>
-<p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:24px 0 0;max-width:1600px;">Set a property directly rather than through an input and the view has not been checked yet. Flush before asserting on the DOM.</p>
-
-<!--
-The dangerous failure here is not a flaky test. It is a test that goes green while the feature is broken, and green tests do not get read again. Walk through the left-hand side. You wait six turns, the resource settles on the seventh, and your assertion runs against the state the component was in before anything loaded. If that initial state happens to satisfy what you asserted - no error, nothing rendered yet, whatever it is - the test passes and you ship. Six is not a magic number either. Six is however many turns it happened to take on the machine of the person who wrote the test. Add one await anywhere upstream, let the response come back a tick later, change a scheduler, and you are asserting against a component that has not done anything yet. Waiting on a predicate takes the guess out entirely: you stop encoding today's scheduling and start describing the state you actually care about, and if that state never arrives the test tells you so instead of quietly agreeing with you. One more thing while we are here, and it is a separate trap. If you set a property on a component directly instead of going through its inputs, the view has not been checked by the time your next line runs. So flush first, then assert on the DOM.
--->
-
----
-layout: content
-eyebrow: 'Readiness'
-heading: 'A readiness signal that can never arrive'
----
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 36px;max-width:1600px;">Waiting for a count to become non-zero works right up until zero is the correct answer.</p>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;"> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:34px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:20px;">AMBIGUOUS</div> <p style="font-size:29px;line-height:1.5;margin:0;color:#C9D4E2;">"Has it produced results yet?" cannot distinguish a finished empty pass from a pass that never ran.</p> </div> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:34px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#2FD8B4;margin-bottom:20px;">UNAMBIGUOUS</div> <p style="font-size:29px;line-height:1.5;margin:0;color:#C9D4E2;">"Has it finished?" A status, a settled state, an explicit first-emission flag. Empty is then a result like any other.</p> </div> </div>
-<p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:40px 0 0;max-width:1600px;">A timeout is a diagnosis to start from, not a verdict. Check the interaction, the locator and the setup before you conclude the component is broken.</p>
-
-<!--
-This is the four-states slide from earlier, except now it is your test infrastructure making the mistake rather than your component. If the thing you are waiting on cannot tell the difference between "nothing has happened yet" and "nothing was there", you have written a test that can only pass when the data is non-empty - and the non-empty case is almost always the one that already worked. The empty case is the one you needed the test for. What happens in practice is worse than a failing test, by the way. The test hangs. It times out. And the timeout gets filed as a bug against whatever the test was pointing at, so somebody loses a morning reading a component that was fine the whole time. That is why I want you to treat a timeout as the start of a diagnosis rather than as a verdict. Check the interaction, check the locator, check how the fixture was set up, and only then start suspecting the code. The fix on the right is genuinely small: wait for a status, or a settled state, or an explicit flag that says the first emission has happened. Once you are asking "has it finished" instead of "has it produced anything", empty is just a result like any other.
--->
-
----
-layout: section
-number: '08'
 transition: fade
 ---
 ## Signal Forms
@@ -1259,7 +1184,7 @@ transition: fade
 <p class="lead" style="margin-top:40px">The same ideas, applied to the one API built entirely on them.</p>
 
 <!--
-Last chapter, and I'll admit up front that it's shorter than it wants to be. Signal Forms really deserves a session of its own, and one day it will get one. The reason it's here at all is that it's the one API in Angular built entirely on the ideas we've spent the last seven chapters on. So as we go through it, I want you to keep recognising things: derived state instead of synchronisation, rules that declare what they depend on instead of code that keeps things in step by hand, and one source of truth instead of two.
+Last chapter, and I'll admit up front that it's shorter than it wants to be. Signal Forms really deserves a session of its own, and one day it will get one. The reason it's here at all is that it's the one API in Angular built entirely on the ideas we've spent the last six chapters on. So as we go through it, I want you to keep recognising things: derived state instead of synchronisation, rules that declare what they depend on instead of code that keeps things in step by hand, and one source of truth instead of two.
 -->
 
 ---
@@ -1378,7 +1303,7 @@ Let me answer the question I know at least half of you are holding, which is whe
 
 ---
 layout: section
-number: '09'
+number: '08'
 transition: fade
 ---
 ## In review
@@ -1394,7 +1319,7 @@ layout: content
 eyebrow: 'Checklist'
 heading: 'Symptom, and what to reach for'
 ---
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:44px;align-items:start;"> <div><div class="compare" style="grid-template-columns:1fr 1.1fr;font-size:24px;"> <div class="head">IF YOU SEE</div> <div class="head teal">REACH FOR</div> <div class="row-label">An effect that writes a signal</div> <div class="new"><code style="font-family:'JetBrains Mono',monospace;">computed</code>, or <code style="font-family:'JetBrains Mono',monospace;">linkedSignal</code></div> <div class="row-label">An effect that writes another component's signal</div> <div class="new">An input, or an explicit method on the owner</div> <div class="row-label">An <code style="font-family:'JetBrains Mono',monospace;">await</code> inside an effect</div> <div class="new">A resource keyed on a computed of the parameters</div> <div class="row-label">A non-signal read inside derived state</div> <div class="new">Bring it into the graph, or read it at render time</div> <div class="row-label">A decision taken in a constructor</div> <div class="new">A <code style="font-family:'JetBrains Mono',monospace;">computed</code>, or an effect that tracks the input</div> <div class="row-label last">A DOM write in a plain effect</div> <div class="new last"><code style="font-family:'JetBrains Mono',monospace;">afterRenderEffect</code> with a phase</div> </div></div> <div><div class="compare" style="grid-template-columns:1fr 1.1fr;font-size:24px;"> <div class="head">IF YOU SEE</div> <div class="head teal">REACH FOR</div> <div class="row-label">A fresh array or object per read</div> <div class="new">A <code style="font-family:'JetBrains Mono',monospace;">computed</code>, so identity is cached</div> <div class="row-label">A method call in a binding</div> <div class="new">A precomputed view object, bound field by field</div> <div class="row-label">An error mapped to an empty value</div> <div class="new">A distinct error state, carried to the template</div> <div class="row-label">A resource on a component-scoped service</div> <div class="new">Scope it to whatever outlives the interaction</div> <div class="row-label">Side effects in derived state</div> <div class="new">An owner that can also tear it down</div> <div class="row-label">A public writable signal</div> <div class="new"><code style="font-family:'JetBrains Mono',monospace;">protected readonly</code>, readonly at boundaries</div> <div class="row-label last">A fixed number of ticks in a test</div> <div class="new last">A predicate the test can wait on</div> </div></div></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:44px;align-items:start;"> <div><div class="compare" style="grid-template-columns:1fr 1.1fr;font-size:24px;"> <div class="head">IF YOU SEE</div> <div class="head teal">REACH FOR</div> <div class="row-label">An effect that writes a signal</div> <div class="new"><code style="font-family:'JetBrains Mono',monospace;">computed</code>, or <code style="font-family:'JetBrains Mono',monospace;">linkedSignal</code></div> <div class="row-label">An effect that writes another component's signal</div> <div class="new">An input, or an explicit method on the owner</div> <div class="row-label">An <code style="font-family:'JetBrains Mono',monospace;">await</code> inside an effect</div> <div class="new">A resource keyed on a computed of the parameters</div> <div class="row-label">A non-signal read inside derived state</div> <div class="new">Bring it into the graph, or read it at render time</div> <div class="row-label">A decision taken in a constructor</div> <div class="new">A <code style="font-family:'JetBrains Mono',monospace;">computed</code>, or an effect that tracks the input</div> <div class="row-label last">A DOM write in a plain effect</div> <div class="new last"><code style="font-family:'JetBrains Mono',monospace;">afterRenderEffect</code> with a phase</div> </div></div> <div><div class="compare" style="grid-template-columns:1fr 1.1fr;font-size:24px;"> <div class="head">IF YOU SEE</div> <div class="head teal">REACH FOR</div> <div class="row-label">A fresh array or object per read</div> <div class="new">A <code style="font-family:'JetBrains Mono',monospace;">computed</code>, so identity is cached</div> <div class="row-label">A method call in a binding</div> <div class="new">A precomputed view object, bound field by field</div> <div class="row-label">An error mapped to an empty value</div> <div class="new">A distinct error state, carried to the template</div> <div class="row-label">A resource on a component-scoped service</div> <div class="new">Scope it to whatever outlives the interaction</div> <div class="row-label">Side effects in derived state</div> <div class="new">An owner that can also tear it down</div> <div class="row-label">A public writable signal</div> <div class="new"><code style="font-family:'JetBrains Mono',monospace;">protected readonly</code>, readonly at boundaries</div> <div class="row-label last">A mutable array crossing a boundary</div> <div class="new last">Type it <code style="font-family:'JetBrains Mono',monospace;">readonly</code> at the boundary</div> </div></div></div>
 
 <style>
 .compare > div { padding: 19px 28px; }
@@ -1402,7 +1327,7 @@ heading: 'Symptom, and what to reach for'
 </style>
 
 <!--
-This is the whole deck compressed into things you can look for in a diff. Left-hand column is the symptom, the thing you can literally see on the screen; right-hand column is what to reach for instead. I'm not going to read all twelve at you, because you'll have the slide - but I do want to put a finger on two of them. The first row is the one you will hit most often, by a distance: an effect that reads signals and writes a signal. That is the single largest cluster in everything we looked at, and almost every instance of it wants to be a computed, or a linkedSignal if the value also has to stay writable. And the one I would most like you to catch is over on the right: an error mapped to an empty value. That's the row where the cost isn't a wasted render - it's a person being told there is nothing there, when the truth is that we don't know. Everything else on here we've been through together: effects reaching into another component, an await inside an effect, non-signal reads inside derived state, decisions taken in a constructor, DOM writes in a plain effect, a fresh array or object on every read, a method call in a binding, side effects in derived state, public writable signals, and a fixed number of ticks in a test. The value of this slide isn't in me narrating it. It's in having it written down somewhere you'll see it again.
+This is the whole deck compressed into things you can look for in a diff. Left-hand column is the symptom, the thing you can literally see on the screen; right-hand column is what to reach for instead. I'm not going to read all twelve at you, because you'll have the slide - but I do want to put a finger on two of them. The first row is the one you will hit most often, by a distance: an effect that reads signals and writes a signal. That is the single largest cluster in everything we looked at, and almost every instance of it wants to be a computed, or a linkedSignal if the value also has to stay writable. And the one I would most like you to catch is over on the right: an error mapped to an empty value. That's the row where the cost isn't a wasted render - it's a person being told there is nothing there, when the truth is that we don't know. Everything else on here we've been through together: effects reaching into another component, an await inside an effect, non-signal reads inside derived state, decisions taken in a constructor, DOM writes in a plain effect, a fresh array or object on every read, a method call in a binding, side effects in derived state, public writable signals, and public writable signals. The value of this slide isn't in me narrating it. It's in having it written down somewhere you'll see it again.
 -->
 
 ---
