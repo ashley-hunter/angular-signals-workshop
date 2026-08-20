@@ -741,16 +741,52 @@ Chapter four. Everything in this section is correct the first time it runs. That
 ---
 layout: content
 eyebrow: 'Purity'
-heading: 'A computed may run at any time, or never'
+heading: 'A computed has no way to clean up after itself'
 ---
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 36px;max-width:1600px;">You do not control when derived state evaluates, how often, or whether it evaluates at all.</p>
-<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:28px;"> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:32px 36px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:18px;">MUTATES SOMETHING</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">Injecting a stylesheet, writing to storage, registering a handler. The graph is not a place to cause things.</p> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:32px 36px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:18px;">OWNS A LIFETIME</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">Constructing something that holds a worker, a socket or a subscription. Recomputing replaces it and nothing disposes the old one.</p> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:32px 36px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:18px;">READS THE DOM</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">The DOM does not notify, so the value is a snapshot - correct once, then frozen.</p> </div> </div>
-<p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:44px 0 0;max-width:1600px;">If something needs creating and disposing, that is a lifecycle concern. Give it an owner that can tear it down.</p>
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">Its only options are <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">equal</code> and <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">debugName</code>. There is no teardown hook, so whatever it builds, it also abandons.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
+<div>
+
+```ts
+// AVOID
+readonly worker = computed(() =>
+  new Worker(this.config()),
+);
+
+// config changes -> a second Worker,
+// and the first one is still running
+```
+
+</div>
+<div>
+
+```ts
+// PREFER: derive the config, own the thing
+readonly #config = computed(() =>
+  this.config(),
+);
+
+readonly #worker = effect((onCleanup) => {
+  const w = new Worker(this.#config());
+  onCleanup(() => w.terminate());
+});
+```
+
+</div>
+</div>
+<p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:26px 0 0;max-width:1660px;">Sockets, observers, subscriptions, timers - same shape. If it needs disposing, it needs an owner, and a <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">computed</code> cannot be one.</p>
 
 <!--
-Of these three, the middle one hurts the most, because you cannot see it until the source changes twice. The first time the computed runs, it creates the expensive thing - the worker, the socket, the subscription. Then the source changes, it runs again, it creates another one, and the first is still sitting there running with nobody holding a reference to shut it down. There is no cleanup hook on a computed. Nothing is going to dispose it for you. Under load that shows up as a performance problem, and you will go looking in entirely the wrong place. When we filed this, the author pushed back, and the pushback is fair, so I will give you both sides: the rule is about mutating state outside the graph, not about constructing an object that happens to do some work. The line I would draw is the one at the bottom. If the thing you create needs disposing, it has a lifecycle, and a computed has no lifecycle to hang it on.
--->
+This one is invisible until the source changes twice, which is why it survives review.
 
+First evaluation builds the worker. Fine. Something in the config changes, the computed reevaluates, and it builds another worker - and the first one is still running, with nobody holding a reference to stop it. There is no hook you could have used: a computed takes exactly two options, equal and debugName. No cleanup, nothing. Under load that shows up as memory climbing and CPU you cannot account for, and you will go looking in completely the wrong place.
+
+When we filed this, the author pushed back, and I think the pushback is fair, so let me give you both sides. Their argument was that purity is a rule about mutating state outside the graph - and constructing an object is not mutating anything. That is right as far as it goes. My answer is that the problem is not the allocation, it is that the thing has a lifetime and a computed has no lifecycle to hang it on. Build a plain object in a computed all day. Build something that needs stopping, and you have made the computed responsible for something it has no way to do.
+
+The version on the right splits those two jobs. The computed derives the configuration, which is genuinely derived state. The effect owns the worker, and because it is an effect it has onCleanup - so when the config changes, the old worker is terminated before the new one starts, and when the component goes away, so does the worker.
+
+Same shape for anything else with an off switch: sockets, resize observers, subscriptions, intervals. If you would have to write code to dispose of it, it does not belong in derived state.
+-->
 ---
 layout: content
 eyebrow: 'Identity'
