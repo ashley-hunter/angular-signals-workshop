@@ -418,53 +418,68 @@ And one small mercy: if your params function returns a primitive rather than an 
 ---
 layout: content
 eyebrow: 'Escape hatch'
-heading: 'untracked() is a claim you have to defend'
+heading: 'A dependency can arrive in code you did not write'
+clicks: 2
 ---
-<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 28px;max-width:1660px;">This should fire when the page changes. It needs the user too - but switching user is not a page view.</p>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
-<div>
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 24px;max-width:1660px;">Call a method from inside an effect and every signal <em>it</em> reads becomes your dependency too - including the ones added later.</p>
 
+````md magic-move
 ```ts
-// AVOID: user is a trigger too
-readonly #track = effect(() => {
-  track(this.page(), this.user().id);
+readonly #ping = effect(() => {
+  const page = this.page();
+  this.analytics.send(page);
 });
+
+// analytics.service.ts
+send(page: string) {
+  this.http.post('/track', { page });
+}
 ```
 
-</div>
-<div>
-
 ```ts
-// PREFER: user is only context
-readonly #track = effect(() => {
-  track(this.page(), untracked(this.user).id);
+readonly #ping = effect(() => {
+  const page = this.page();
+  this.analytics.send(page);        // unchanged
 });
+
+// analytics.service.ts - six months later
+send(page: string) {
+  this.http.post('/track', { page });
+  this.recent.set([...this.recent(), page]);
+}   // reads recent, writes recent - the effect now loops
 ```
 
-</div>
-</div>
-<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:30px 0 0;max-width:1660px;">A value you need but should not rerun on is context. <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">untracked</code> is how you say so.</p>
+```ts
+readonly #ping = effect(() => {
+  const page = this.page();
+  untracked(() => this.analytics.send(page));
+});
+
+// analytics.service.ts - still fine as it is
+send(page: string) {
+  this.http.post('/track', { page });
+  this.recent.set([...this.recent(), page]);
+}
+```
+````
+
+<p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:24px 0 0;max-width:1660px;">Nothing in the effect changed. Wrap the call, not just the read - you are declaring that this effect reacts to <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">page()</code> and to nothing the callee happens to touch.</p>
 
 <!--
-Here is the case where untracked is genuinely the right tool, and it is worth being precise about why, because it is easy to reach for it when something else is wrong.
+This is the untracked case I most want you to leave with, because it is the one you cannot see coming from your own file.
 
-The effect is a bridge out of the graph - it drives analytics, which is not reactive. It should fire when the page changes. That is the whole trigger. But the call also needs to know who the user is, so it reads the user signal.
+Start on the left. An effect reads the page and calls a service to record it. The service does an HTTP post. Nothing reactive in there, everything works, and it works for months.
 
-On the left, that read is a dependency like any other. So if somebody switches account without navigating anywhere, the effect reruns and you log a page view for a page nobody visited. Your analytics are now quietly wrong, and nothing anywhere errors - which is this entire deck in one line.
+Then somebody improves the service. They add a recently-viewed list - read the current value, append, write it back. Completely reasonable change, made by somebody who has never opened your component and has no idea an effect calls this.
 
-untracked fixes it by saying: I need to read this, but a change to it is not a reason to run me. The trigger stays the page. The user is just a value the call needs.
+And now look at what happened to your effect, without a single character of it changing. The call happens inside the effect's reactive context, so the read of recent inside send is a read inside your effect. That makes recent a dependency of your effect. And the very next line writes recent. So the effect runs, writes, invalidates itself, runs again. You have an infinite loop, and the change that caused it is in a file you have never touched.
 
-There is a second version of this that Angular's own docs call out, and it is worth mentioning because you cannot see it coming. You can wrap a whole call in untracked, not just a read. If you call into a service from inside an effect, and that service reads signals internally, those reads become dependencies of your effect - even though nothing in your code mentions them. Wrapping the call in untracked stops that. So if an effect is rerunning and you cannot see why from the code in front of you, look at what it calls.
+The fix is on the right, and notice what it is not - it is not a change to the service. Wrap the call. What untracked is saying there is a genuine statement about design: this effect reacts to the page changing, and to nothing that the thing it calls happens to touch. That is almost always what you meant.
 
-Two things I want to warn you off, though, because untracked is also the easiest way in the language to build something permanently stale.
+So the rule I would take from this: when an effect calls out to something you do not own - a service, a library, anything with its own state - wrap the call. Not because it reads signals today, but because it might tomorrow, and you will not be the one who adds them.
 
-First: if you are reaching for untracked because your effect is looping, stop and look at the shape instead. An effect that reads state and writes state is nearly always derived state in disguise, and the fix is a computed or a linkedSignal - at which point there is no loop to break, because there is no write.
-
-Second, and this one saves you writing untracked where it does nothing: update does not track. It reads the current value directly rather than through the graph, so calling update inside an effect is already safe. Only an explicit read - calling the signal - creates the dependency.
-
-The question I use on every untracked I meet in review is: if this value changed right now, and nothing reran, would that be correct? Here it is obviously yes - nobody navigated. When the answer comes that quickly you are fine. In the review history I went through, authors successfully defended untracked three times, and every time it was the same defence: naming the thing outside the graph that was actually driving the rerun.
+Two things to keep in the back of your mind. update does not track - it reads the current value directly - so a service using update rather than a read plus a set would not have caused this. And if you are reaching for untracked because your own effect is looping, that is different: an effect that reads state and writes state is usually derived state in disguise, and the fix is a computed, not a wrapper.
 -->
-
 ---
 layout: content
 eyebrow: 'The invisible dependency'
