@@ -800,10 +800,25 @@ protected readonly held = computed(() =>
 
 </div>
 </div>
-<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:36px 0 0;max-width:1600px;">Bind that to a virtualiser or a chart and every check throws away work. The computed returns the same array until its inputs change.</p>
+<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:36px 0 0 0;max-width:1600px;">Bind that to a virtualiser or a chart and every check throws away work. The computed returns the same array until its inputs change.</p>
+<p style="font-size:28px;color:#8A97A8;line-height:1.4;margin:32px 0 16px;max-width:1600px;">When the contents matter more than the identity, say so with <code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#2FD8B4;">equal</code>:</p>
+
+```ts
+readonly ids = computed(() => this.rows().map((r) => r.id), {
+  equal: (a, b) => a.length === b.length && a.every((x, i) => x === b[i]),
+});   // says equal -> the computed keeps the old value and never notifies
+```
 
 <!--
-If you have ever chased a performance problem you could not explain, there is a good chance it was this one. A virtualiser recalculating its ranges on every check. A chart rebuilding its series. A grid recreating its column definitions. In every case something upstream is handing out a brand new array each time it is asked, and everything downstream believes it, because the default comparison is Object.is - two arrays with identical contents are always different. I want you to notice which way the fix points. Moving this to a computed is not about tidiness. The caching is the entire feature: the computed hands back the same array reference until its inputs actually change, so the work downstream stops rerunning. And if you go the custom equality route for a collection whose contents matter more than its identity, one thing to know - when your comparator says equal, the computed keeps the old value, so consumers keep the reference they already had. Which is exactly what you want.
+If you have ever chased a performance problem you could not explain, there is a good chance it was this one. A virtualiser recalculating its ranges on every check. A chart rebuilding its series. A grid recreating its column definitions. In every case something upstream is handing out a brand new array each time it is asked, and everything downstream believes it, because the default comparison is Object.is - two arrays with identical contents are always different.
+
+I want you to notice which way the fix points. Moving this to a computed is not about tidiness. The caching is the entire feature: the computed hands back the same array reference until its inputs actually change, so the work downstream stops rerunning.
+
+The bottom of the slide is the other half, for when a computed alone is not enough - when the inputs do change but the answer does not. Mapping rows to their IDs is the classic: the rows are new objects, so the computed reruns and produces a new array, but the IDs are identical and nothing downstream needed to know. A custom equal lets you say that.
+
+The mechanism is worth knowing because it is what makes it work. When your comparator returns true, the computed puts the old value back and does not bump its version, and consumers decide whether they changed by looking at that version. So nothing downstream ever hears about it. It is not that they hear about it and ignore it - the notification never happens.
+
+Two cautions. The comparator runs on every recomputation, so it has to be cheaper than the work it is preventing. Comparing two IDs to avoid rebuilding a chart is a good trade; deep-comparing a thousand objects to avoid a cheap map is not. And this is genuinely rare in our codebase - sixteen uses against eight thousand computeds - so treat it as the tool you reach for when you have measured something, not as a default.
 -->
 
 ---
