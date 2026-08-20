@@ -1231,7 +1231,9 @@ eyebrow: 'Validation · conditional required'
 heading: 'Describe the rule, not the response'
 clicks: 2
 ---
-<div class="code-hero">
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 24px;max-width:1660px;">Email is required, but only when notifications are on.</p>
+<div style="display:grid;grid-template-columns:1.3fr 0.7fr;gap:44px;align-items:start;">
+<div>
 
 ````md magic-move
 ```ts
@@ -1259,12 +1261,21 @@ readonly prefsForm = form(this.prefs, (p) => {
 ````
 
 </div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-bottom:48px;" v-click="2"> <div style="background:#0F131A;border:1px solid #4A5568;border-radius:14px;padding:32px 36px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#5E6B7D;margin-bottom:18px;">REACTIVE FORMS</div> <div style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#8A97A8;">listen → inspect → mutate → recalculate</div> </div> <div style="background:#0A0D12;border:1px solid #2FD8B4;border-radius:14px;padding:32px 36px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#2FD8B4;margin-bottom:18px;">SIGNAL FORMS</div> <div style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#E8ECF2;">describe the relationship</div> </div> </div>
+<div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:34px 36px;"> <div style="display:flex;align-items:center;gap:18px;margin-bottom:34px;"> <div style="width:30px;height:30px;border:2px solid #2FD8B4;border-radius:6px;background:#2FD8B4;display:flex;align-items:center;justify-content:center;color:#0A0D12;font-size:24px;font-weight:700;">✓</div> <div style="font-size:28px;color:#E8ECF2;">Notify me by email</div> </div> <div style="font-size:24px;color:#8A97A8;margin-bottom:12px;">Email</div> <div style="background:#0A0D12;border:1px solid #FF7A6B;border-radius:8px;padding:0 20px;height:60px;display:flex;align-items:center;font-family:'JetBrains Mono',monospace;font-size:24px;color:#5E6B7D;"></div> <div style="font-size:24px;color:#FF7A6B;margin-top:14px;">Email is required</div> </div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-top:30px;" v-click="2"> <div style="background:#0F131A;border:1px solid #4A5568;border-radius:14px;padding:26px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#5E6B7D;margin-bottom:14px;">REACTIVE FORMS</div> <div style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#8A97A8;">listen → inspect → mutate → recalculate</div> </div> <div style="background:#0A0D12;border:1px solid #2FD8B4;border-radius:14px;padding:26px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#2FD8B4;margin-bottom:14px;">SIGNAL FORMS</div> <div style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#E8ECF2;">describe the relationship</div> </div> </div>
 
 <!--
-Here's the requirement, and you have all built this form. Email is required, but only when the user has opted in to notifications. On the left is how we write that today. We subscribe to notify's value changes. We prime it with startWith so it also runs for the initial value. We take until destroyed so it doesn't outlive the component. And then on every change we inspect the value, we add a validator or we remove one, and finally we tell email to recalculate itself. Four steps, and every single one of them is us doing the bookkeeping by hand. Now watch what it becomes. Email is required, when notify is true. That's the whole thing. We don't subscribe. We don't add a validator. We don't remove one. We don't tell email to recalculate. We describe the relationship once, and the framework works out when it applies and when it stops applying. This is the moment where the last two hours pay off, because it is exactly the move we made with computed at the very start of the day: stop orchestrating the response, and describe the rule.
--->
+Here is the requirement, and you have all built this form. The checkbox is on, so email is required, and the field is showing its error. Turn the checkbox off and that requirement has to disappear.
 
+On the left is how we write that today. We subscribe to notify's value changes. We prime it with startWith so it also runs for the initial value. We take until destroyed so it does not outlive the component. And then on every change we inspect the value, we add a validator or we remove one, and finally we tell email to recalculate itself. Four steps, and every one of them is us doing bookkeeping by hand.
+
+Now watch what it becomes. Email is required, when notify is true. That is the whole thing. We do not subscribe. We do not add a validator. We do not remove one. We do not tell email to recalculate. We describe the relationship once, and the framework works out when it applies and when it stops applying.
+
+And notice the form on the right did not change. Same behaviour, same error, same checkbox - the only thing that changed is how much of it we had to say.
+
+This is the moment where the rest of the deck pays off, because it is exactly the move we made with computed at the very start: stop orchestrating the response, and describe the rule.
+-->
 ---
 layout: content
 eyebrow: 'Custom controls'
