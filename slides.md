@@ -1003,7 +1003,7 @@ layout: content
 eyebrow: 'The silent failure'
 heading: 'A failed request that renders as no data'
 ---
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 32px;max-width:1600px;">This is the most common async finding we file, in several disguises. All of them turn "we do not know" into "there is nothing".</p>
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">Same resource, one line different. The fix is deleting something.</p>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
 <div>
 
@@ -1013,44 +1013,99 @@ readonly users = resource({
   params: this.teamId,
   loader: ({ params }) =>
     loadUsers(params).catch(() => []),
-});   // failure becomes "no users"
+});
+
+// error() is never true, so the
+// template shows the empty state
 ```
 
 </div>
 <div>
 
 ```ts
-// AVOID
-readonly url = computed(() =>
-  this.data.hasValue()
-    ? build(this.data.value())
-    : '',   // link silently vanishes
-);
+// PREFER
+readonly users = resource({
+  params: this.teamId,
+  loader: ({ params }) =>
+    loadUsers(params),
+});
+
+// error() is true, so the template
+// shows the error and a retry
 ```
 
 </div>
 </div>
-<div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:32px 38px;margin-top:36px;"> <p style="font-size:30px;line-height:1.45;margin:0;color:#C9D4E2;">Guard with <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">hasValue()</code>, then render the error branch as an error. Reading <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">value()</code> after a failure <em>throws</em> - and inside a <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">computed</code> that poisons everything downstream.</p>
-<p style="font-size:29px;color:#8A97A8;line-height:1.45;margin:20px 0 0;max-width:1600px;">An empty list, a zero and a missing button are all valid renderings of real data. None of them can mean "this failed".</p> </div>
+<p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:26px 0 0;max-width:1660px;">The same bug wears four costumes: a <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">catch</code> to an empty array, a <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">defaultValue</code> so the template need not branch, no-value treated as no-data, and a ternary returning <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">''</code> so a link quietly vanishes.</p>
+<p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:18px 0 0;max-width:1660px;">All four exist because reading <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">value()</code> after a failure <em>throws</em> - and in a <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">computed</code>, that poisons everything downstream. Guard with <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">hasValue()</code> instead of swallowing.</p>
 
 <!--
-We filed this one five separate times in four different costumes, and every one of them reads as defensive good practice when you meet it in a diff. A catchError to an empty array. A default value supplied so the template does not have to branch. No value quietly treated as no data. And a ternary returning an empty string, which is the one on the right - the link does not break, it just is not there any more, and nobody files a bug about a button they never saw. In every case the code stops throwing and starts lying. Now, the pressure that produces all four of those is real, and it lives on the other side of this same line. If you read value while the resource is in its error state, it throws. And if that read is inside a computed, the computed does not absorb it - it stores the error and rethrows it to every consumer, so one failed request takes out everything downstream of it. So people add the guard, and then they need something to return, and they reach for a fallback. Guard with hasValue, which is reactive and already returns false in the error state, and then let the error branch render as an error. An empty list, a zero, a dash, a missing button - those are all valid renderings of real data. Not one of them can carry the meaning "this failed".
--->
+We filed this one five separate times, and every one of them reads as defensive good practice when you meet it in a diff. Somebody added a catch so the page would not blow up. That is a reasonable instinct. But look at what it actually does: the promise no longer rejects, so the resource never reaches its error state, so error() is never true, so the template on the last slide takes the hasValue branch and renders an empty list. The request failed and the user is told the team has no members.
 
+The fix is the version on the right, and I like this one because the fix is deleting code. Let the loader reject. The resource is built to handle that - it has an error state, and you already wrote the branch for it.
+
+The four costumes are worth knowing by sight. A catch to an empty array, which is this one. A default value supplied so the template does not have to branch. No-value quietly treated as no-data. And a ternary returning an empty string, which is the meanest of them, because the link does not break - it just is not there any more, and nobody files a bug about a button they never saw.
+
+Now, the pressure that produces all four is real, and it is worth being fair about it. If you read value() while the resource is in its error state, it throws. And if that read is inside a computed, the computed does not absorb it - it stores the error and rethrows it to every consumer, so one failed request takes out everything downstream of it. So people hit that, get scared, and reach for a fallback.
+
+The answer is to guard rather than swallow. hasValue() is reactive, it is already false in the error state, and it is a type guard so the value is properly typed inside the branch. Ask the question instead of suppressing the answer.
+
+And the line to leave with: an empty list, a zero, a dash, a missing button - those are all valid renderings of real data. Not one of them can carry the meaning "this failed".
+-->
 ---
 layout: content
 eyebrow: 'Composition'
 heading: 'Two resources, one verdict'
 ---
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-bottom:40px;"> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:34px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:20px;">HALF-WIRED STATE</div> <p style="font-size:28px;line-height:1.5;margin:0 0 16px;color:#C9D4E2;">An aggregate <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">error</code> that reads only one of the two sources reports success while half the data is missing.</p> <p style="font-size:28px;line-height:1.5;margin:0;color:#C9D4E2;">A retry that reloads only one of them can never recover the other.</p> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:34px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:20px;">AND / OR</div> <p style="font-size:28px;line-height:1.5;margin:0;color:#C9D4E2;">Require <em>both</em> to fail and a single failure renders as a legitimate "not available". Pick the operator deliberately.</p> </div> </div>
-<div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#5E6B7D;margin:0 0 18px;">TWO MORE ASSUMPTIONS</div>
-<p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:0 0 16px;max-width:1600px;">Two resources over the same parameters are two requests. Nothing deduplicates them for you, so if both are heavy, share one owner.</p>
-<p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:0;max-width:1600px;">A resource lives as long as its injector. Destroy the service while something it fed is on screen, and you get a spinner that never ends.</p>
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">The screen needs both. Every place that asks "did it work?" has to ask about both - and so does every retry.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
+<div>
+
+```ts
+// AVOID: half-wired
+readonly failed = computed(() =>
+  !!this.users.error(),
+);
+
+retry() {
+  this.users.reload();
+}
+```
+
+</div>
+<div>
+
+```ts
+// PREFER
+readonly failed = computed(() =>
+  !!this.users.error() ||
+  !!this.teams.error(),
+);
+
+retry() {
+  this.users.reload();
+  this.teams.reload();
+}
+```
+
+</div>
+</div>
+<p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:26px 0 0;max-width:1660px;"><code style="font-family:'JetBrains Mono',monospace;font-size:25px;">||</code> warns when either fails. <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">&amp;&amp;</code> waits for both, so one failure renders as a legitimate "not available". Pick it on purpose.</p>
+<p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:18px 0 0;max-width:1660px;">Two resources over the same parameters are two requests - nothing deduplicates them. And a resource lives as long as its injector: destroy the service while something it fed is on screen and you get a spinner that never ends.</p>
 
 <!--
-Both of these boxes are about the same question: what does "this screen failed" mean when there are two requests behind it. If your aggregate error signal reads only one of the two sources, the screen reports success while half the data is missing, and the same asymmetry comes back in retry, where reloading one source can never recover the other. Go the other way and require both to fail before you show anything, and a single failure renders as a perfectly legitimate "not available". There is no default answer here. Ask which combination the user needs to be warned about, and then choose and or or on purpose. The two lines underneath are things people assume and should not. Two resources over the same parameters are two requests - nothing deduplicates them for you, so if both are expensive, give them a single owner and derive from it. And the last one I have watched happen. A drawer opens and reads from a panel-scoped service. The user switches tabs behind it. The panel is destroyed, the injector goes with it, the resource is torn down, the in-flight request is aborted, and the drawer is still sitting open on screen. Nothing errors. Nothing logs. The resource reports idle with no value from then on, which in most templates is a spinner that never stops. So decide who owns the request, and scope it to whatever outlives the interaction.
--->
+This is the same failure as the last slide, one level up. There, an error was swallowed by a catch. Here it is swallowed by an aggregate that simply does not look at it.
 
+Look at the left-hand side. Users and teams both feed this screen, and the failed signal reads only users. So when the teams request falls over, failed stays false, the screen renders as though everything is fine, and half the data is silently missing. Nobody wrote "ignore the teams error" - they wrote the users check first and never came back.
+
+And the retry has exactly the same hole. Even if you do notice something is wrong and hit retry, it reloads users and leaves teams broken, so the screen can never recover. That is the version I have actually seen ship: a retry button that genuinely cannot fix the thing it is offering to fix.
+
+The right-hand side is not clever, it is just complete. Both sources in the check, both sources in the retry.
+
+Now the operator, because that is a real decision and not a detail. Or means warn me when either one fails, which is usually what you want, because a screen missing half its data is broken. And means wait for both to fail before showing an error - and the consequence of that is that a single failure renders as a perfectly legitimate "not available", which is the silent shape all over again. So ask which combination the user needs to be warned about, and then choose deliberately.
+
+Two things underneath that people assume and should not. Two resources over the same parameters are two requests - nothing deduplicates them for you, so if both are expensive, give them one owner and derive from it. And the last one I have watched happen: a drawer opens and reads from a panel-scoped service, the user switches tabs behind it, the panel is destroyed, the injector goes with it, the request is aborted, and the drawer is still sitting open on screen with a spinner that will never stop. Decide who owns the request, and scope it to whatever outlives the interaction.
+-->
 ---
 layout: section
 number: '06'
