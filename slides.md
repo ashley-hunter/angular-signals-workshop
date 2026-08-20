@@ -392,62 +392,64 @@ This chapter is the stale family, and every bug in it comes down to the same sen
 layout: content
 eyebrow: 'Two failure modes'
 heading: 'A dependency set can be wrong in both directions'
+clicks: 2
 ---
-<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 24px;max-width:1600px;">Too narrow and a real change never reruns the work. Too wide and unrelated changes rerun expensive things - here, a sort toggle that fires a network request.</p>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
-<div>
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">Too narrow and a real change never reruns the work. Too wide and unrelated changes rerun expensive things - here, a sort toggle that fires a network request.</p>
 
+````md magic-move
 ```ts
-// TOO WIDE
-readonly state = signal({
-  teamId: 'a1', page: 1, sortBy: 'name',
-});
+readonly state = signal({ teamId: 'a1', page: 1, sortBy: 'name' });
 
 readonly rows = resource({
   params: () => this.state(),
-  loader: ({ params }) =>
-    loadRows(params.teamId, params.page),
-});   // sortBy changes -> refetch
+  loader: ({ params }) => loadRows(params.teamId, params.page),
+});
+
+// sorting is client-side, but sortBy changes still refetch
 ```
 
-</div>
-<div>
+```ts
+readonly state = signal({ teamId: 'a1', page: 1, sortBy: 'name' });
+
+readonly rows = resource({
+  params: () => ({ teamId: this.state().teamId, page: this.state().page }),
+  loader: ({ params }) => loadRows(params.teamId, params.page),
+});
+
+// still refetches - params read state(), and returns a new object every time
+```
 
 ```ts
-// NARROW
 readonly teamId = signal('a1');
 readonly page = signal(1);
 readonly sortBy = signal('name');
 
 readonly rows = resource({
-  params: () => ({
-    teamId: this.teamId(), page: this.page(),
-  }),
-  loader: ({ params }) =>
-    loadRows(params.teamId, params.page),
-});   // sortBy changes -> nothing
-```
+  params: () => ({ teamId: this.teamId(), page: this.page() }),
+  loader: ({ params }) => loadRows(params.teamId, params.page),
+});
 
-</div>
-</div>
-<p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:26px 0 0;max-width:1660px;">Nothing diffs the params for you - the previous request is compared by <em>reference</em>. So reading the whole object and picking fields back out of it changes nothing: the read is the dependency. Split the signals, or feed <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">params</code> a <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">computed</code> with an <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">equal</code>.</p>
+// params never reads sortBy, so changing it does nothing
+```
+````
+
+<p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:26px 0 0;max-width:1660px;">The read is the dependency, and the request is compared by <em>reference</em>. Split the signals - or feed <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">params</code> a <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">computed</code> with an <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">equal</code> when you cannot.</p>
 
 <!--
-Both directions turn up in review about as often as each other, and both are normally written by somebody with exactly the right intention.
+Both directions turn up in review about as often as each other, and both are normally written by somebody with exactly the right intention. Too narrow is the stale family from the last chapter - the read goes through a helper, or sits inside an untracked block, and the tracking quietly gets skipped. Too wide is this one.
 
-Too narrow is the stale family from the last chapter - the read goes through a helper, or sits inside an untracked block, and the tracking quietly gets skipped.
+Everything is in one state object here: team ID, page, and the column you are sorting by. Sorting is client-side - the server returns the same rows either way - but params reads the whole object, so changing the sort fires a network request. Nobody wrote that on purpose, but that is what the code says.
 
-Too wide is the one on this slide. On the left, everything is in one state object: team ID, page, and the column you are sorting by. Sorting is a client-side concern - the server sends the same rows either way - but params reads the whole object, so changing the sort fires a network request. Nobody wrote that, and nobody would defend it, but that is what the code says.
+So you do the obvious thing. Pull out just the two fields the request needs, and hand those over instead.
 
-Now here is the part that catches people, and it is worth knowing precisely, because the obvious fix does not work. Nothing diffs your params for you. Angular runs the params function and compares what it returns against the previous request with a reference check. So if you keep the single state object and just pick the two fields back out of it into a new object literal, you have changed nothing: you still read the whole state signal, so params still reruns when sortBy changes, and it still hands back a brand new object, which is never reference-equal to the last one. Same refetch.
+And it changes nothing at all. Watch what is still there: params still calls this.state(), so it still depends on the whole state signal, so it still reruns when sortBy changes. And now it returns a brand new object literal each time it runs. Nothing diffs that for you - Angular compares the new request against the previous one by reference - so a fresh object is never equal, and you refetch exactly as often as before. This is the version I want you to recognise, because it looks like a fix and it is not one, and it is the one you will write.
 
-The read is the dependency. That is the thing to hold on to. So on the right, the values are separate signals, and the params function only ever touches the two the request is actually made of. Changing sortBy does not invalidate params at all, because params never read it.
+The read is the dependency. Once that lands, the real fix is obvious: hold the values as separate signals, and let params touch only the two the request is actually made of. Now sortBy changing does not invalidate params at all, because params never read it.
 
-If you genuinely cannot split the state up - and sometimes you cannot - the other route is to put a computed in front of it with a custom equal that compares the fields you care about. When your comparator says equal, the computed keeps its previous value and never notifies, so the resource never sees a change. Same outcome, more machinery.
+If you genuinely cannot split the state up - and sometimes you cannot - the other route is a computed in front of it with a custom equal comparing the fields you care about. When your comparator says equal, the computed keeps its previous value and never notifies, so the resource never sees a change. Same outcome, more machinery.
 
-And one small mercy: if your params function returns a primitive rather than an object - a string ID, a number - then the reference check is a value check, and all of this goes away.
+And one small mercy: if your params function returns a primitive rather than an object, a string ID or a number, the reference check is a value check and all of this goes away.
 -->
-
 ---
 layout: content
 eyebrow: 'Escape hatch'
