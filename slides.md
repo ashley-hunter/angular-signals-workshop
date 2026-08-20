@@ -268,23 +268,22 @@ I need to strike a balance here, otherwise you'll all leave thinking effects are
 layout: content
 eyebrow: 'Footgun'
 heading: 'An effect stops tracking the moment it goes async'
+clicks: 1
 ---
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">The team loads and the grid renders. Then somebody changes the format - what happens?</p>
+<div style="display:grid;grid-template-columns:1.3fr 0.7fr;gap:40px;align-items:start;">
 <div>
 
+````md magic-move
 ```ts
 // AVOID
 readonly #render = effect(async () => {
-  const id = this.teamId();      // tracked
+  const id = this.teamId();
   const rows = await loadUsers(id);
 
-  // this.format() is NOT tracked
   this.grid.render(rows, this.format());
 });
 ```
-
-</div>
-<div>
 
 ```ts
 // PREFER
@@ -298,15 +297,24 @@ readonly #render = effect(() => {
   this.grid.render(rows, this.format());
 });
 ```
+````
 
 </div>
+<div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:30px 32px;"><div style="font-size:23px;color:#8A97A8;margin-bottom:10px;">What the effect depends on</div><div v-click.hide="1"><div style="display:flex;align-items:baseline;gap:14px;padding:11px 0;border-bottom:1px solid #1E252F;"><span style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#C9D4E2;flex:1;">teamId</span><span style="font-size:21px;color:#2FD8B4;">tracked</span></div><div style="display:flex;align-items:baseline;gap:14px;padding:11px 0;border-bottom:1px solid #1E252F;"><span style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#C9D4E2;flex:1;">format</span><span style="font-size:21px;color:#FF7A6B;">not tracked</span></div></div><div v-click="1"><div style="display:flex;align-items:baseline;gap:14px;padding:11px 0;border-bottom:1px solid #1E252F;"><span style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#C9D4E2;flex:1;">teamId</span><span style="font-size:21px;color:#2FD8B4;">tracked</span></div><div style="display:flex;align-items:baseline;gap:14px;padding:11px 0;border-bottom:1px solid #1E252F;"><span style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#C9D4E2;flex:1;">users.value</span><span style="font-size:21px;color:#2FD8B4;">tracked</span></div><div style="display:flex;align-items:baseline;gap:14px;padding:11px 0;border-bottom:1px solid #1E252F;"><span style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#C9D4E2;flex:1;">format</span><span style="font-size:21px;color:#2FD8B4;">tracked</span></div></div><div style="font-size:24px;line-height:1.4;margin-top:22px;"><span v-click.hide="1" style="color:#FF7A6B;">Change the format and nothing rerenders.</span><span v-click="1" style="color:#2FD8B4;">Every read is synchronous, so every read counts.</span></div></div>
 </div>
-<p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:40px 0 0;max-width:1600px;">Tracking covers the synchronous run only. Everything read after the <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">await</code> is invisible to the graph.</p>
+<p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:34px 0 0;max-width:1660px;">Tracking covers the synchronous run only. Everything read after the <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">await</code> is invisible to the graph.</p>
 
 <!--
-This one is nasty because it half works. The first dependency is tracked, so the effect does fire sometimes, and that's more than enough to make the wiring look correct. Then somebody changes the second value, nothing happens, and you go and spend an afternoon looking for a bug in the render path. If you need async work driven by signal parameters, that is exactly what the resource APIs are for. And you get cancellation of superseded work for free, which the async effect very much does not give you.
--->
+The team loads, the grid renders, everything looks fine. Then somebody changes the format, and nothing happens.
 
+Here is why. The effect is async. The first read, teamId, happens synchronously, so that one is a real dependency. Then we await. And the moment we come back from that await we are no longer inside the reactive consumer - Angular stopped watching when the synchronous run finished. So format gets read, gets used, and never gets registered. It is on screen, it is in the render call, and it is not in the graph.
+
+That is the panel on the right. One of the two dependencies made it. Which is worse than none making it, because the effect does still fire when the team changes, so the wiring looks correct. You will demo this and it will work. Somebody will only find it later, changing the format and watching nothing happen, and then spend an afternoon looking for a bug in the render path where there isn't one.
+
+The fix is to stop doing the async work in the effect at all. Move the fetch into a resource, where params is the tracked part and the loader is the untracked part - which is exactly the split from a few slides ago. Now the effect is fully synchronous. It reads the resource value, it reads the format, both are real dependencies, and it reruns on either.
+
+And you get cancellation for free. If the team changes twice quickly, the resource abandons the superseded request. The async effect will happily let both land and render whichever finishes last.
+-->
 ---
 layout: content
 eyebrow: 'Cleanup'
