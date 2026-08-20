@@ -319,9 +319,19 @@ And you get cancellation for free. If the team changes twice quickly, the resour
 layout: content
 eyebrow: 'Cleanup'
 heading: 'Cleanup is not teardown. It is undo the previous run'
+clicks: 1
 ---
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">This polls an order. The id changes three times - how many intervals are running?</p>
 <div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:44px;align-items:center;">
 <div>
+
+````md magic-move
+```ts
+readonly poll = effect(() => {
+  const id = this.orderId();
+  setInterval(() => this.check(id), 5_000);
+});
+```
 
 ```ts
 readonly poll = effect((onCleanup) => {
@@ -331,18 +341,22 @@ readonly poll = effect((onCleanup) => {
   onCleanup(() => clearInterval(handle));
 });
 ```
+````
 
 </div>
-<div>
-<p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:0 0 28px;"><code style="font-family:'JetBrains Mono',monospace;font-size:27px;">onCleanup</code> runs before <em>every</em> rerun, not just on destroy. Without it, changing the id starts a second interval and keeps the first.</p>
-<p style="font-size:29px;color:#8A97A8;line-height:1.45;margin:0;">Nothing errors. The app just does more work, forever.</p>
+<div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:32px 34px;"><div style="font-size:23px;color:#8A97A8;margin-bottom:16px;">Intervals still running after three id changes</div><div style="display:flex;align-items:baseline;gap:16px;"><span v-click.hide="1" style="font-family:'JetBrains Mono',monospace;font-size:76px;line-height:1;color:#FF7A6B;">3</span><span v-click="1" style="font-family:'JetBrains Mono',monospace;font-size:76px;line-height:1;color:#2FD8B4;">1</span><span style="font-size:24px;color:#8A97A8;">polling every 5s</span></div><div style="font-size:25px;line-height:1.4;margin-top:24px;"><span v-click.hide="1" style="color:#FF7A6B;">Two of them are checking orders nobody is looking at.</span><span v-click="1" style="color:#2FD8B4;">Each rerun undoes the one before it.</span></div></div>
 </div>
-</div>
+<p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:34px 0 0;max-width:1660px;"><code style="font-family:'JetBrains Mono',monospace;font-size:25px;">onCleanup</code> runs before <em>every</em> rerun, not just on destroy. Nothing errors - the app just does more work, forever.</p>
 
 <!--
-The subtle part is that onCleanup runs before every rerun, not just on destroy. So don't think of it as teardown - think of it as "undo the previous run", which is exactly what you want when the effect is keyed on something that changes. And if what you're adding is DOM listeners rather than timers, an AbortController gives you the same thing with a single signal covering the whole set.
--->
+Same effect, keyed on an order id. Every time the id changes the effect reruns and starts an interval. Change the id three times and you have three intervals, and two of them are polling an order nobody is looking at any more.
 
+Notice what this failure looks like from the outside, which is: fine. Nothing throws. The screen is correct, because the newest interval is checking the right order. You have just quietly signed up for permanent background work that grows every time somebody clicks around, and you will find it as a performance complaint weeks later, or on a server bill.
+
+The fix is one parameter. Take onCleanup, hold on to the handle, and clear it. And the important word in that callback is not destroy - it is rerun. onCleanup runs before every single rerun of the effect, and then once more when the component goes away. So the mental model is not teardown, it is undo the previous run. Which, when your effect is keyed on something that changes, is exactly what you want.
+
+Anything you start inside an effect belongs in here - intervals, subscriptions, listeners, an in-flight request. And if it is DOM listeners rather than timers, use an AbortController: pass its signal to every addEventListener, then abort it in the cleanup and the whole set goes at once.
+-->
 ---
 layout: section
 number: '02'
