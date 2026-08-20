@@ -453,56 +453,61 @@ layout: content
 eyebrow: 'Escape hatch'
 heading: 'untracked() is a claim you have to defend'
 ---
-<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 24px;max-width:1600px;">An effect that reads what it writes re-triggers itself. <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">untracked</code> says: I need this value, but a change to it is not why I should run.</p>
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 24px;max-width:1600px;">This effect should fire when the page changes. It also reads the current user - not as a reason to run, just as a value the call needs.</p>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
 <div>
 
 ```ts
-// AVOID: reads summary, then writes it
-readonly #sync = effect(() => {
-  const rows = this.rows();
+// AVOID: user is now a trigger
+readonly #track = effect(() => {
+  const page = this.route.page();
 
-  this.summary.set({
-    count: rows.length,
-    openedAt: this.summary().openedAt,
-  });
-});   // the write re-triggers the read
+  analytics.pageView(
+    page,
+    this.user().id,
+  );
+});   // switching user logs a page
+      // view nobody navigated to
 ```
 
 </div>
 <div>
 
 ```ts
-// PREFER: the read is context, not a trigger
-readonly #sync = effect(() => {
-  const rows = this.rows();
-  const prev = untracked(this.summary);
+// PREFER: user is context
+readonly #track = effect(() => {
+  const page = this.route.page();
+  const user = untracked(this.user);
 
-  this.summary.set({
-    ...prev,
-    count: rows.length,
-  });
-});   // only rows() re-triggers it
+  analytics.pageView(
+    page,
+    user.id,
+  );
+});   // only a page change fires it
 ```
 
 </div>
 </div>
-<p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:26px 0 0;max-width:1660px;">Ask: if this value changed right now and nothing reran, would that be correct? If yes, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">untracked</code> is right - say so in a comment. If the loop is really derived state living in an effect, the fix is a <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">computed</code>, not a wrapper.</p>
+<p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:26px 0 0;max-width:1660px;">Ask: if this value changed right now and nothing reran, would that be correct? Here, yes - nobody navigated. If the answer takes more than a few seconds, you are building a stale value on purpose.</p>
 
 <!--
-This is the one legitimate use of untracked that everybody meets first, so let us do it properly.
+Here is the case where untracked is genuinely the right tool, and it is worth being precise about why, because it is easy to reach for it when something else is wrong.
 
-On the left, the effect reads summary and then writes summary. That read is a dependency, so the write immediately invalidates the effect, which runs again, which writes again. It loops. In practice you notice because the tab starts burning CPU, or because Angular tells you.
+The effect is a bridge out of the graph - it is driving analytics, which is not reactive. It should fire when the page changes. That is the whole trigger. But the call also needs to know who the user is, so it reads the user signal.
 
-untracked is the honest fix here, because look at what the read is actually for. It is not why the effect should run - rows changing is why the effect should run. It is just supplying a value the write needs. That is precisely the case untracked exists for: I need to read this, but do not treat it as a trigger.
+On the left, that read is a dependency like any other. So if the user switches accounts without navigating anywhere, the effect reruns and you log a page view for a page nobody visited. Your analytics are now quietly wrong, and nothing anywhere errors - which is this entire deck in one line.
 
-The question at the bottom is the one I use on every untracked I meet in review. If this value changed right now, and nothing reran, would that be correct? If the answer comes quickly and it is yes, it is the right call, and put a comment next to it saying why. If you have to think about it for more than a few seconds, what you have is a stale bug waiting for a customer to find it.
+untracked fixes it by saying: I need to read this, but a change to it is not a reason to run me. The trigger stays the page. The user is just a value the call needs.
 
-And I want to be careful not to sell this too hard, because untracked is also the easiest way in the language to build something permanently stale. If the only reason you are reaching for it is that your effect is looping, stop and look at the shape first. An effect that reads state and writes state is usually derived state wearing a disguise, and the real fix is a computed or a linkedSignal - at which point there is no loop to break, because there is no write.
+That question at the bottom is the one I use on every untracked I meet in review. If this value changed right now, and nothing reran, would that be correct? Here it is obviously yes - nobody navigated, so no page view should be logged. When the answer comes that quickly, you are fine, and I would write it in a comment next to the call so the next person does not have to work it out.
 
-One detail that surprises people, and it is worth knowing so you do not add untracked where it does nothing: update does not track. It reads the current value directly rather than through the reactive graph, so summary.update of some function is already safe inside an effect. It is only an explicit read - calling the signal - that creates the dependency.
+Two things I want to warn you off, though, because untracked is also the easiest way in the language to build something permanently stale.
 
-Last thing. In the review history I went through, authors successfully defended untracked three times, and every single time they defended it the same way: by naming the thing outside the graph that was actually driving the rerun. If you can name that, you are fine.
+First: if you are reaching for untracked because your effect is looping, stop and look at the shape instead. An effect that reads state and writes state is nearly always derived state in disguise, and the fix is a computed or a linkedSignal - at which point there is no loop to break, because there is no write.
+
+Second, and this one saves you writing untracked where it does nothing: update does not track. It reads the current value directly rather than through the graph, so calling summary.update inside an effect is already safe. Only an explicit read - calling the signal - creates the dependency.
+
+In the review history I went through, authors successfully defended untracked three times, and every single time it was the same defence: naming the thing outside the graph that was actually driving the rerun. If you can name that, you are fine. If you cannot, you probably have a computed.
 -->
 ---
 layout: content
