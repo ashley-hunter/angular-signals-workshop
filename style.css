@@ -430,3 +430,13 @@
   margin-bottom: 52px;
 }
 
+
+/* Two states of the same panel occupy one cell, so the hidden one
+   does not push the visible one down the slide. */
+.slidev-layout .swap {
+  display: grid;
+}
+
+.slidev-layout .swap > * {
+  grid-area: 1 / 1;
+}
