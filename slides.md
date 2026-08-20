@@ -729,7 +729,19 @@ afterNextRender({
 <p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:20px 0 0;max-width:1650px;">Calls that force layout: <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">offsetHeight</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">clientWidth</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">scrollTop</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">getBoundingClientRect()</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">getComputedStyle()</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">scrollIntoView()</code>, even <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">focus()</code>. Cheap once, and multiplied by every row, cell or widget on the page.</p>
 
 <!--
-This is the phase table made concrete. The thing I want you to hold onto is that the cost here is not the read - you almost always need that number - the cost is entirely the ordering, which means batching is the whole fix. Read everything, then write everything, and the browser does one layout instead of one per row. And where the code lives decides how much any of this actually matters to you. An unbatched read in something that renders once on a settings page costs you nothing you could measure. The exact same line in a per-row component, or in a directive that sits on every item, becomes one forced reflow per instance, and on a page with a few hundred rows that is the difference between smooth and visibly janky. One last thing while we are on it: if a resize observer has already handed you the box, use the number it gave you rather than going back and asking the DOM again, because that second question costs you exactly what the first one did.
+This is the phase table made concrete. The thing I want you to hold onto is that the cost here is not the read - you almost always need that number - the cost is entirely the ordering. So batching is the whole fix. Read everything, then write everything, and the browser does one layout instead of one per row.
+
+Two details about how the phases actually run, because they are better than people assume.
+
+The order is fixed by the framework, not by you. Angular takes your spec object and drops the four functions into fixed positions - early read, write, mixed, read - and then walks those positions in order. So it does not matter which order you write the keys in; early read always runs before write. Writing them in firing order like this is just courtesy to whoever reads the code next.
+
+And the batching is global, not per callback. The outer loop is the phase and the inner loop is every registered sequence, so every early read in the entire application runs before any write does. Your component is not just batching against itself, it is batching against everything else that registered. That is really why these phases exist.
+
+The value threading is simple: whatever a phase returns gets handed to the next phase that actually exists. Here early read returns the array of heights and write receives it. If you skip a phase, the value carries past it rather than being lost.
+
+Where the code lives decides how much any of this matters. An unbatched read in something that renders once on a settings page costs you nothing you could measure. The same line in a per-row component becomes one forced reflow per instance, and on a page with a few hundred rows that is the difference between smooth and visibly janky.
+
+One last thing while we are on it: if a resize observer has already handed you the box, use the number it gave you rather than asking the DOM again, because that second question costs you exactly what the first one did.
 -->
 
 ---
