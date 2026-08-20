@@ -1038,6 +1038,7 @@ readonly users = resource({
 </div>
 <p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:26px 0 0;max-width:1660px;">The same bug wears four costumes: a <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">catch</code> to an empty array, a <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">defaultValue</code> so the template need not branch, no-value treated as no-data, and a ternary returning <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">''</code> so a link quietly vanishes.</p>
 <p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:18px 0 0;max-width:1660px;">All four exist because reading <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">value()</code> after a failure <em>throws</em> - and in a <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">computed</code>, that poisons everything downstream. Guard with <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">hasValue()</code> instead of swallowing.</p>
+<p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:18px 0 0;max-width:1660px;">With two resources behind one screen, the aggregate <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">error</code> and the retry both have to name both - and a resource lives only as long as its injector.</p>
 
 <!--
 We filed this one five separate times, and every one of them reads as defensive good practice when you meet it in a diff. Somebody added a catch so the page would not blow up. That is a reasonable instinct. But look at what it actually does: the promise no longer rejects, so the resource never reaches its error state, so error() is never true, so the template on the last slide takes the hasValue branch and renders an empty list. The request failed and the user is told the team has no members.
@@ -1051,60 +1052,6 @@ Now, the pressure that produces all four is real, and it is worth being fair abo
 The answer is to guard rather than swallow. hasValue() is reactive, it is already false in the error state, and it is a type guard so the value is properly typed inside the branch. Ask the question instead of suppressing the answer.
 
 And the line to leave with: an empty list, a zero, a dash, a missing button - those are all valid renderings of real data. Not one of them can carry the meaning "this failed".
--->
----
-layout: content
-eyebrow: 'Composition'
-heading: 'Two resources, one verdict'
----
-<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">The screen needs both. Every place that asks "did it work?" has to ask about both - and so does every retry.</p>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
-<div>
-
-```ts
-// AVOID: half-wired
-readonly failed = computed(() =>
-  !!this.users.error(),
-);
-
-retry() {
-  this.users.reload();
-}
-```
-
-</div>
-<div>
-
-```ts
-// PREFER
-readonly failed = computed(() =>
-  !!this.users.error() ||
-  !!this.teams.error(),
-);
-
-retry() {
-  this.users.reload();
-  this.teams.reload();
-}
-```
-
-</div>
-</div>
-<p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:26px 0 0;max-width:1660px;"><code style="font-family:'JetBrains Mono',monospace;font-size:25px;">||</code> warns when either fails. <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">&amp;&amp;</code> waits for both, so one failure renders as a legitimate "not available". Pick it on purpose.</p>
-<p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:18px 0 0;max-width:1660px;">Two resources over the same parameters are two requests - nothing deduplicates them. And a resource lives as long as its injector: destroy the service while something it fed is on screen and you get a spinner that never ends.</p>
-
-<!--
-This is the same failure as the last slide, one level up. There, an error was swallowed by a catch. Here it is swallowed by an aggregate that simply does not look at it.
-
-Look at the left-hand side. Users and teams both feed this screen, and the failed signal reads only users. So when the teams request falls over, failed stays false, the screen renders as though everything is fine, and half the data is silently missing. Nobody wrote "ignore the teams error" - they wrote the users check first and never came back.
-
-And the retry has exactly the same hole. Even if you do notice something is wrong and hit retry, it reloads users and leaves teams broken, so the screen can never recover. That is the version I have actually seen ship: a retry button that genuinely cannot fix the thing it is offering to fix.
-
-The right-hand side is not clever, it is just complete. Both sources in the check, both sources in the retry.
-
-Now the operator, because that is a real decision and not a detail. Or means warn me when either one fails, which is usually what you want, because a screen missing half its data is broken. And means wait for both to fail before showing an error - and the consequence of that is that a single failure renders as a perfectly legitimate "not available", which is the silent shape all over again. So ask which combination the user needs to be warned about, and then choose deliberately.
-
-Two things underneath that people assume and should not. Two resources over the same parameters are two requests - nothing deduplicates them for you, so if both are expensive, give them one owner and derive from it. And the last one I have watched happen: a drawer opens and reads from a panel-scoped service, the user switches tabs behind it, the panel is destroyed, the injector goes with it, the request is aborted, and the drawer is still sitting open on screen with a spinner that will never stop. Decide who owns the request, and scope it to whatever outlives the interaction.
 -->
 ---
 layout: section
@@ -1387,7 +1334,12 @@ layout: content
 eyebrow: 'Checklist'
 heading: 'Symptom, and what to reach for'
 ---
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:44px;align-items:start;"> <div><div class="compare" style="grid-template-columns:1fr 1.1fr;font-size:24px;"> <div class="head">IF YOU SEE</div> <div class="head teal">REACH FOR</div> <div class="row-label">An effect that writes a signal</div> <div class="new"><code style="font-family:'JetBrains Mono',monospace;">computed</code>, or <code style="font-family:'JetBrains Mono',monospace;">linkedSignal</code></div> <div class="row-label">An effect that writes another component's signal</div> <div class="new">An input, or an explicit method on the owner</div> <div class="row-label">An <code style="font-family:'JetBrains Mono',monospace;">await</code> inside an effect</div> <div class="new">A resource keyed on a computed of the parameters</div> <div class="row-label">A non-signal read inside derived state</div> <div class="new">Bring it into the graph, or read it at render time</div> <div class="row-label">A decision taken in a constructor</div> <div class="new">A <code style="font-family:'JetBrains Mono',monospace;">computed</code>, or an effect that tracks the input</div> <div class="row-label last">A DOM write in a plain effect</div> <div class="new last"><code style="font-family:'JetBrains Mono',monospace;">afterRenderEffect</code> with a phase</div> </div></div> <div><div class="compare" style="grid-template-columns:1fr 1.1fr;font-size:24px;"> <div class="head">IF YOU SEE</div> <div class="head teal">REACH FOR</div> <div class="row-label">A fresh array or object per read</div> <div class="new">A <code style="font-family:'JetBrains Mono',monospace;">computed</code>, so identity is cached</div> <div class="row-label">A method call in a binding</div> <div class="new">A precomputed view object, bound field by field</div> <div class="row-label">An error mapped to an empty value</div> <div class="new">A distinct error state, carried to the template</div> <div class="row-label">Side effects in derived state</div> <div class="new">An owner that can also tear it down</div> <div class="row-label">A public writable signal</div> <div class="new"><code style="font-family:'JetBrains Mono',monospace;">protected readonly</code>, readonly at boundaries</div> <div class="row-label last">A fixed number of ticks in a test</div> <div class="new last">A predicate the test can wait on</div> </div></div></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:44px;align-items:start;"> <div><div class="compare" style="grid-template-columns:1fr 1.1fr;font-size:24px;"> <div class="head">IF YOU SEE</div> <div class="head teal">REACH FOR</div> <div class="row-label">An effect that writes a signal</div> <div class="new"><code style="font-family:'JetBrains Mono',monospace;">computed</code>, or <code style="font-family:'JetBrains Mono',monospace;">linkedSignal</code></div> <div class="row-label">An effect that writes another component's signal</div> <div class="new">An input, or an explicit method on the owner</div> <div class="row-label">An <code style="font-family:'JetBrains Mono',monospace;">await</code> inside an effect</div> <div class="new">A resource keyed on a computed of the parameters</div> <div class="row-label">A non-signal read inside derived state</div> <div class="new">Bring it into the graph, or read it at render time</div> <div class="row-label">A decision taken in a constructor</div> <div class="new">A <code style="font-family:'JetBrains Mono',monospace;">computed</code>, or an effect that tracks the input</div> <div class="row-label last">A DOM write in a plain effect</div> <div class="new last"><code style="font-family:'JetBrains Mono',monospace;">afterRenderEffect</code> with a phase</div> </div></div> <div><div class="compare" style="grid-template-columns:1fr 1.1fr;font-size:24px;"> <div class="head">IF YOU SEE</div> <div class="head teal">REACH FOR</div> <div class="row-label">A fresh array or object per read</div> <div class="new">A <code style="font-family:'JetBrains Mono',monospace;">computed</code>, so identity is cached</div> <div class="row-label">A method call in a binding</div> <div class="new">A precomputed view object, bound field by field</div> <div class="row-label">An error mapped to an empty value</div> <div class="new">A distinct error state, carried to the template</div> <div class="row-label">A resource on a component-scoped service</div> <div class="new">Scope it to whatever outlives the interaction</div> <div class="row-label">Side effects in derived state</div> <div class="new">An owner that can also tear it down</div> <div class="row-label">A public writable signal</div> <div class="new"><code style="font-family:'JetBrains Mono',monospace;">protected readonly</code>, readonly at boundaries</div> <div class="row-label last">A fixed number of ticks in a test</div> <div class="new last">A predicate the test can wait on</div> </div></div></div>
+
+<style>
+.compare > div { padding: 19px 28px; }
+.compare > .head { padding: 16px 28px; }
+</style>
 
 <!--
 This is the whole deck compressed into things you can look for in a diff. Left-hand column is the symptom, the thing you can literally see on the screen; right-hand column is what to reach for instead. I'm not going to read all twelve at you, because you'll have the slide - but I do want to put a finger on two of them. The first row is the one you will hit most often, by a distance: an effect that reads signals and writes a signal. That is the single largest cluster in everything we looked at, and almost every instance of it wants to be a computed, or a linkedSignal if the value also has to stay writable. And the one I would most like you to catch is over on the right: an error mapped to an empty value. That's the row where the cost isn't a wasted render - it's a person being told there is nothing there, when the truth is that we don't know. Everything else on here we've been through together: effects reaching into another component, an await inside an effect, non-signal reads inside derived state, decisions taken in a constructor, DOM writes in a plain effect, a fresh array or object on every read, a method call in a binding, side effects in derived state, public writable signals, and a fixed number of ticks in a test. The value of this slide isn't in me narrating it. It's in having it written down somewhere you'll see it again.
