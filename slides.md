@@ -33,18 +33,6 @@ Let me tell you where these three come from, because I don't want you taking the
 -->
 
 ---
-layout: content
-eyebrow: 'Mental model'
-heading: 'Signals pull. They do not push.'
----
-<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:28px;margin-bottom:44px;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:34px 38px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#8B7CF6;margin-bottom:18px;">LAZY</div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">A <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">computed</code> does not run when its source changes. It runs when somebody reads it, and only if something it depends on actually changed.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:34px 38px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#8B7CF6;margin-bottom:18px;">GLITCH-FREE</div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">Readers never see a half-updated graph. There is no intermediate state to defend against, so no ordering to coordinate by hand.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:34px 38px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#8B7CF6;margin-bottom:18px;">TRACKED AT RUNTIME</div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">Whatever you read during this run. A branch changes the set; after an <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">await</code> there is no set at all.</p> </div> </div>
-<div style="border-left:4px solid #2FD8B4;padding-left:28px;font-family:'Space Grotesk',sans-serif;font-size:38px;font-weight:500;color:#E8ECF2;line-height:1.3;">Almost every pitfall in this deck is one of these three, met head on.</div>
-
-<!--
-I want to slow down on the third one, tracked at runtime, because it's the root of the whole stale family. You never declare what a computed depends on. Angular watches which signals you actually read while the function runs, and that set of reads is the dependency set - for that run only. Two things follow from that, and we'll keep coming back to both. If you read a value behind a condition, it's only a dependency on the runs where the condition let you get to it. And if you read a value outside a reactive context, or after the function has already handed control back, it isn't a dependency at all.
--->
-
----
 layout: section
 number: '01'
 transition: fade
@@ -385,7 +373,13 @@ transition: fade
 <p class="lead" style="margin-top:40px">The set is observed, not declared. That is where stale comes from.</p>
 
 <!--
-This chapter is the stale family, and every bug in it comes down to the same sentence: something changed, and nobody was listening. The thing to hold onto before we start is that the set of dependencies is observed while your code runs, not declared anywhere up front. Nobody writes it down, nothing checks it, and the compiler cannot help you. That is where stale comes from, and it is why every bug in this chapter looks like working software right up until it does not.
+This chapter is the stale family, and every bug in it comes down to the same sentence: something changed, and nobody was listening.
+
+The thing to hold onto before we start is that a dependency set is observed, not declared. You never write down what a computed depends on. Angular watches which signals you actually read while the function runs, and that set of reads is the dependency set - for that run, and only that run.
+
+Two things follow from that, and we keep coming back to both. A value you read behind a condition is only a dependency on the runs where the condition let you reach it, so the set can change from one evaluation to the next. And a value you read outside a reactive context - or after the function has already handed control back, which is the await case we just looked at - is not a dependency at all.
+
+Nobody writes that set down, nothing checks it, and the compiler cannot help you. That is where stale comes from, and it is why every bug in this chapter looks like working software right up until it does not.
 -->
 
 ---
