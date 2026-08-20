@@ -484,22 +484,23 @@ readonly #track = effect(() => {
 <!--
 Here is the case where untracked is genuinely the right tool, and it is worth being precise about why, because it is easy to reach for it when something else is wrong.
 
-The effect is a bridge out of the graph - it is driving analytics, which is not reactive. It should fire when the page changes. That is the whole trigger. But the call also needs to know who the user is, so it reads the user signal.
+The effect is a bridge out of the graph - it drives analytics, which is not reactive. It should fire when the page changes. That is the whole trigger. But the call also needs to know who the user is, so it reads the user signal.
 
-On the left, that read is a dependency like any other. So if the user switches accounts without navigating anywhere, the effect reruns and you log a page view for a page nobody visited. Your analytics are now quietly wrong, and nothing anywhere errors - which is this entire deck in one line.
+On the left, that read is a dependency like any other. So if somebody switches account without navigating anywhere, the effect reruns and you log a page view for a page nobody visited. Your analytics are now quietly wrong, and nothing anywhere errors - which is this entire deck in one line.
 
 untracked fixes it by saying: I need to read this, but a change to it is not a reason to run me. The trigger stays the page. The user is just a value the call needs.
 
-That question at the bottom is the one I use on every untracked I meet in review. If this value changed right now, and nothing reran, would that be correct? Here it is obviously yes - nobody navigated, so no page view should be logged. When the answer comes that quickly, you are fine, and I would write it in a comment next to the call so the next person does not have to work it out.
+There is a second version of this that Angular's own docs call out, and it is worth mentioning because you cannot see it coming. You can wrap a whole call in untracked, not just a read. If you call into a service from inside an effect, and that service reads signals internally, those reads become dependencies of your effect - even though nothing in your code mentions them. Wrapping the call in untracked stops that. So if an effect is rerunning and you cannot see why from the code in front of you, look at what it calls.
 
 Two things I want to warn you off, though, because untracked is also the easiest way in the language to build something permanently stale.
 
 First: if you are reaching for untracked because your effect is looping, stop and look at the shape instead. An effect that reads state and writes state is nearly always derived state in disguise, and the fix is a computed or a linkedSignal - at which point there is no loop to break, because there is no write.
 
-Second, and this one saves you writing untracked where it does nothing: update does not track. It reads the current value directly rather than through the graph, so calling summary.update inside an effect is already safe. Only an explicit read - calling the signal - creates the dependency.
+Second, and this one saves you writing untracked where it does nothing: update does not track. It reads the current value directly rather than through the graph, so calling update inside an effect is already safe. Only an explicit read - calling the signal - creates the dependency.
 
-In the review history I went through, authors successfully defended untracked three times, and every single time it was the same defence: naming the thing outside the graph that was actually driving the rerun. If you can name that, you are fine. If you cannot, you probably have a computed.
+The question I use on every untracked I meet in review is: if this value changed right now, and nothing reran, would that be correct? Here it is obviously yes - nobody navigated. When the answer comes that quickly you are fine. In the review history I went through, authors successfully defended untracked three times, and every time it was the same defence: naming the thing outside the graph that was actually driving the rerun.
 -->
+
 ---
 layout: content
 eyebrow: 'The invisible dependency'
