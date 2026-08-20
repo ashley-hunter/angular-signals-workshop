@@ -1227,6 +1227,54 @@ Let's put that next to something familiar. On the left, Reactive Forms: we const
 
 ---
 layout: content
+eyebrow: 'Validation'
+heading: 'Rules live in the schema, errors live on the field'
+---
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 24px;max-width:1660px;">Every rule carries its own message. Angular ships no default copy, so a single loop can render any field.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
+<div>
+
+```ts
+readonly signupForm = form(this.signup, (p) => {
+  required(p.email, { message: 'Email is required' });
+  email(p.email, { message: 'Enter a valid email' });
+
+  minLength(p.password, 8, {
+    message: 'At least 8 characters',
+  });
+});
+```
+
+</div>
+<div>
+
+```html
+<input [formField]="signupForm.email" />
+
+@for (e of signupForm.email().errors(); track e) {
+  <p class="error">{{ e.message }}</p>
+}
+```
+
+</div>
+</div>
+<div style="display:grid;grid-template-columns:auto 1fr;gap:30px;align-items:start;margin-top:28px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:23px;letter-spacing:0.12em;color:#2FD8B4;white-space:nowrap;padding-top:4px;">BUILT&nbsp;IN</div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;line-height:1.6;color:#8A97A8;">required&nbsp; email&nbsp; min&nbsp; max&nbsp; minDate&nbsp; maxDate&nbsp; minLength&nbsp; maxLength&nbsp; pattern<div style="font-size:24px;font-family:'Barlow',sans-serif;color:#C9D4E2;margin-top:12px;line-height:1.4;">Anything else is <span style="color:#2FD8B4;">validate</span>, returning <span style="color:#2FD8B4;">{ kind, message }</span> or <span style="color:#2FD8B4;">null</span>. Async goes to <span style="color:#2FD8B4;">validateHttp</span>.</div> </div> </div>
+
+<!--
+Two halves to this, and they are deliberately separate.
+
+The rules go in the schema - the second argument to form. You are not attaching validators to controls one at a time; you are describing, in one place, what has to be true about this data. Required, email, min length. Each one takes a path and an options object.
+
+The errors come out on the field, as a signal. So the template asks the field what is wrong with it and renders whatever comes back.
+
+The bit worth pausing on is the message. Angular ships no default copy - if you do not give a rule a message, the error has a kind and nothing to display. That sounds like a chore, and it is the thing that makes the template on the right possible: because every rule carries its own message, one loop renders every field in your form. No branching on error kind, no template that has to know which rules were applied. Compare that to what we all write today, which is an if per error type per field, with the copy living in the template and getting rewritten every time the field is reused.
+
+Along the bottom are the built-ins. Anything they do not cover is validate, which takes the field context and returns an error object with a kind and a message, or null when it passes. And if the check has to leave the browser - a username availability check - that is validateHttp, which handles the debouncing and the stale responses for you, and exposes pending while it runs.
+
+One thing to know about ordering: async validation for a field only starts once that field's synchronous rules are passing. There is no point asking the server whether an email is taken if it is not a valid email yet.
+-->
+---
+layout: content
 eyebrow: 'Validation · conditional required'
 heading: 'Describe the rule, not the response'
 clicks: 2
@@ -1342,18 +1390,6 @@ Last thing, and it is a design point rather than an API point. Do not put valida
 -->
 ---
 layout: content
-eyebrow: 'Footguns'
-heading: 'The ones that catch everybody'
----
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:26px;"> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:26px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:18px;">THE SCHEMA IS NOT AN EFFECT</div> <p style="font-size:27px;line-height:1.4;margin:0 0 18px;color:#C9D4E2;">The callback builds the rules once. A plain <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">if</code> is evaluated at construction and never again.</p> <div style="font-family:'JetBrains Mono',monospace;font-size:22px;line-height:1.55;color:#8A97A8;"> <div><span style="color:#FF7A6B;">if</span> (this.order().express) {</div> <div style="padding-left:1.2em;"><span style="color:#7CC4FF;">disabled</span>(p.pickupTime);</div> <div>}</div> <div style="height:0.5em;"></div> <div style="color:#2FD8B4;"><span style="color:#7CC4FF;">disabled</span>(p.pickupTime, ({ valueOf }) =&gt;</div> <div style="padding-left:1.2em;color:#2FD8B4;">valueOf(p.express));</div> </div> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:26px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:14px;">MISSING MEANS ABSENT</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">A field missing from the model - or set to <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">undefined</code> - is not in the tree. The rule type-checks, never runs, form says valid.</p> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:26px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:14px;">SHAPE IS STRUCTURE</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">The tree follows the model, so swapping one shape for another destroys field state. Keep the shape stable and switch behaviour with rules.</p> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:26px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:14px;">VALIDATION IS NOT THE BROWSER'S</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">Validity lives in the field tree, not in native validity, and the old status classes are opt-in. CSS keyed on them stops applying, silently.</p> </div> </div>
-<p style="font-size:28px;color:#8A97A8;line-height:1.4;margin:28px 0 0;max-width:1600px;">Three smaller ones: <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">required</code> treats an empty array as present, class instances lose their prototype on the first write, and hidden, disabled or readonly fields do not validate and do not count towards the parent.</p>
-
-<!--
-Four of these catch everybody, and two of them are lessons from earlier in this deck wearing different clothes. First: the schema callback is not an effect. It builds the rules once, when the form is constructed, and it never runs again. So if you wrap a rule in a plain if, that condition is evaluated exactly once and then frozen forever. That is the constructor-sees-defaults problem all over again - code that runs once, sitting in a place that looks reactive. The condition belongs inside the rule, in a when. Second: if a field isn't in the model, it isn't in the tree. Your rule still type-checks against the type, it just never runs. No error, no warning, and the form cheerfully reports itself valid - which is the silent-failure shape from chapter one. Initialise every field you actually want, and be aware that a field initialised to undefined counts as absent too. Third: the tree follows the shape of the model, so if you swap one object shape for another, the fields underneath are destroyed and rebuilt, and their touched and dirty state goes with them. Keep the shape stable and switch behaviour with rules instead. Arrays of objects are the exception there - items in an array are tracked by identity rather than by position. And fourth: validity lives in the field tree, not in the browser's native validity, and the old ng-valid and ng-invalid classes are opt-in now. So if you have CSS keyed on those class names, it stops applying, and it stops applying quietly. Three smaller ones to take away. Required treats an empty array as present, so an empty multi-select passes. Class instances lose their prototype the first time any field is written, because the write spreads the object into a plain one. And hidden, disabled and readonly fields don't validate at all, and don't count towards their parent's validity.
--->
-
----
-layout: content
 eyebrow: 'Guidance'
 heading: 'What we do about it'
 ---
@@ -1404,3 +1440,20 @@ center: true
 <!--
 I want to finish on this rather than on a summary. Every bug we have talked about today shares one property: not one of them throws. A stale label, an empty list, a chart full of zeroes, and a form that says it is valid - all four of those look exactly like working software. And the reason we keep shipping them isn't that they're hard to fix. Most of them are a one-line change once you can see them. It's that they're invisible when they work and invisible when they don't, so by the time the code reaches review, it already looks fine. That's why the habits matter more than the review does. Thank you - and I'm very happy to take questions.
 -->
+
+---
+layout: content
+center: true
+---
+<h2 style="font-size:88px;line-height:1.1;margin:0 0 40px;">Questions?</h2>
+<p style="font-size:32px;color:#8A97A8;line-height:1.5;margin:0 0 44px;max-width:1500px;">Everything in this deck came out of our own review history - so if you have hit one of these and it went differently, I would rather hear about that than not.</p>
+<div style="display:flex;gap:44px;font-family:'JetBrains Mono',monospace;font-size:26px;color:#5E6B7D;"> <div>angular.dev/guide/signals</div> <div>angular.dev/guide/forms/signals</div> </div>
+
+<!--
+Open it up here.
+
+If nothing comes straight away, the two questions I would prime the room with are: which of these have you actually hit, and is there one you disagree with? The second one is more useful to me than the first, because a couple of the findings in here were argued down when we filed them and the arguments were good.
+
+And if somebody asks the question I would ask - how do I find one of these in a running app, given none of them throw - the honest answer is that debugName plus the signal graph in Angular DevTools is the tooling, and it is genuinely better than it sounds. Name your signals when you create them and the graph becomes readable. A stale value is a missing edge, and the graph draws edges.
+-->
+
