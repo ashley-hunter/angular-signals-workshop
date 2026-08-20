@@ -630,15 +630,17 @@ layout: content
 eyebrow: 'Render phases'
 heading: 'DOM work belongs to a render phase'
 ---
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 36px;max-width:1600px;">An <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">effect</code> runs before view queries resolve, so the element may not exist yet. A raw animation frame is worse - it skips Angular's coordination entirely.</p>
+<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 36px;max-width:1600px;">An <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">effect</code> runs <em>during</em> change detection, before <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">&#64;if</code> blocks and child components are refreshed - so the element may not be there, and the write is not coordinated with painting.</p>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
 <div>
 
 ```ts
 // AVOID
-effect(() => {
-  this.selectedId();          // track
-  this.pane().scrollTop = 0;
+readonly pane = viewChild.required('pane');
+
+readonly #scroll = effect(() => {
+  this.selectedId();               // track
+  this.pane().nativeElement.scrollTop = 0;
 });
 ```
 
@@ -647,10 +649,12 @@ effect(() => {
 
 ```ts
 // PREFER
-afterRenderEffect({
+readonly pane = viewChild.required('pane');
+
+readonly #scroll = afterRenderEffect({
   write: () => {
-    this.selectedId();          // track
-    this.pane().scrollTop = 0;
+    this.selectedId();               // track
+    this.pane().nativeElement.scrollTop = 0;
   },
 });
 ```
@@ -659,7 +663,17 @@ afterRenderEffect({
 </div>
 
 <!--
-The reason the version on the left is wrong stops being subtle once you know the order things happen in. A component effect runs inside change detection, before child components and embedded views have been refreshed and before the view queries have even resolved - so the element you are reaching for may genuinely not exist yet, and your write lands on the old view or on nothing at all. A raw requestAnimationFrame is worse again, because that steps outside Angular's render coordination entirely and puts you back to guessing. Then there is the case at the bottom, which I have never seen anybody predict in advance. Your effect tracks the anchor and it tracks the content, both of them settle, you position the overlay against what is on screen - and then a deferred block swaps its placeholder out for the real content, and the height you measured is now wrong. Nothing in your dependency set changed, so nothing reran, and the overlay just sits there in the wrong place. You either observe the size of the thing you measured, or you track whatever it is that signals the swap.
+Let me be precise about why the version on the left is wrong, because I checked this in the framework source and the reason is not quite the one people give.
+
+A component effect runs inside change detection. Angular updates this component's own template first, then runs the effects attached to this view, and only after that does it refresh embedded views - your if blocks and for loops - and then child components. So the element you are reaching for is only guaranteed to be there if it is a plain part of this template. Put it behind an if, or inside a child component, and on the pass where it first appears, your effect has already run.
+
+The other half is that even when the element does exist, you are writing to it in the middle of a change detection pass, not at a point anybody scheduled for DOM work. afterRenderEffect gives you that point, and the write phase specifically means write - no reading layout back.
+
+I want to correct something you might have heard, including possibly from me: it is not that view queries have not resolved yet. Signal queries are lazy - reading one materialises the results right there - so a viewChild read inside an effect will find the element if the element exists. The failure is about whether the element exists, not about query timing. And if you use viewChild.required and it does not exist, you get NG0951 rather than silence, which is a good reason to prefer required.
+
+A raw requestAnimationFrame is worse than either, because that steps outside Angular's render coordination entirely and puts you back to guessing.
+
+Then there is the case at the bottom, which I have never seen anybody predict in advance. Your effect tracks the anchor and it tracks the content, both settle, you position the overlay against what is on screen - and then a deferred block swaps its placeholder out for the real content, and the height you measured is now wrong. Nothing in your dependency set changed, so nothing reran, and the overlay just sits there in the wrong place. You either observe the size of the thing you measured, or you track whatever signals the swap.
 -->
 
 ---
@@ -711,7 +725,7 @@ afterNextRender({
 
 </div>
 </div>
-<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:36px 0 0;max-width:1650px;">Each phase hands its result to the next. <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">afterNextRender</code> runs once, <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">afterRenderEffect</code> reruns - and hands the next phase a <em>signal</em>, not a value.</p>
+<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:36px 0 0;max-width:1650px;">Each phase can hand a value to the next. <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">afterNextRender</code> runs once, <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">afterRenderEffect</code> reruns - and hands the next phase a <em>signal</em>, not a value.</p>
 <p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:20px 0 0;max-width:1650px;">Calls that force layout: <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">offsetHeight</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">clientWidth</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">scrollTop</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">getBoundingClientRect()</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">getComputedStyle()</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">scrollIntoView()</code>, even <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">focus()</code>. Cheap once, and multiplied by every row, cell or widget on the page.</p>
 
 <!--
