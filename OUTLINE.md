@@ -1,5 +1,7 @@
 # Angular Signal Forms - candidate slides
 
+> Scope note: this is the research backing the **Signal Forms chapter** of `slides.md`, which is now one short section of a wider Angular Signals workshop. Most of the candidate slides below are deliberately not in the deck; they are kept here as the source material for a dedicated Signal Forms session.
+
 Source of truth for the API: `node_modules/@angular/forms/types/*.d.ts` (v22.1.1), cross-checked
 against angular.dev guides. Most blog posts are written against v21 previews and are wrong now -
 see "API churn" below.

@@ -1,7 +1,7 @@
 ---
 theme: default
-title: Signal Forms
-info: Angular's newest forms API, built on signals.
+title: Angular Signals
+info: Signals in practice - the patterns we reach for, and the pitfalls we keep shipping.
 canvasWidth: 1920
 colorSchema: dark
 highlighter: shiki
@@ -11,14 +11,871 @@ layout: cover
 eyebrow: 'Workshop'
 ---
 
-# Signal Forms
+# Angular Signals
 
-Angular's newest forms API, built on signals.
+The patterns we reach for, and the pitfalls we keep shipping.
 
 <!--
-I'm assuming everyone knows Angular, has used Reactive Forms, and understands Signals. The interesting question is not how to write a form with a different API. It is how the mental model changes when the form is built around normal signal-based application data.
+Signals are not new to anyone here. Adoption is not the problem - the codebase is overwhelmingly signal-based already. What keeps happening is a small set of mistakes, made over and over, in code that looks completely reasonable. This session is about those, and about the shape of the fix in each case.
 -->
 
+---
+layout: content
+eyebrow: 'Framing'
+heading: 'Adoption is done. Fluency is not.'
+---
+<p style="font-size:32px;color:#8A97A8;line-height:1.45;margin:0 0 44px;max-width:1600px;">We write signals everywhere. The reactivity findings that come back in review are rarely typos - they are code that reads correctly and behaves incorrectly, and they show up in three recognisable shapes.</p>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:28px;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:20px;">STALE</div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">Something read a value once and never heard that it changed. The UI is simply wrong, and nothing errors.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:20px;">WASTEFUL</div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">Correct, and doing the work again on every pass. Rebuilt objects, repeated formatting, the same request twice.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:20px;">SILENT</div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">A failure was flattened into an empty value, so the screen renders a confident, believable lie.</p> </div> </div>
+<p style="font-size:30px;color:#5E6B7D;line-height:1.45;margin:44px 0 0;max-width:1600px;">Stale is a dependency problem, wasteful is an identity problem, silent is a state-modelling problem. Every chapter after this is one of the three.</p>
+
+<!--
+Provenance, in case anyone asks: this is a keyword pass over a sample of the repo's PR review comments, narrowed to the reactivity-related ones. Stale language dominates, wasted or repeated work is close behind, and silent failure is third. Deliberately not claiming these are the most common review findings overall - across every comment, the biggest categories are guideline violations, logical bugs, missing test coverage and comments that no longer match the code. And do not add races to this list: it reads like it belongs, but it barely appears in our reactivity findings.
+-->
+---
+layout: content
+eyebrow: 'Mental model'
+heading: 'Signals pull. They do not push.'
+---
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:28px;margin-bottom:44px;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:34px 38px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#8B7CF6;margin-bottom:18px;">LAZY</div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">A <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">computed</code> does not run when its source changes. It runs when somebody reads it, and only if something it depends on actually changed.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:34px 38px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#8B7CF6;margin-bottom:18px;">GLITCH-FREE</div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">Readers never see a half-updated graph. There is no intermediate state to defend against, so no ordering to coordinate by hand.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:34px 38px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#8B7CF6;margin-bottom:18px;">TRACKED AT RUNTIME</div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">Dependencies are whatever you read during this run. An early return, a branch, or an <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">await</code> changes the set.</p> </div> </div>
+<div style="border-left:4px solid #2FD8B4;padding-left:28px;font-family:'Space Grotesk',sans-serif;font-size:38px;font-weight:500;color:#E8ECF2;line-height:1.3;">Almost every pitfall in this deck is one of these three, met head on.</div>
+
+<!--
+Worth being precise about tracked-at-runtime, because it is the root of the stale family. The dependency set is not declared. It is observed, per run, from the reads that actually happened. Two consequences we will keep coming back to: a value you read behind a condition is only a dependency on the runs where the condition let you read it, and a value you read outside a reactive context is not a dependency at all.
+-->
+
+---
+layout: section
+number: '01'
+transition: fade
+---
+## Derived state
+
+<p class="lead" style="margin-top:40px">Where the largest share of review findings live.</p>
+
+<!--
+This chapter is the single biggest cluster in our review history, by a wide margin. If we only fix one habit as a team, it is this one.
+-->
+
+---
+layout: content
+eyebrow: 'Picking one'
+heading: 'You know what they do. Which one owns the value?'
+---
+<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 40px;max-width:1600px;">Nothing in this deck is news about the primitives. Every mistake in it is a mistake about which primitive a particular value belongs to, and the choice comes down to one question asked in order.</p>
+<div style="display:flex;flex-direction:column;gap:20px;margin-bottom:40px;"> <div style="display:grid;grid-template-columns:1fr auto;gap:36px;align-items:center;background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:28px 36px;"> <p style="font-size:30px;line-height:1.35;margin:0;color:#C9D4E2;">Can you write it as a formula over other signals?</p> <div style="font-family:'JetBrains Mono',monospace;font-size:28px;color:#2FD8B4;white-space:nowrap;">computed()</div> </div> <div style="display:grid;grid-template-columns:1fr auto;gap:36px;align-items:center;background:#12171F;border:1px solid #8B7CF6;border-radius:14px;padding:28px 36px;"> <p style="font-size:30px;line-height:1.35;margin:0;color:#C9D4E2;">A formula, <em>and</em> something else is allowed to overwrite the result?</p> <div style="font-family:'JetBrains Mono',monospace;font-size:28px;color:#8B7CF6;white-space:nowrap;">linkedSignal()</div> </div> <div style="display:grid;grid-template-columns:1fr auto;gap:36px;align-items:center;background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:28px 36px;"> <p style="font-size:30px;line-height:1.35;margin:0;color:#C9D4E2;">Nothing derives it - a user or an external event decides?</p> <div style="font-family:'JetBrains Mono',monospace;font-size:28px;color:#2FD8B4;white-space:nowrap;">signal()</div> </div> </div>
+<div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:30px 38px;"> <p style="font-size:29px;line-height:1.45;margin:0;color:#C9D4E2;"><code style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#FF7A6B;">effect()</code> is not an answer to this question. It is the exit from the graph into something that is not reactive, and it is not a place to keep state.</p> </div>
+
+<!--
+Worth saying out loud that the middle row is the interesting one for this audience. Everybody here reaches for computed and signal correctly. Almost nobody reaches for linkedSignal, so when a value is derived but also writable, the fallback is an effect - and that is where the largest cluster of our review findings comes from. The ordering matters too: work down the list and stop at the first yes, rather than starting from "what do I need to keep in sync".
+-->
+---
+layout: content
+eyebrow: 'The pattern'
+heading: 'The finding we file most often'
+---
+<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 32px;max-width:1600px;">An effect reads reactive state and writes reactive state. Everything is signals, so it feels reactive. It is not: it is a manual subscription that happens to be spelled with signals.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
+<div>
+
+```ts
+// AVOID
+readonly rows = input.required<Row[]>();
+readonly visible = signal<Row[]>([]);
+
+constructor() {
+  effect(() => {
+    this.visible.set(
+      this.rows().filter((r) => r.enabled),
+    );
+  });
+}
+```
+
+</div>
+<div>
+
+```ts
+// PREFER
+readonly rows = input.required<Row[]>();
+
+readonly visible = computed(() =>
+  this.rows().filter((r) => r.enabled),
+);
+```
+
+</div>
+</div>
+<p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:40px 0 0;max-width:1600px;">The version on the left is one render behind, can be written by anyone, needs a test to prove it stays in sync, and produces an extra change detection pass every time the input changes.</p>
+
+<!--
+Say out loud why the left is worse, because "the rule says so" does not change habits. Four things. It is a frame late, because the effect runs after the change. It is writable by anything, so the invariant is not enforced. It has no cached identity, so downstream work reruns. And it costs an extra pass. The right-hand version cannot drift, because there is nothing to keep in sync.
+-->
+
+---
+layout: content
+eyebrow: 'Derived, and writable'
+heading: 'When the user can override the derived value'
+---
+<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 32px;max-width:1600px;">The reason people reach for an effect is usually legitimate: the value is derived, but it also has to be writable. That is not a gap in the API. That is <code style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;">linkedSignal</code>.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
+<div>
+
+```ts
+// AVOID
+readonly page = signal(1);
+
+constructor() {
+  effect(() => {
+    this.filter();       // track
+    this.page.set(1);    // reset
+  });
+}
+```
+
+</div>
+<div>
+
+```ts
+// PREFER
+readonly page = linkedSignal(() => {
+  this.filter();  // track
+  return 1;       // reset
+});
+```
+
+</div>
+</div>
+<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:40px 0 0;max-width:1600px;">Selected row, current page, active tab, a form field seeded from loaded data, a selection that must survive a filter change but not a dataset change. All the same shape.</p>
+
+<!--
+This is the highest-leverage slide in the deck for us, because the codebase has hundreds of the left-hand shape and barely any of the right-hand one. The tell for linkedSignal is a sentence with "but" in it: it is derived, but the user can change it. Also worth mentioning the computation form, which takes the previous value, for cases where you want to keep the selection if it still exists in the new source.
+-->
+
+---
+layout: content
+eyebrow: 'Lesser known'
+heading: 'A linkedSignal can write back to its source'
+---
+<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 28px;max-width:1650px;">By default a write to a <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">linkedSignal</code> is local: it overrides the derived value until the source changes again, and then the edit is gone. The <code style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;">set</code> option intercepts that write, so the edit can go to whoever actually owns the value.</p>
+<div style="display:grid;grid-template-columns:0.85fr 1.15fr;gap:36px;">
+<div>
+
+```ts
+// local override, the default
+readonly pageSize = linkedSignal(
+  () => this.prefs().pageSize,
+);
+```
+
+</div>
+<div>
+
+```ts
+// write-through to the owner
+readonly pageSize = linkedSignal({
+  source: this.prefs,
+  computation: (p) => p.pageSize,
+  set: (value, rawSet) => {
+    this.prefs.update((p) =>
+      ({ ...p, pageSize: value }));
+    rawSet(value);
+  },
+});
+```
+
+</div>
+</div>
+<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:36px 0 0;max-width:1650px;">Omit the <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">rawSet</code> call and the new value arrives back through the recomputation, so the source stays the only place the value lives. Call it and you also get the optimistic local update. <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">update()</code> goes through the same hook.</p>
+<p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:20px 0 0;max-width:1650px;">This closes the last honest reason to reach for an effect: a value that is derived, writable, and whose writes belong to somebody else.</p>
+
+<!--
+Genuinely lesser known, and it removes a plumbing job people currently do by hand. Without it, the pattern is a local linked signal plus something that pushes edits back, which in practice means an effect or a manually wired method. Two details worth saying: the hook replaces the default write entirely, so if you never call rawSet the only path back is the recomputation, which is usually what you want because there is then exactly one owner. And update() reads the current value untracked before handing it to your hook, so it does not create a dependency by accident.
+-->
+---
+layout: content
+eyebrow: 'Boundaries'
+heading: 'Effects that reach into another component'
+---
+<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 36px;max-width:1600px;">The same mistake, one level up: an effect in the parent writes a signal that belongs to a child, a shared service, or the parameters of a request. Reactive state crosses a component boundary through the back door.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-bottom:40px;"> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:32px 38px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:20px;">WHAT IT LOOKS LIKE</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">An effect calls <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">child.something.set(...)</code>, or mirrors state into a store purely so a request can read it.</p> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:32px 38px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:20px;">WHY IT HURTS</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">The child's own derived work reruns on a schedule the child cannot see, ownership of the value becomes unclear, and two writers can now disagree.</p> </div> </div>
+<div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:34px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#2FD8B4;margin-bottom:18px;">REACH FOR</div> <p style="font-size:29px;line-height:1.45;margin:0;color:#C9D4E2;">An <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">input()</code> on the child, so the value arrives through the declared contract. A <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">computed</code> handed straight to whatever consumes it. Or an explicit method on the child, called from the event that caused the change.</p> </div>
+
+<!--
+The question to ask in review is simply: who owns this value? If the answer is the child, the parent should be passing it in, not writing it. If the answer is the request, then the request should take a computed of its parameters directly instead of reading a mirror that an effect keeps up to date. Mirrors are where races come from, because now there are two writers and the order between them is timing.
+-->
+
+---
+layout: content
+eyebrow: 'Legitimate use'
+heading: 'What an effect is actually for'
+---
+<div style="display:grid;grid-template-columns:1.05fr 0.95fr;gap:44px;align-items:start;">
+<div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.18em;text-transform:uppercase;color:#2FD8B4;margin-bottom:28px;">Bridges out of the graph</div>
+<div style="display:flex;flex-direction:column;gap:18px;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:12px;padding:22px 30px;font-size:28px;color:#C9D4E2;">A third-party library that must be told, not asked</div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:12px;padding:22px 30px;font-size:28px;color:#C9D4E2;">Persistence: writing to storage or the URL</div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:12px;padding:22px 30px;font-size:28px;color:#C9D4E2;">Logging, analytics, telemetry</div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:12px;padding:22px 30px;font-size:28px;color:#C9D4E2;">Imperative APIs driven from outside the signal graph</div> </div>
+</div>
+<div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.18em;text-transform:uppercase;color:#8B7CF6;margin-bottom:28px;">If you write one, it should say</div>
+<div style="background:#12171F;border:1px solid #8B7CF6;border-radius:14px;padding:32px 38px;"> <p style="font-size:28px;line-height:1.5;margin:0 0 20px;color:#C9D4E2;"><strong style="color:#E8ECF2;">What is outside the graph.</strong> Name the non-reactive thing being driven.</p> <p style="font-size:28px;line-height:1.5;margin:0 0 20px;color:#C9D4E2;"><strong style="color:#E8ECF2;">Who owns the write.</strong> If the effect writes a signal, why it is the only writer.</p> <p style="font-size:28px;line-height:1.5;margin:0;color:#C9D4E2;"><strong style="color:#E8ECF2;">What it reacts to.</strong> The dependency set, honestly, including anything deliberately excluded.</p> </div>
+</div>
+</div>
+<p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:40px 0 0;max-width:1600px;">Effects that pass review are the ones that name the non-reactive driver. One effect per side effect, and prefer a named class field over a constructor body.</p>
+
+<!--
+Important balance to strike here, otherwise everyone leaves thinking effects are banned. They are not, and the genuine bridge cases are common in our codebase - grid libraries, editors, charts, anything driven from an event stream we do not own. The difference between an effect that survives review and one that does not is almost always whether the author could name the thing outside the graph. If you cannot name it, there probably is not one, and it is a computed.
+-->
+
+---
+layout: content
+eyebrow: 'Footgun'
+heading: 'An effect stops tracking at the first await'
+---
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
+<div>
+
+```ts
+// AVOID
+effect(async () => {
+  const id = this.teamId();      // tracked
+  const data = await load(id);
+  const fmt = this.format();     // NOT tracked
+  this.render(data, fmt);
+});
+```
+
+</div>
+<div>
+
+```ts
+// PREFER
+readonly params = computed(() => ({
+  id: this.teamId(),
+  fmt: this.format(),
+}));
+
+readonly data = rxResource({
+  params: this.params,
+  stream: ({ params }) => load(params),
+});
+```
+
+</div>
+</div>
+<p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:40px 0 0;max-width:1600px;">Tracking only covers the synchronous run. After an <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">await</code>, a <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">setTimeout</code>, or a <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">then</code>, reads are invisible to the graph. The effect quietly stops reacting to half of what it uses.</p>
+
+<!--
+This one is nasty because it half works. The first dependency is tracked, so the effect does fire sometimes, which makes it look wired up. Then a change to the second value does nothing and you go looking for a bug in the render path. If you need async work driven by signal parameters, that is what the resource APIs are for - and they cancel superseded work for free, which the async effect also does not do.
+-->
+
+---
+layout: content
+eyebrow: 'Cleanup'
+heading: 'Anything an effect starts, the effect must stop'
+---
+<div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:44px;align-items:center;">
+<div>
+
+```ts
+readonly poll = effect((onCleanup) => {
+  const id = this.orderId();
+  const handle = setInterval(
+    () => this.check(id),
+    5_000,
+  );
+
+  onCleanup(() => clearInterval(handle));
+});
+```
+
+</div>
+<div>
+<p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:0 0 28px;">Without <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">onCleanup</code>, changing the id starts a second interval and keeps the first. Nothing errors. The app just does more work every time, forever.</p>
+<p style="font-size:29px;color:#8A97A8;line-height:1.45;margin:0;">Same for listeners, observers, animation frames and subscriptions. It runs before every rerun and once on destroy.</p>
+</div>
+</div>
+
+<!--
+The subtle part is that onCleanup runs before each rerun, not only on destroy. So it is not just teardown, it is "undo the previous run" - which is exactly what you want when the effect is keyed on something that changes. For DOM listeners, an AbortController gives you the same thing with one signal for the whole set.
+-->
+
+---
+layout: section
+number: '02'
+transition: fade
+---
+## Dependencies
+
+<p class="lead" style="margin-top:40px">The set is observed, not declared. That is where stale comes from.</p>
+
+<!--
+Chapter two is the stale family. Every bug in here is the same sentence: something changed and nobody was listening.
+-->
+
+---
+layout: content
+eyebrow: 'Two failure modes'
+heading: 'A dependency set can be wrong in both directions'
+---
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-bottom:44px;"> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:36px 42px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:22px;">TOO NARROW</div> <p style="font-size:30px;line-height:1.45;margin:0 0 20px;color:#C9D4E2;">Something the code genuinely uses is not tracked, so a real change never reruns the work.</p> <p style="font-size:28px;line-height:1.45;margin:0;color:#8A97A8;">Presents as: stale labels, stale selections, a panel that only updates if you touch something else first, back and forward navigation that changes nothing.</p> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:36px 42px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:22px;">TOO WIDE</div> <p style="font-size:30px;line-height:1.45;margin:0 0 20px;color:#C9D4E2;">The work is keyed on more than it needs, so unrelated changes rerun expensive things.</p> <p style="font-size:28px;line-height:1.45;margin:0;color:#8A97A8;">Presents as: remeasuring on every keystroke, refetching on an unrelated toggle, layout work during typing.</p> </div> </div>
+<div style="border-left:4px solid #2FD8B4;padding-left:28px;font-family:'Space Grotesk',sans-serif;font-size:36px;font-weight:500;color:#E8ECF2;line-height:1.3;">Key the work on what the result is actually made of. Not the whole object it came from, and not a convenient subset.</div>
+
+<!--
+Both directions turn up in review roughly as often as each other, and both are usually written by someone who had the right intention. Too narrow happens when you read through a helper or a service and do not realise the read was skipped. Too wide happens when you key an effect on a whole state object because it was easier than naming the four fields the measurement depends on.
+-->
+
+---
+layout: content
+eyebrow: 'Escape hatch'
+heading: 'untracked() is a claim you have to defend'
+---
+<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 36px;max-width:1600px;">Wrapping a read in <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">untracked</code> says: this value is used, and I do not want a change to it to rerun this. It is sometimes exactly right, and it is also the easiest way in the language to build a permanently stale value.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;"> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:34px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#2FD8B4;margin-bottom:20px;">DEFENSIBLE</div> <p style="font-size:28px;line-height:1.5;margin:0 0 18px;color:#C9D4E2;">The rerun is driven by something outside the graph, and this read is only supplying context to it.</p> <p style="font-size:28px;line-height:1.5;margin:0;color:#C9D4E2;">A write is being wrapped so it does not participate in the read that caused it.</p> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:34px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:20px;">NOT DEFENSIBLE</div> <p style="font-size:28px;line-height:1.5;margin:0 0 18px;color:#C9D4E2;">It silences a loop you did not want to think about. The loop is the symptom, the shape is the cause.</p> <p style="font-size:28px;line-height:1.5;margin:0;color:#C9D4E2;">It was added to make a test settle.</p> </div> </div>
+<p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:40px 0 0;max-width:1600px;">If the write is already wrapped at every call site, the wrapper inside the shared helper is not protection, it is a second place for the rule to drift.</p>
+
+<!--
+Useful review question: if this value changed right now and nothing reran, would that be correct? If yes, untracked is right and should say so in a comment. If you have to think about it for more than a few seconds, it is a stale bug waiting for a customer to find it.
+-->
+
+---
+layout: content
+eyebrow: 'The invisible dependency'
+heading: 'Non-reactive reads inside reactive code'
+---
+<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 32px;max-width:1600px;">A <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">computed</code> can only track signals. Read a value from something that is not a signal and you have taken a snapshot: correct once, then frozen, with no warning and no error.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
+<div>
+
+```ts
+// AVOID
+readonly rows = computed(() =>
+  this.items().map((item) => ({
+    ...item,
+    label: this.i18n.instant(item.key),
+  })),
+);
+```
+
+</div>
+<div>
+
+```ts
+// PREFER
+readonly rows = computed(() =>
+  this.items().map((item) => ({
+    ...item,
+    labelKey: item.key,
+  })),
+);
+// translate in the template, reactively
+```
+
+</div>
+</div>
+<p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:36px 0 0;max-width:1600px;">Same shape: an imperative getter on a service, a value read from storage, the current time, the current URL, or the contents of a DOM node. None of them notify.</p>
+
+<!--
+This is the highest-volume single bug in our review history and it is worth dwelling on, because the symptom looks like an i18n bug rather than a signals bug. Someone changes language, half the screen updates because it went through a pipe, and the other half does not because it was snapshotted into a computed. The general rule is the important part though: if the source cannot notify, do not read it inside derived state. Either bring it into the graph as a signal, or move the read to the point of render.
+-->
+
+---
+layout: content
+eyebrow: 'Discipline'
+heading: 'A comment about reactivity is a testable claim'
+---
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-bottom:44px;"> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:34px 40px;"> <p style="font-size:29px;line-height:1.5;margin:0;color:#8A97A8;font-family:'JetBrains Mono',monospace;">// runs once per open</p> <p style="font-size:29px;line-height:1.5;margin:18px 0 0;color:#C9D4E2;">The dependency list said: every keystroke.</p> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:34px 40px;"> <p style="font-size:29px;line-height:1.5;margin:0;color:#8A97A8;font-family:'JetBrains Mono',monospace;">// reacts to the verified flag</p> <p style="font-size:29px;line-height:1.5;margin:18px 0 0;color:#C9D4E2;">The flag was read inside <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">untracked</code>.</p> </div> </div>
+<p style="font-size:31px;color:#C9D4E2;line-height:1.45;margin:0;max-width:1600px;">Both of these were found in review by reading the comment and then checking whether the code agreed. It is a genuinely effective review technique, and it works because a comment about what something reacts to is the one comment that can be verified line by line.</p>
+
+<!--
+Two practical takeaways. If you write that comment, check it. And when you are reviewing, treat those comments as the first place to look rather than as documentation you can trust - they are where intent and implementation drift apart, and the drift is invisible in the diff.
+-->
+
+---
+layout: section
+number: '03'
+transition: fade
+---
+## Timing
+
+<p class="lead" style="margin-top:40px">When your code runs relative to inputs and to render.</p>
+
+<!--
+Chapter three is the one people find most surprising, because the code is correct in isolation and wrong in sequence.
+-->
+
+---
+layout: content
+eyebrow: 'Lifecycle'
+heading: 'The constructor sees defaults, not inputs'
+---
+<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 32px;max-width:1600px;">Template-bound inputs are not set when the constructor runs. Any decision taken there sees the default value, and keeps that answer forever.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
+<div>
+
+```ts
+// AVOID
+readonly mode = input<'tree' | 'flat'>('tree');
+
+constructor() {
+  // always sees 'tree'
+  if (this.mode() === 'tree') {
+    this.startObserving();
+  }
+}
+```
+
+</div>
+<div>
+
+```ts
+// PREFER
+readonly mode = input<'tree' | 'flat'>('tree');
+
+readonly observing = computed(
+  () => this.mode() === 'tree',
+);
+// or act on it from a render-time hook
+```
+
+</div>
+</div>
+<p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:36px 0 0;max-width:1600px;">This one is especially good at hiding, because the default is often the common case. The code appears to work, and the comment above it describes behaviour that never happens.</p>
+
+<!--
+We have shipped this more than once and it took a careful reviewer to spot it both times. Note the second-order damage: the guard that was supposed to avoid allocating observers for the cheap layouts never fired, so every instance paid for machinery the comment promised it would skip. If a decision depends on an input, it belongs in derived state or in a hook that runs after inputs are set.
+-->
+
+---
+layout: content
+eyebrow: 'Render phases'
+heading: 'DOM work belongs to a render phase'
+---
+<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 36px;max-width:1600px;">An <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">effect</code> can run before the DOM it wants to touch exists, so the write lands on the old view or on nothing. A raw animation frame is worse: it opts out of Angular's coordination altogether.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
+<div>
+
+```ts
+// AVOID
+effect(() => {
+  this.selectedId();
+  this.pane().scrollTop = 0;
+});
+```
+
+</div>
+<div>
+
+```ts
+// PREFER
+afterRenderEffect({
+  write: () => {
+    this.selectedId();
+    this.pane().scrollTop = 0;
+  },
+});
+```
+
+</div>
+</div>
+<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:36px 0 0;max-width:1600px;">And when a render-time effect drives layout, the dependency set has to include everything that changes the geometry, including content that arrives later from a deferred block.</p>
+
+<!--
+The deferred-content case is worth calling out separately because it is not obvious: your effect tracks the anchor and the content, both settle, you position the overlay, and then a deferred chunk swaps a placeholder for the real thing and the height you measured is wrong. Nothing in the dependency set changed, so nothing reran. You either need to observe the size or track the thing that signals the swap.
+-->
+
+---
+layout: content
+eyebrow: 'Render phases'
+heading: 'Pick the phase, do not take the default'
+---
+<div class="compare" style="grid-template-columns:0.5fr 1fr 1fr;margin-bottom:40px;"> <div class="head">PHASE</div> <div class="head teal">FOR</div> <div class="head">CONSTRAINT</div> <div class="row-label"><code style="font-family:'JetBrains Mono',monospace;">earlyRead</code></div> <div>Measuring, before anything writes</div> <div>Never write here</div> <div class="row-label"><code style="font-family:'JetBrains Mono',monospace;">write</code></div> <div>Mutating the DOM</div> <div>Never read layout here</div> <div class="row-label"><code style="font-family:'JetBrains Mono',monospace;">mixedReadWrite</code></div> <div>The default, and the reason to be explicit</div> <div>Only when unavoidable</div> <div class="row-label last"><code style="font-family:'JetBrains Mono',monospace;">read</code></div> <div class="last">Inspecting after all writes</div> <div class="last">Never write here</div> </div>
+<p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:0 0 20px;max-width:1600px;">Reads and writes in the same phase force the browser to recompute layout between them. Splitting them is usually a two-line change, and the phases run in a fixed order so the data flows from one to the next.</p>
+<p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:0;max-width:1600px;">A measurement taken once inside a phase is not reactive either. If the thing being measured can resize on its own, observe it.</p>
+
+<!--
+The default phase is the trap: it works, so nobody changes it, and you pay a forced synchronous layout for every run. The other half of this slide is the one-shot measurement - reading an element height inside a render effect gives you the height at that moment, and if the element can change size without any signal changing, you will never hear about it. That is what a resize observer is for, torn down properly.
+-->
+
+---
+layout: content
+eyebrow: 'Forced reflow'
+heading: 'Read everything, then write everything'
+---
+<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 28px;max-width:1600px;">A read after a write forces the browser to recompute layout there and then, instead of once before the next paint. Interleave them in a loop and you pay for it on every iteration.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
+<div>
+
+```ts
+// AVOID: a reflow per row
+afterNextRender(() => {
+  for (const r of this.rows()) {
+    const h = r.el.offsetHeight;   // read
+    r.el.style.height = `${h + 8}px`; // write
+  }
+});
+```
+
+</div>
+<div>
+
+```ts
+// PREFER: one read pass, one write pass
+afterNextRender({
+  earlyRead: () =>
+    this.rows().map((r) => r.el.offsetHeight),
+  write: (h) => {
+    this.rows().forEach((r, i) => {
+      r.el.style.height = `${h[i] + 8}px`;
+    });
+  },
+});
+```
+
+</div>
+</div>
+<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:36px 0 0;max-width:1650px;">The phases hand their result to the next one, so the split costs nothing in structure. <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">afterNextRender</code> for setup that happens once, <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">afterRenderEffect</code> when it has to rerun - same phases, and the effect version hands the next phase a signal rather than a value.</p>
+<p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:20px 0 0;max-width:1650px;">Reads that force layout: <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">offsetHeight</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">clientWidth</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">scrollTop</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">getBoundingClientRect()</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">getComputedStyle()</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">scrollIntoView()</code>, even <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">focus()</code>. Cheap once, and multiplied by every row, cell or widget on the page.</p>
+
+<!--
+This is the concrete version of the phase table. Two things worth stressing. First, the cost is not the read - the read is usually necessary - it is the ordering, so batching is the whole fix. Second, where the code sits decides how much it costs: an unbatched read in something rendered once is nothing, and the same read in a per-row component or a per-item directive becomes one reflow per instance on a page with hundreds of them. And if a resize observer already handed you the box, use it rather than asking the DOM again.
+-->
+---
+layout: section
+number: '04'
+transition: fade
+---
+## Purity and cost
+
+<p class="lead" style="margin-top:40px">Derived state is read often, and at unpredictable times.</p>
+
+<!--
+Chapter four. Nothing here is a correctness bug on the first run, which is exactly why it survives to production.
+-->
+
+---
+layout: content
+eyebrow: 'Purity'
+heading: 'A computed may run at any time, or never'
+---
+<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 36px;max-width:1600px;">You do not control when derived state evaluates, how often, or whether it evaluates at all. So it must not do anything you would care about the timing of.</p>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:28px;"> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:32px 36px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:18px;">MUTATES SOMETHING</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">Injecting a stylesheet, writing to storage, registering a handler. The graph is not a place to cause things.</p> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:32px 36px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:18px;">OWNS A LIFETIME</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">Constructing something that holds a worker, a socket or a subscription. Recomputing replaces it and nothing disposes the old one.</p> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:32px 36px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:18px;">READS THE DOM</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">The DOM does not notify, so the value is a snapshot, and reading layout during a render pass is its own problem.</p> </div> </div>
+<p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:44px 0 0;max-width:1600px;">If something needs creating and disposing, that is a lifecycle concern. Give it an owner that can tear it down.</p>
+
+<!--
+The lifetime case is the one that bites hardest, because it is invisible until the source changes twice. First evaluation creates the expensive thing. Source changes, second evaluation creates another one, and the first is still running with nobody holding a reference to stop it. Under load, that is a leak that looks like a performance problem.
+-->
+
+---
+layout: content
+eyebrow: 'Identity'
+heading: 'Reference equality is the notification boundary'
+---
+<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 32px;max-width:1600px;">Signals compare with reference equality by default. Return a fresh object or array and every consumer is told it changed, even when the contents are identical.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
+<div>
+
+```ts
+// AVOID: new array every read
+protected held(): string[] {
+  return this.dragging()
+    ? [this.dragged()]
+    : [];
+}
+```
+
+</div>
+<div>
+
+```ts
+// PREFER: cached identity
+readonly held = computed(() =>
+  this.dragging() ? [this.dragged()] : [],
+);
+```
+
+</div>
+</div>
+<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:36px 0 0;max-width:1600px;">Bound to something that does real work with the value, the left-hand version invalidates that work on every check. Where a derived value is a collection whose contents matter more than its identity, a custom equality function is the tool.</p>
+
+<!--
+This is the slide that explains a whole class of mystery performance problems: a virtualiser recalculating ranges, a chart rebuilding series, a grid recreating column definitions, all because something upstream hands out a new array each time it is asked. And note the direction of the fix - a computed is not just tidier, the caching is the feature.
+-->
+
+---
+layout: content
+eyebrow: 'Templates'
+heading: 'Templates call. Computeds cache.'
+---
+<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 32px;max-width:1600px;">A method call in a binding runs on every check of that view, including checks caused by something completely unrelated. A signal read is a cache lookup.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
+<div>
+
+```html
+<!-- AVOID -->
+<a [href]="buildUrl(row.id, row.envs)">
+  {{ formatNextRun(nextRunAt()) }}
+</a>
+```
+
+</div>
+<div>
+
+```html
+<!-- PREFER -->
+@let view = rowView();
+<a [href]="view.url">{{ view.nextRun }}</a>
+```
+
+</div>
+</div>
+<p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:36px 0 0;max-width:1600px;">Precompute the whole row view once, bind to its fields. This is also the cheapest fix on the list: it is a move, not a redesign.</p>
+
+<!--
+Two practical notes. First, "unrelated" is the important word - a resource resolving somewhere else in the component causes a check, and your date formatting runs again for every visible row. Second, @let is the tool for naming a repeated deep read in a template, and it is also how you subscribe to an async pipe once instead of once per usage.
+-->
+
+---
+layout: section
+number: '05'
+transition: fade
+---
+## Async state
+
+<p class="lead" style="margin-top:40px">Loading, empty, error, and the difference between them.</p>
+
+<!--
+Chapter five is where the user-visible damage is worst. Every finding in this chapter shipped something that looked fine and was lying.
+-->
+
+---
+layout: content
+eyebrow: 'Resources'
+heading: 'The default shape for a signal-driven read'
+---
+<div style="display:grid;grid-template-columns:1.1fr 0.9fr;gap:44px;align-items:start;">
+<div>
+
+```ts
+readonly teamId = input.required<string>();
+
+readonly users = httpResource<User[]>(() => ({
+  url: `/api/teams/${this.teamId()}/users`,
+}));
+```
+
+</div>
+<div>
+<div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:32px 38px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#2FD8B4;margin-bottom:20px;">YOU GET, FOR FREE</div> <p style="font-size:28px;line-height:1.5;margin:0 0 14px;color:#C9D4E2;">Refetch when the parameters change</p> <p style="font-size:28px;line-height:1.5;margin:0 0 14px;color:#C9D4E2;">Cancellation of superseded requests</p> <p style="font-size:28px;line-height:1.5;margin:0 0 14px;color:#C9D4E2;">Loading, error and status as signals</p> <p style="font-size:28px;line-height:1.5;margin:0;color:#C9D4E2;">No race between two in-flight responses</p> </div>
+</div>
+</div>
+<p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:40px 0 0;max-width:1600px;">Reads driven by signals belong in a resource. Writes do not: a POST or DELETE is an action with a moment, not a value with parameters, so it stays on the HTTP client.</p>
+<p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:24px 0 0;max-width:1600px;">And a shared component should take the finished list, not the resource. The consumer may want to derive its input from a resource, or from three, or from none.</p>
+
+<!--
+The last line is a real design argument that came up in review and was settled the right way: taking a resource as an input couples a shared component to one data-loading mechanism. Take the value. Let the consumer decide where it came from.
+-->
+
+---
+layout: content
+eyebrow: 'States'
+heading: 'Four states, not two'
+---
+<div class="compare" style="grid-template-columns:0.6fr 1fr 1fr;margin-bottom:40px;"> <div class="head">STATE</div> <div class="head teal">MEANS</div> <div class="head">GETS RENDERED AS</div> <div class="row-label">loading</div> <div>The answer is not known yet</div> <div>A skeleton, not an empty state</div> <div class="row-label">value</div> <div>The answer is known, and may be empty</div> <div>Content, or a real empty state</div> <div class="row-label">error</div> <div>The answer is unknown and will not arrive</div> <div>An error, with a way to retry</div> <div class="row-label last">undefined</div> <div class="last">There is no answer to ask for yet</div> <div class="last">Usually the same as loading</div> </div>
+<p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:0 0 20px;max-width:1600px;">Collapsing any two of these produces a bug that testers cannot reproduce and users report as "it showed nothing".</p>
+<p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:0;max-width:1600px;">Worth knowing: when parameters become <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">undefined</code>, the previous value is discarded. If a transient gap in the parameters is reachable, the list will empty itself on the way through.</p>
+
+<!--
+The parameters-going-undefined case is a good example of a finding worth understanding even when it turns out not to be reachable. The mechanism is real. Whether it can happen depends on whether that intermediate state exists in your flow, and that is the question to answer in review rather than patching defensively.
+-->
+
+---
+layout: content
+eyebrow: 'The silent failure'
+heading: 'A failed request that renders as no data'
+---
+<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 32px;max-width:1600px;">This is the most common async finding we file, in several disguises. All of them turn "we do not know" into "there is nothing".</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
+<div>
+
+```ts
+// AVOID
+this.load().pipe(
+  catchError(() => of([])),
+);
+```
+
+</div>
+<div>
+
+```ts
+// AVOID
+readonly url = computed(() =>
+  this.data.hasValue()
+    ? build(this.data.value())
+    : '',   // link silently vanishes
+);
+```
+
+</div>
+</div>
+<div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:32px 38px;margin-top:36px;"> <p style="font-size:30px;line-height:1.45;margin:0;color:#C9D4E2;">Keep the error a distinct state all the way to the template. An empty list, a zero, a dash and a missing button are all valid renderings of real data, so none of them can carry the meaning "this failed".</p> </div>
+
+<!--
+The disguises are worth listing because they all read as defensive good practice: catchError to an empty array, a default value so the template does not have to branch, treating no-value as no-data, and a ternary that returns an empty string. In every case the code stops throwing and starts lying. Also note the opposite failure on the same line: reading value() while a resource is in its error state throws, and if that read is inside a computed, the exception poisons everything downstream of it.
+-->
+
+---
+layout: content
+eyebrow: 'Composition'
+heading: 'Two resources, one screen'
+---
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-bottom:40px;"> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:34px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:20px;">HALF-WIRED STATE</div> <p style="font-size:28px;line-height:1.5;margin:0 0 16px;color:#C9D4E2;">An aggregate <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">error</code> that reads only one of the two sources reports success while half the data is missing.</p> <p style="font-size:28px;line-height:1.5;margin:0;color:#C9D4E2;">A retry that reloads only one of them can never recover the other.</p> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:34px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:20px;">AND / OR</div> <p style="font-size:28px;line-height:1.5;margin:0;color:#C9D4E2;">Requiring <em>both</em> to fail before showing an error means one failure renders as a legitimate "not available". Ask which combination the user should be warned about, then pick the operator deliberately.</p> </div> </div>
+<p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:0 0 20px;max-width:1600px;">Two resources over the same parameters are also two requests. Nothing deduplicates them for you, so if both are heavy, share one owner.</p>
+<p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:0;max-width:1600px;">A resource lives as long as the injector that created it. Destroy a component-scoped service while something it fed is still on screen, and that thing is frozen from then on.</p>
+
+<!--
+The lifetime line is worth landing with a concrete picture: a drawer opens, it reads from a panel-scoped service, the user switches tabs behind it, the panel is destroyed, the resource is cancelled, and the still-open drawer keeps showing its loading state forever. Nothing errors, nothing logs. The fix is to decide who owns the request and scope it to the thing that outlives the interaction.
+-->
+
+---
+layout: section
+number: '06'
+transition: fade
+---
+## Boundaries
+
+<p class="lead" style="margin-top:40px">What a signal exposes, and to whom.</p>
+
+<!--
+Chapter six is the cheap chapter. These findings take a minute to fix and keep coming back, which makes them a good candidate for habit rather than review.
+-->
+
+---
+layout: content
+eyebrow: 'Visibility'
+heading: 'Template-only state is not public API'
+---
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-bottom:40px;"> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:34px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#2FD8B4;margin-bottom:18px;">protected readonly</div> <p style="font-size:28px;line-height:1.5;margin:0;color:#C9D4E2;">Anything the template reads and nothing outside needs: derived state, signal queries, view helpers.</p> </div> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:34px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#2FD8B4;margin-bottom:18px;">#private</div> <p style="font-size:28px;line-height:1.5;margin:0;color:#C9D4E2;">Anything neither the template nor a consumer touches. Enforced at runtime, not just by the compiler.</p> </div> </div>
+<p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:0 0 20px;max-width:1600px;">A public writable signal is an invitation. Somebody will accept it, from a place you did not plan for, and then the invariant you were maintaining has two owners.</p>
+<p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:0;max-width:1600px;">Tests are not a reason to widen visibility. Reaching past <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">protected</code> with bracket access is a test smell, not an access strategy.</p>
+
+<!--
+Templates can read protected members, which is the whole reason protected is the right default here rather than public. The one to watch in review is a signal that is public purely because it was written that way first - it costs nothing to narrow before merge and it is a breaking change to narrow afterwards.
+-->
+
+---
+layout: content
+eyebrow: 'Immutability'
+heading: 'Signals do not make your data immutable'
+---
+<div style="display:grid;grid-template-columns:1.05fr 0.95fr;gap:44px;align-items:center;">
+<div>
+
+```ts
+// AVOID
+readonly items: Signal<Item[]> = this.#items;
+
+// a consumer can do this:
+service.items().pop();
+service.items()[0].label = 'edited';
+```
+
+</div>
+<div>
+<p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:0 0 24px;">The signal protects the reference, not the contents. A cached array handed across a boundary can be mutated in place, and nothing notifies, so later readers see the edit and the graph never hears about it.</p>
+<p style="font-size:29px;color:#8A97A8;line-height:1.45;margin:0;">Type the boundary as <code style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#2FD8B4;">Signal&lt;readonly Item[]&gt;</code>, and hand out data the caller cannot edit underneath you.</p>
+</div>
+</div>
+
+<!--
+Worth spelling out the failure, because it is unusual: this is not a stale bug, it is the opposite. The mutation is visible immediately to everybody who reads the cached array, and completely invisible to the reactive graph. So the UI and the state disagree with no changed reference anywhere for anyone to notice.
+-->
+
+---
+layout: content
+eyebrow: 'Restraint'
+heading: 'Not everything wants to be a signal'
+---
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:28px;margin-bottom:40px;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:32px 36px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#8B7CF6;margin-bottom:18px;">FIXED AT CREATION</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">Data that cannot change while the view is alive does not need to be writable. Making it writable invents a state transition nobody handles.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:32px 36px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#8B7CF6;margin-bottom:18px;">DERIVED FROM ONE THING</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">A computed that just renames another signal is a second place to read from, and a chance for the two to disagree.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:32px 36px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#8B7CF6;margin-bottom:18px;">NAME THE MEANING</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">Derived state names a concept, so name the concept and not the mechanism. Reviewers read the name before the formula.</p> </div> </div>
+<p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:0;max-width:1600px;">The reactive question to ask about any new signal: what writes this, and when? If the honest answer is "nothing, ever", it is a constant.</p>
+
+<!--
+The mid-session flip is the concrete risk on the first card. If a dialog is seeded once from the data it was opened with, turning that into live writable state means a change halfway through the interaction can send the wrong shape of request. It is the kind of bug that only happens to a real user, once, and is never reproduced.
+-->
+
+---
+layout: section
+number: '07'
+transition: fade
+---
+## Testing
+
+<p class="lead" style="margin-top:40px">Reactive code fails in ways that make tests pass.</p>
+
+<!--
+Chapter seven, and short. The point of this one is that a signals bug can hide behind a green test just as easily as behind a working screen.
+-->
+
+---
+layout: content
+eyebrow: 'Settling'
+heading: 'Wait for a state, not for a number of ticks'
+---
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
+<div>
+
+```ts
+// AVOID
+for (let i = 0; i < 6; i++) {
+  TestBed.tick();
+  await Promise.resolve();
+}
+expect(state.rows()).toHaveLength(2);
+```
+
+</div>
+<div>
+
+```ts
+// PREFER
+await vi.waitFor(() =>
+  expect(state.rows()).toHaveLength(2),
+);
+```
+
+</div>
+</div>
+<p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:40px 0 0;max-width:1600px;">A fixed number of flushes encodes today's scheduling. One extra turn, one delayed response, and the assertion runs against the initial state and passes for the wrong reason.</p>
+<p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:24px 0 0;max-width:1600px;">Also: after mutating a component imperatively rather than through its inputs, nothing has told Angular to check the view. Flush before asserting on the DOM.</p>
+
+<!--
+The failure mode here is the dangerous kind: a test that passes when the feature is broken. It waits six turns, the resource settles on the seventh, the assertion sees the initial empty state, and the expectation happened to match it. Predicate-based waiting removes the guess entirely.
+-->
+
+---
+layout: content
+eyebrow: 'Readiness'
+heading: 'A readiness signal that can never arrive'
+---
+<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 36px;max-width:1600px;">Waiting for a count to become non-zero works right up until zero is the correct answer. Then the test hangs, times out, and gets reported as a product bug in whatever it was pointing at.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;"> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:34px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:20px;">AMBIGUOUS</div> <p style="font-size:29px;line-height:1.5;margin:0;color:#C9D4E2;">"Has it produced results yet?" cannot distinguish a finished empty pass from a pass that never ran.</p> </div> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:34px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#2FD8B4;margin-bottom:20px;">UNAMBIGUOUS</div> <p style="font-size:29px;line-height:1.5;margin:0;color:#C9D4E2;">"Has it finished?" A status, a settled state, an explicit first-emission flag. Empty is then a result like any other.</p> </div> </div>
+<p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:40px 0 0;max-width:1600px;">A timeout is a diagnosis to start from, not a verdict. Check the interaction, the locator and the setup before you conclude the component is broken.</p>
+
+<!--
+Same idea as the four-states slide, applied to test infrastructure. If your readiness check cannot tell the difference between "nothing happened" and "nothing was there", you have a test that can only pass for non-empty data - which is usually the case that already worked.
+-->
+
+---
+layout: section
+number: '08'
+transition: fade
+---
+## Signal Forms
+
+<p class="lead" style="margin-top:40px">The same ideas, applied to the one API built entirely on them.</p>
+
+<!--
+Last chapter, and a shorter one than it wants to be. Signal Forms deserves its own session - the point of including it here is that everything in the previous seven chapters is why it looks the way it does. Derived state instead of synchronisation, rules that declare what they depend on, one source of truth instead of two.
+-->
 ---
 layout: content
 eyebrow: 'Introduction'
@@ -29,18 +886,6 @@ heading: 'A third forms API, built on signals'
 
 <!--
 Orientation before we go near the API. Signal Forms became stable in v22 - public API, semver-protected, still growing. It is not a replacement - reactive forms are still supported and still fine for plenty of screens. The difference is that the form is built around ordinary signal-based data instead of a separate control tree.
--->
----
-layout: section
-number: '01'
-transition: fade
----
-## The mental model
-
-<p class="lead" style="margin-top:40px">Three pieces of API, one diagram, and the simplest form we can write.</p>
-
-<!--
-We start with the smallest possible signal form, then the picture we keep coming back to.
 -->
 ---
 layout: content
@@ -70,230 +915,9 @@ At this point the main difference is architectural rather than dramatic. If all 
 Anchor against something familiar. Do not mark anything red - we are not trying to make Reactive Forms look bad. For a form this simple there really isn't much wrong with this.
 -->
 ---
-layout: section
-number: '02'
-transition: fade
----
-## Why another<br/>forms API?
-
-<p class="lead" style="margin-top:40px">Where reactive forms make us do the work twice.</p>
-
-<!--
-Be careful with the framing throughout - the case is that signal forms remove work, not that reactive forms were bad.
--->
----
 layout: content
-eyebrow: 'Framing'
-heading: 'Reactive Forms are not “bad”'
----
-<div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:64px;"> <div style="border:1px solid #4A5568;border-radius:999px;padding:14px 34px;font-family:'JetBrains Mono',monospace;font-size:25px;color:#8A97A8;">Mature</div> <div style="border:1px solid #4A5568;border-radius:999px;padding:14px 34px;font-family:'JetBrains Mono',monospace;font-size:25px;color:#8A97A8;">Powerful</div> <div style="border:1px solid #4A5568;border-radius:999px;padding:14px 34px;font-family:'JetBrains Mono',monospace;font-size:25px;color:#8A97A8;">Still supported</div> <div style="border:1px solid #4A5568;border-radius:999px;padding:14px 34px;font-family:'JetBrains Mono',monospace;font-size:25px;color:#8A97A8;">Widely understood</div> </div>
-<div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.18em;text-transform:uppercase;color:#2FD8B4;margin-bottom:32px;">So what changes with Signal Forms?</div>
-<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:28px;"> <div style="background:#0A0D12;border:1px solid #4A5568;border-radius:14px;padding:34px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:40px;color:#2FD8B4;margin-bottom:18px;">1</div> <p style="font-size:30px;line-height:1.4;margin:0;color:#C9D4E2;">Data has one authoritative model.</p> </div> <div style="background:#0A0D12;border:1px solid #4A5568;border-radius:14px;padding:34px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:40px;color:#2FD8B4;margin-bottom:18px;">2</div> <p style="font-size:30px;line-height:1.4;margin:0;color:#C9D4E2;">Form state is signal-based.</p> </div> <div style="background:#0A0D12;border:1px solid #4A5568;border-radius:14px;padding:34px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:40px;color:#2FD8B4;margin-bottom:18px;">3</div> <p style="font-size:30px;line-height:1.4;margin:0;color:#C9D4E2;">Relationships can be declarative.</p> </div> </div>
-
-<!--
-Angular did not need to replace Reactive Forms because forms suddenly stopped working. The question is what becomes simpler when forms participate naturally in Angular's signal-based state model.
--->
----
-layout: content
-eyebrow: 'The edit form'
-heading: 'We fetch a user and show their values'
----
-<div style="display:grid;grid-template-columns:0.85fr 1.15fr;gap:64px;align-items:center;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:44px;"> <div style="font-size:24px;color:#8A97A8;margin-bottom:10px;">Name</div> <div style="background:#0A0D12;border:1px solid #4A5568;border-radius:8px;padding:0 18px;height:60px;display:flex;align-items:center;font-family:'JetBrains Mono',monospace;font-size:24px;color:#E8ECF2;margin-bottom:28px;">Sam Taylor</div> <div style="font-size:24px;color:#8A97A8;margin-bottom:10px;">Email</div> <div style="background:#0A0D12;border:1px solid #4A5568;border-radius:8px;padding:0 18px;height:60px;display:flex;align-items:center;font-family:'JetBrains Mono',monospace;font-size:24px;color:#E8ECF2;margin-bottom:36px;">sam.taylor@example.com</div> <div style="background:#2FD8B4;color:#0A0D12;border-radius:8px;padding:16px 0;text-align:center;font-size:26px;font-weight:600;">Save</div> </div> <div style="display:flex;flex-direction:column;gap:36px;"> <div style="display:flex;gap:20px;align-items:center;font-family:'JetBrains Mono',monospace;font-size:26px;"> <span style="border:1px solid #2FD8B4;border-radius:8px;padding:14px 28px;color:#2FD8B4;">GET /user</span> <span style="color:#8A97A8;">→</span> <span style="color:#8A97A8;">the form shows current values</span> </div> <div style="display:flex;gap:20px;align-items:center;font-family:'JetBrains Mono',monospace;font-size:26px;"> <span style="border:1px solid #2FD8B4;border-radius:8px;padding:14px 28px;color:#2FD8B4;">PUT /user</span> <span style="color:#8A97A8;">←</span> <span style="color:#8A97A8;">the user's edits go back</span> </div> <p style="font-size:31px;color:#C9D4E2;line-height:1.45;margin:16px 0 0;">The work is in what we write between those two calls.</p> </div> </div>
-
-<!--
-Imagine an edit screen. We fetch a user from an API and the form shows their current values. The user edits, and we save. Everything that follows is about what happens between those two API calls.
--->
----
-layout: content
-eyebrow: 'Reactive Forms'
-heading: 'Populate, edit, extract, merge'
----
-<div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:56px;align-items:start;"> <div style="background:#0F131A;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;font-family:'JetBrains Mono',monospace;font-size:24px;line-height:1.6;color:#8A97A8;"> <div><span style="color:#8577CF;">readonly</span> <span>userForm</span> = <span style="color:#8577CF;">new</span> FormGroup({</div> <div style="padding-left:1.2em;">name: <span style="color:#8577CF;">new</span> FormControl(<span style="color:#3FBFA2;">''</span>),</div> <div style="padding-left:1.2em;">email: <span style="color:#8577CF;">new</span> FormControl(<span style="color:#3FBFA2;">''</span>),</div> <div>});</div> <div style="height:0.85em;"></div> <div style="color:#5E6B7D;">// later</div> <div><span style="color:#8577CF;">const</span> user = <span style="color:#8577CF;">await</span> api.getUser();</div> <div><span style="color:#8577CF;">this</span>.userForm.patchValue(user);</div> <div style="height:0.85em;"></div> <div style="color:#5E6B7D;">// later</div> <div><span style="color:#8577CF;">await</span> api.update({</div> <div style="padding-left:1.2em;">...user,</div> <div style="padding-left:1.2em;">...<span style="color:#8577CF;">this</span>.userForm.getRawValue(),</div> <div>});</div> </div> <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start;font-family:'JetBrains Mono',monospace;font-size:24px;"> <div style="border:1px solid #4A5568;border-radius:8px;padding:8px 26px;color:#8A97A8;">GET /user</div> <div style="color:#8A97A8;padding-left:22px;">↓</div> <div style="border:1px solid #8B7CF6;border-radius:8px;padding:8px 26px;color:#B9A9FF;">patchValue()</div> <div style="color:#8A97A8;padding-left:22px;">↓</div> <div style="border:1px solid #4A5568;border-radius:8px;padding:8px 26px;color:#8A97A8;">FormGroup - user edits</div> <div style="color:#8A97A8;padding-left:22px;">↓</div> <div style="border:1px solid #8B7CF6;border-radius:8px;padding:8px 26px;color:#B9A9FF;">getRawValue()</div> <div style="color:#8A97A8;padding-left:22px;">↓</div> <div style="border:1px solid #8B7CF6;border-radius:8px;padding:8px 26px;color:#B9A9FF;">map / merge</div> <div style="color:#8A97A8;padding-left:22px;">↓</div> <div style="border:1px solid #4A5568;border-radius:8px;padding:8px 26px;color:#8A97A8;">PUT /user</div> </div> </div>
-
-<!--
-With Reactive Forms we commonly have application data representing the user and a separate control tree representing the editable form. We populate the tree, the user edits it, then we take values back out, often combine them with other application state, transform them, and send them back. Do not say Reactive Forms always have two sources of truth - say that real applications often end up maintaining two representations of the same data.
--->
----
-layout: content
-eyebrow: 'Signal Forms'
-heading: 'The model is already the editable data'
----
-<div style="display:grid;grid-template-columns:0.8fr 1.2fr;gap:56px;align-items:center;"> <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start;font-family:'JetBrains Mono',monospace;font-size:24px;"> <div style="border:1px solid #4A5568;border-radius:8px;padding:8px 26px;color:#8A97A8;">GET /user</div> <div style="color:#8A97A8;padding-left:22px;">↓</div> <div style="border:1px solid #2FD8B4;border-radius:8px;padding:8px 26px;color:#2FD8B4;">model signal</div> <div style="color:#8A97A8;padding-left:22px;">↕</div> <div style="border:1px solid #4A5568;border-radius:8px;padding:8px 26px;color:#E8ECF2;">FieldTree</div> <div style="color:#8A97A8;padding-left:22px;">↕</div> <div style="border:1px solid #4A5568;border-radius:8px;padding:8px 26px;color:#E8ECF2;">UI</div> <div style="color:#8A97A8;padding-left:22px;">↓</div> <div style="border:1px solid #4A5568;border-radius:8px;padding:8px 26px;color:#8A97A8;">PUT /user</div> </div> <div style="display:flex;flex-direction:column;gap:28px;"> <div style="background:#0A0D12;border:1px solid #2FD8B4;border-radius:14px;padding:34px 40px;font-family:'JetBrains Mono',monospace;font-size:24px;line-height:1.65;color:#C9D4E2;"> <div><span style="color:#8B7CF6;">readonly</span> <span>model</span> = <span style="color:#7CC4FF;">signal</span>({ name: <span style="color:#2FD8B4;">''</span>, email: <span style="color:#2FD8B4;">''</span> });</div> <div><span style="color:#8B7CF6;">readonly</span> <span>userForm</span> = <span style="color:#7CC4FF;">form</span>(<span style="color:#8B7CF6;">this</span>.model);</div> <div style="height:0.85em;"></div> <div style="color:#5E6B7D;">// later</div> <div><span style="color:#8B7CF6;">this</span>.model.<span style="color:#7CC4FF;">set</span>(<span style="color:#8B7CF6;">await</span> api.getUser());</div> <div style="height:0.85em;"></div> <div style="color:#5E6B7D;">// later</div> <div><span style="color:#8B7CF6;">await</span> api.<span style="color:#7CC4FF;">update</span>(<span style="color:#8B7CF6;">this</span>.model());</div> </div> <p style="font-size:30px;color:#8A97A8;line-height:1.45;margin:0;">No patchValue. No getRawValue. No merge step to keep two representations aligned.</p> </div> </div>
-<div style="margin-top:36px;border-left:4px solid #2FD8B4;padding-left:28px;font-family:'Space Grotesk',sans-serif;font-size:34px;font-weight:500;color:#E8ECF2;">Signal Forms do not maintain another copy of the form data.</div>
-
-<!--
-With Signal Forms the model signal is already the editable data. When API data arrives, update the model. When the user edits the form, the model changes. The FieldTree doesn't become a second store for the values.
--->
----
-layout: content
-eyebrow: 'Reactive state'
-heading: 'One reactive model, not two'
----
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 40px;max-width:1500px;">A control's value is not reactive on its own. Reading <code style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#C9D4E2;">userForm.value</code> gives a snapshot, so anything that has to respond to a change has to subscribe. In a component already built on <code style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;">signal</code> and <code style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;">computed</code>, the form ends up a separate reactive island.</p>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;"> <div style="background:#0F131A;border:1px solid #4A5568;border-radius:14px;padding:40px 44px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#5E6B7D;margin-bottom:28px;">REACTIVE FORMS</div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;line-height:1.6;color:#8A97A8;margin-bottom:26px;"> <div style="color:#5E6B7D;">// a snapshot, not a live value</div> <div><span style="color:#8577CF;">const</span> current = <span style="color:#8577CF;">this</span>.form.value;</div> <div style="height:0.85em;"></div> <div style="color:#5E6B7D;">// so anything derived must subscribe</div> <div><span style="color:#8577CF;">this</span>.form.valueChanges</div> <div style="padding-left:1.2em;">.pipe(takeUntilDestroyed())</div> <div style="padding-left:1.2em;">.subscribe((v) =&gt; <span style="color:#8577CF;">this</span>.recalculate(v));</div> </div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;line-height:1.7;color:#8A97A8;border-top:1px solid #4A5568;padding-top:22px;"> <div>valueChanges  statusChanges</div> </div> <p style="font-size:25px;color:#5E6B7D;margin:22px 0 0;line-height:1.4;">Observable-based form state, plus a subscription and a teardown per dependency.</p> </div> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:40px 44px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#2FD8B4;margin-bottom:28px;">SIGNAL FORMS</div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;line-height:1.6;color:#C9D4E2;margin-bottom:26px;"> <div style="color:#5E6B7D;">// the value is a signal</div> <div>userForm.email().value()</div> <div style="height:0.85em;"></div> <div style="color:#5E6B7D;">// so derived state is just a computed</div> <div><span style="color:#8B7CF6;">const</span> summary = <span style="color:#7CC4FF;">computed</span>(() =&gt;</div> <div style="padding-left:1.2em;"><span style="color:#7CC4FF;">describe</span>(userForm.email().value()),</div> <div>);</div> </div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;line-height:1.7;color:#E8ECF2;border-top:1px solid #4A5568;padding-top:22px;"> <div>value()  valid()  errors()  pending()</div> </div> <p style="font-size:25px;color:#8A97A8;margin:22px 0 0;line-height:1.4;">Signal-based form state. No subscription, no teardown.</p> </div> </div>
-
-<!--
-RxJS is not a problem. But forms become a different reactive island. A modern component already uses signal and computed.
--->
----
-layout: section
-number: '03'
-transition: fade
----
-## The FieldTree
-
-<p class="lead" style="margin-top:40px">The structure that <code style="font-family:'JetBrains Mono',monospace;font-size:29px;color:#2FD8B4;">form()</code> hands back, and the state it carries.</p>
-
-<!--
-The FieldTree: what form() returns, what a node is, and what state it carries.
--->
----
-layout: content
-eyebrow: 'FieldTree'
-heading: 'The FieldTree mirrors the model'
----
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 36px;max-width:1500px;">A FieldTree is what <code style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;">form()</code> returns. Its shape follows the model: if the model contains <code style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#C9D4E2;">address.city</code>, the form has <code style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#C9D4E2;">userForm.address.city</code>.</p>
-<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:44px;align-items:center;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;font-family:'JetBrains Mono',monospace;font-size:26px;line-height:1.65;color:#C9D4E2;"> <div><span style="color:#8B7CF6;">const</span> <span>userModel</span> = <span style="color:#7CC4FF;">signal</span>({</div> <div style="padding-left:1.2em;">name: <span style="color:#2FD8B4;">''</span>,</div> <div style="padding-left:1.2em;">address: {</div> <div style="padding-left:2.4em;">city: <span style="color:#2FD8B4;">''</span>,</div> <div style="padding-left:2.4em;">postcode: <span style="color:#2FD8B4;">''</span>,</div> <div style="padding-left:1.2em;">},</div> <div>});</div> <div style="height:0.85em;"></div> <div><span style="color:#8B7CF6;">const</span> <span>userForm</span> = <span style="color:#7CC4FF;">form</span>(userModel);</div> </div> <div style="font-family:'JetBrains Mono',monospace;font-size:44px;color:#2FD8B4;">→</div> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:36px 40px;font-family:'JetBrains Mono',monospace;font-size:26px;line-height:1.8;color:#E8ECF2;"> <div>userForm<span style="color:#5E6B7D;font-size:24px;">  FieldTree&lt;User&gt;</span></div> <div><span style="color:#8A97A8;">├──</span> name<span style="color:#5E6B7D;font-size:24px;">  FieldTree&lt;string&gt;</span></div> <div><span style="color:#8A97A8;">└──</span> address<span style="color:#5E6B7D;font-size:24px;">  FieldTree&lt;Address&gt;</span></div> <div><span style="color:#8A97A8;">    ├──</span> city<span style="color:#5E6B7D;font-size:24px;">  FieldTree&lt;string&gt;</span></div> <div><span style="color:#8A97A8;">    └──</span> postcode<span style="color:#5E6B7D;font-size:24px;">  FieldTree&lt;string&gt;</span></div> </div> </div>
-<div style="margin-top:52px;border-left:4px solid #2FD8B4;padding-left:28px;font-family:'Space Grotesk',sans-serif;font-size:34px;font-weight:500;color:#E8ECF2;line-height:1.3;">The model owns the data. The FieldTree adds form state and behaviour to it.</div>
-
-<!--
-When we call form(), Angular gives us a FieldTree. The easiest way to understand it is that it mirrors the structure of our model. If the model is nested, the FieldTree is nested. It is not another copy of those values - it is the form layer over them.
--->
----
-layout: content
-eyebrow: 'FieldTree'
-heading: 'FieldTree and FieldState'
----
-<p style="font-size:31px;color:#8A97A8;line-height:1.4;margin:0 0 44px;max-width:1550px;">A node is an object that is also a function. Call it, and you get that field's state.</p>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;align-items:stretch;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#5E6B7D;margin-bottom:16px;">FIELDTREE</div> <div style="font-family:'JetBrains Mono',monospace;font-size:34px;color:#E8ECF2;margin-bottom:32px;">userForm.email</div> <div style="font-size:28px;line-height:1.45;color:#C9D4E2;display:flex;flex-direction:column;gap:20px;"> <div>The position in the tree. Its children are nodes too.</div> <div>This is what you hand to <code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#8A97A8;">[formField]</code>.</div> <div style="color:#5E6B7D;">No signals of its own.</div> </div> </div> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:36px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#2FD8B4;margin-bottom:16px;">FIELDSTATE</div> <div style="font-family:'JetBrains Mono',monospace;font-size:34px;color:#E8ECF2;margin-bottom:32px;">userForm.email<span style="color:#2FD8B4;">()</span></div> <div style="font-family:'JetBrains Mono',monospace;font-size:26px;line-height:1.85;color:#C9D4E2;"> <div>.value()</div> <div>.valid()  .invalid()  .errors()  .pending()</div> <div>.dirty()  .touched()</div> <div>.hidden()  .disabled()  .disabledReasons()</div> <div>.readonly()  .required()  .errorSummary()  .submitting()</div> </div> <p style="font-size:26px;color:#8A97A8;line-height:1.4;margin:22px 0 0;">Signals, except <span style="color:#C9D4E2;">value</span> and <span style="color:#C9D4E2;">controlValue</span>, which are writable. There are methods too: <span style="color:#C9D4E2;">reset</span>, <span style="color:#C9D4E2;">markAsTouched</span>, <span style="color:#C9D4E2;">focusBoundControl</span>.</p> </div> </div>
-
-<!--
-A FieldTree node, like a signal, is an object that is also a function. The object is the position in the tree - you navigate through it and pass it to the directive. Calling it returns a FieldState, and every signal lives there, not on the node. Children are FieldTrees too, so userForm.address.city is a node in the same way.
--->
----
-layout: content
-eyebrow: 'FieldState'
-heading: 'The value is the model, not a copy of it'
----
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center;"> <div style="background:#0A0D12;border:1px solid #2FD8B4;border-radius:14px;padding:40px 48px;font-family:'JetBrains Mono',monospace;font-size:26px;line-height:1.7;color:#C9D4E2;"> <div>userForm.name().value()  <span style="color:#2FD8B4;">≡</span>  userModel().name</div> <div style="height:0.85em;"></div> <div style="color:#5E6B7D;">// writing through the field</div> <div style="color:#5E6B7D;">// writes the model signal</div> <div>userForm.name().value.<span style="color:#7CC4FF;">set</span>(<span style="color:#2FD8B4;">'Sam Taylor'</span>);</div> </div> <div style="display:flex;flex-direction:column;gap:30px;"> <p style="font-size:32px;color:#C9D4E2;line-height:1.45;margin:0;">Reading goes to the model signal. Writing goes to the model signal.</p> <p style="font-size:32px;color:#C9D4E2;line-height:1.45;margin:0;">They cannot drift apart, because there is only one signal. The form adds state around it rather than copying it.</p> </div> </div>
-
-<!--
-The one thing worth pausing on. value() on a FieldState is not a separate copy - reading it reads the model signal, writing through it writes the model signal. The docs put it plainly: form uses the given model as the source of truth and does not maintain its own copy of the data.
--->
----
-layout: content
-eyebrow: 'FieldTree'
-heading: 'State aggregates upwards'
----
-<div style="display:grid;grid-template-columns:0.9fr 1.1fr;gap:56px;align-items:center;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:40px;font-family:'JetBrains Mono',monospace;font-size:28px;line-height:1.9;color:#E8ECF2;display:grid;grid-template-columns:auto auto;justify-content:start;column-gap:48px;"> <div>userForm</div><div style="color:#FF7A6B;">✗</div> <div><span style="color:#8A97A8;">└──</span> address</div><div style="color:#FF7A6B;">✗</div> <div><span style="color:#8A97A8;">    ├──</span> city</div><div style="color:#2FD8B4;">✓</div> <div><span style="color:#8A97A8;">    └──</span> postcode</div><div style="color:#FF7A6B;">✗</div> </div> <div style="font-family:'JetBrains Mono',monospace;font-size:27px;line-height:2.1;color:#C9D4E2;"> <div>userForm.address.postcode().invalid() <span style="color:#FF7A6B;">true</span></div> <div>userForm.address().invalid() <span style="color:#FF7A6B;">true</span></div> <div>userForm().invalid() <span style="color:#FF7A6B;">true</span></div> </div> </div>
-
-<!--
-The same FieldState idea applies at every level. Nested objects aren't just an organisational convenience - state aggregates upwards through the FieldTree. If postcode is invalid, the address group is invalid, and the root form is invalid.
--->
----
-layout: section
-number: '04'
-transition: fade
----
-## Validation
-
-<p class="lead" style="margin-top:40px">Where rules live, what you get out of the box, and when they run.</p>
-
-<!--
-The heart of the workshop: where rules live, what ships built in, when they run, and the conditional example that makes the case.
--->
----
-layout: content
-eyebrow: 'The schema'
-heading: 'Rules live in the second argument'
----
-<p style="font-size:31px;color:#8A97A8;line-height:1.4;margin:0 0 44px;max-width:1550px;">Everything in this act is declared in one function you hand to <code style="font-family:'JetBrains Mono',monospace;font-size:28px;color:#2FD8B4;">form()</code>.</p>
-<div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:40px 48px;font-family:'JetBrains Mono',monospace;font-size:30px;line-height:1.7;color:#C9D4E2;margin-bottom:44px;"> <div><span style="color:#8B7CF6;">const</span> <span>userForm</span> = <span style="color:#7CC4FF;">form</span>(</div> <div style="padding-left:1.2em;">userModel,<span style="color:#5E6B7D;">   // the data</span></div> <div style="padding-left:1.2em;"><span style="background:#1E3A33;color:#2FD8B4;">(path) =&gt; { … }</span><span style="color:#5E6B7D;">   // the rules</span></div> <div>);</div> </div>
-<div style="background:#12171F;border:1px solid #8B7CF6;border-radius:14px;padding:36px 44px;display:flex;gap:32px;align-items:flex-start;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.14em;color:#8B7CF6;padding-top:6px;white-space:nowrap;">HEADS UP</div> <p style="font-size:31px;line-height:1.45;margin:0;color:#C9D4E2;">This callback runs <strong style="color:#E8ECF2;font-weight:600;">once</strong>, while the form is being constructed. It is not reactive like an <code style="font-family:'JetBrains Mono',monospace;font-size:28px;color:#B9A9FF;">effect</code> - it does not rerun when values change. What you declare inside it is what the form has for its lifetime.</p> </div>
-
-<!--
-Before we get into paths: rules live in a function you pass as the second argument to form(). It runs once, while the form is being built. Everything in this act - validators, conditions, disabled and hidden, async checks - is declared in there. The callback receives paths to the fields, which is the next slide.
--->
----
-layout: content
-eyebrow: 'SchemaPath'
-heading: 'SchemaPath describes where'
----
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 34px;max-width:1550px;">The callback runs while the form is being constructed - before any FieldTree exists. A SchemaPath therefore holds no state and no values. It is an address, nothing more.</p>
-<div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:34px 44px;font-family:'JetBrains Mono',monospace;font-size:28px;line-height:1.65;color:#C9D4E2;margin-bottom:36px;"> <div><span style="color:#8B7CF6;">const</span> <span>userForm</span> = <span style="color:#7CC4FF;">form</span>(userModel, (schemaPath) =&gt; {</div> <div style="padding-left:2.4em;"><span style="color:#7CC4FF;">required</span>(<span style="background:#1E3A33;color:#2FD8B4;">schemaPath.email</span>);</div> <div>});</div> </div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:32px 38px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:29px;color:#2FD8B4;margin-bottom:16px;">schemaPath.email</div> <p style="font-size:28px;line-height:1.4;margin:0;color:#C9D4E2;">Exists only during construction. Says where a rule belongs. Carries no value, no validity, no interaction state.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:32px 38px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:29px;color:#7CC4FF;margin-bottom:16px;">userForm.email</div> <p style="font-size:28px;line-height:1.4;margin:0;color:#C9D4E2;">Exists after the form is built. Tells us what is happening at that location, as signals.</p> </div> </div>
-<div style="margin-top:34px;border-left:4px solid #2FD8B4;padding-left:28px;font-family:'Space Grotesk',sans-serif;font-size:34px;font-weight:500;color:#E8ECF2;">SchemaPath describes where. FieldTree exposes runtime state.</div>
-
-<!--
-Another tree-shaped concept. The callback runs while the form is being built, before any FieldTree exists - so a SchemaPath cannot hold state or values. It is only an address. A rule attached to it says where it belongs; the FieldTree tells us what is happening there at runtime.
--->
----
-layout: content
-eyebrow: 'Validation'
-heading: 'The toolbox'
----
-<div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 44px;font-family:'JetBrains Mono',monospace;font-size:27px;line-height:1.65;color:#C9D4E2;margin-bottom:48px;"> <div><span style="color:#8B7CF6;">const</span> <span>userForm</span> = <span style="color:#7CC4FF;">form</span>(userModel, (p) =&gt; {</div> <div style="padding-left:1.2em;"><span style="color:#7CC4FF;">required</span>(p.email);</div> <div style="padding-left:1.2em;"><span style="color:#7CC4FF;">email</span>(p.email);</div> <div style="padding-left:1.2em;"><span style="color:#7CC4FF;">minLength</span>(p.password, <span style="color:#8B7CF6;">8</span>);</div> <div>});</div> </div>
-<div style="display:grid;grid-template-columns:1.3fr 1fr;gap:36px;"> <div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#5E6B7D;margin-bottom:22px;">BUILT-IN SYNCHRONOUS</div> <div style="display:flex;gap:14px;flex-wrap:wrap;"> <span style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#C9D4E2;background:#12171F;border:1px solid #4A5568;border-radius:8px;padding:12px 24px;">required</span> <span style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#C9D4E2;background:#12171F;border:1px solid #4A5568;border-radius:8px;padding:12px 24px;">email</span> <span style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#C9D4E2;background:#12171F;border:1px solid #4A5568;border-radius:8px;padding:12px 24px;">min / max</span> <span style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#C9D4E2;background:#12171F;border:1px solid #4A5568;border-radius:8px;padding:12px 24px;">minDate / maxDate</span> <span style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#C9D4E2;background:#12171F;border:1px solid #4A5568;border-radius:8px;padding:12px 24px;">minLength / maxLength</span> <span style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#C9D4E2;background:#12171F;border:1px solid #4A5568;border-radius:8px;padding:12px 24px;">pattern</span> </div> </div> <div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#8B7CF6;margin-bottom:22px;">CUSTOM &amp; ADVANCED</div> <div style="display:flex;gap:14px;flex-wrap:wrap;"> <span style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#B9A9FF;background:#12171F;border:1px solid #3A3057;border-radius:8px;padding:12px 24px;">validate</span> <span style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#B9A9FF;background:#12171F;border:1px solid #3A3057;border-radius:8px;padding:12px 24px;">validateTree</span> <span style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#B9A9FF;background:#12171F;border:1px solid #3A3057;border-radius:8px;padding:12px 24px;">validateAsync</span> <span style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#B9A9FF;background:#12171F;border:1px solid #3A3057;border-radius:8px;padding:12px 24px;">validateHttp</span> <span style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#B9A9FF;background:#12171F;border:1px solid #3A3057;border-radius:8px;padding:12px 24px;">validateStandardSchema</span> </div> </div> </div>
-
-<!--
-We're not going to memorise this list. It is here so you know the toolbox exists. We'll learn the interesting APIs through requirements.
--->
----
-layout: content
-eyebrow: 'Validation'
-heading: 'Simple validation was already simple'
----
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;"> <div style="background:#0F131A;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#5E6B7D;margin-bottom:24px;">REACTIVE FORMS</div> <div style="font-family:'JetBrains Mono',monospace;font-size:27px;line-height:1.7;color:#8A97A8;"> <div>email: <span style="color:#8577CF;">new</span> FormControl(<span style="color:#3FBFA2;">''</span>, [</div> <div style="padding-left:1.2em;">Validators.required,</div> <div style="padding-left:1.2em;">Validators.email,</div> <div>]);</div> </div> </div> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:36px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#2FD8B4;margin-bottom:24px;">SIGNAL FORMS</div> <div style="font-family:'JetBrains Mono',monospace;font-size:27px;line-height:1.7;color:#C9D4E2;"> <div><span style="color:#7CC4FF;">required</span>(p.email);</div> <div><span style="color:#7CC4FF;">email</span>(p.email);</div> </div> </div> </div>
-<p style="font-size:32px;color:#8A97A8;line-height:1.45;margin:52px 0 0;max-width:1500px;">Simple validation was already simple in Reactive Forms. The real difference appears once the rule depends on other state.</p>
-
-<!--
-A deliberately boring comparison. Simple validation was already simple. If this were the biggest improvement, it would not justify learning a new mental model. These functions are now tree shakable.
--->
----
-layout: content
-eyebrow: 'Execution model'
-heading: 'The execution model'
----
-<div style="display:grid;grid-template-columns:0.9fr 1.1fr;gap:64px;align-items:center;"> <div style="display:flex;flex-direction:column;gap:10px;align-items:flex-start;font-family:'JetBrains Mono',monospace;font-size:25px;"> <div style="border:1px solid #4A5568;background:#0A0D12;border-radius:8px;padding:14px 28px;color:#E8ECF2;">Value changes<span style="color:#5E6B7D;">  (interactive fields)</span></div> <div style="color:#8A97A8;padding-left:24px;">↓</div> <div style="border:1px solid #4A5568;background:#0A0D12;border-radius:8px;padding:14px 28px;color:#E8ECF2;">Run synchronous rules</div> <div style="color:#8A97A8;padding-left:24px;">↓</div> <div style="border:1px solid #4A5568;background:#0A0D12;border-radius:8px;padding:14px 28px;color:#E8ECF2;">Collect <em>all</em> sync errors</div> <div style="color:#8A97A8;padding-left:24px;">↓</div> <div style="border:1px solid #8B7CF6;background:#0A0D12;border-radius:8px;padding:14px 28px;color:#B9A9FF;"><em>This field's</em> sync rules valid?</div> <div style="display:flex;gap:36px;padding-left:12px;"> <div style="color:#5E6B7D;">no → stop</div> <div style="color:#2FD8B4;">yes → async rules, pending()</div> </div> </div> <div style="display:flex;flex-direction:column;gap:32px;"> <div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#8B7CF6;margin-bottom:12px;">ONE</div> <p style="font-size:31px;line-height:1.4;margin:0;color:#C9D4E2;">Synchronous validation does not stop after the first error. Multiple rules can produce errors at the same time.</p> </div> <div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#8B7CF6;margin-bottom:12px;">TWO</div> <p style="font-size:31px;line-height:1.4;margin:0;color:#C9D4E2;">Async validation for a field only runs once that field's own synchronous rules pass. It is not a form-wide gate - a failing sibling does not hold it back.</p> </div> <p style="font-size:29px;line-height:1.4;margin:0;color:#5E6B7D;">Which leads to a useful distinction later: while async validation is pending, a field can be neither valid nor invalid.</p> </div> </div>
-
-<!--
-Two execution details. Sync validation does not stop after the first error. Async only runs once sync is passing. Don't fully explain the valid/invalid consequence yet - save it for the async footgun.
--->
----
-layout: content
-eyebrow: 'Validation errors'
-heading: 'The message moves out of the template'
----
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1550px;">Each error carries a <code style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#C9D4E2;">kind</code>, plus whatever message you gave the rule. Angular ships no default copy, so a generic loop needs every rule to supply one.</p>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;align-items:stretch;"> <div style="background:#0F131A;border:1px solid #4A5568;border-radius:14px;padding:32px 38px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#5E6B7D;margin-bottom:24px;">BEFORE - A BRANCH PER KIND</div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;line-height:1.62;color:#8A97A8;"> <div style="color:#5E6B7D;">// component</div> <div>email: <span style="color:#8577CF;">new</span> FormControl(<span style="color:#3FBFA2;">''</span>, [</div> <div style="padding-left:1.2em;">Validators.required,</div> <div style="padding-left:1.2em;">Validators.email,</div> <div>]);</div> <div style="height:0.85em;"></div> <div style="color:#5E6B7D;">&lt;!-- template --&gt;</div> <div>@if (email.hasError(<span style="color:#3FBFA2;">'required'</span>)) {</div> <div style="padding-left:1.2em;">&lt;p&gt;Email is required&lt;/p&gt;</div> <div>}</div> <div>@if (email.hasError(<span style="color:#3FBFA2;">'email'</span>)) {</div> <div style="padding-left:1.2em;">&lt;p&gt;Enter a valid email address&lt;/p&gt;</div> <div>}</div> </div> </div> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:32px 38px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#2FD8B4;margin-bottom:24px;">AFTER - THE RULE CARRIES IT</div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;line-height:1.62;color:#C9D4E2;"> <div style="color:#5E6B7D;">// schema</div> <div><span style="color:#7CC4FF;">required</span>(p.email, {</div> <div style="padding-left:1.2em;">message: <span style="color:#2FD8B4;">'Email is required'</span>,</div> <div>});</div> <div><span style="color:#7CC4FF;">email</span>(p.email, {</div> <div style="padding-left:1.2em;">message: <span style="color:#2FD8B4;">'Enter a valid email address'</span>,</div> <div>});</div> <div style="height:0.85em;"></div> <div style="color:#5E6B7D;">&lt;!-- template --&gt;</div> <div>@for (error of userForm.email().errors();</div> <div style="padding-left:1.2em;">track error) {</div> <div style="padding-left:1.2em;">&lt;p&gt;<span>{</span><span>{ error.message }</span><span>}</span>&lt;/p&gt;</div> <div>}</div> </div> </div> </div>
-<div style="margin-top:30px;display:grid;grid-template-columns:1fr 1fr;gap:36px;"> <p style="font-size:26px;color:#5E6B7D;margin:0;line-height:1.4;">The copy lives in the template, and the switch is rewritten in every form that uses the field.</p> <p style="font-size:26px;color:#8A97A8;margin:0;line-height:1.4;">One loop renders any rule - as long as every rule supplies a message, since none is provided by default.</p> </div>
-
-<!--
-Today the message usually lives in the template, one branch per error kind, repeated in every form that uses the field. In signal forms the copy moves into the rule definition, written once. Be precise: Angular ships no default messages - a rule declared without {message} produces an error whose message is undefined, and a generic loop then renders an empty element. The win is that errors are structured, not that they come pre-worded.
--->
----
-layout: content
-eyebrow: 'The requirement'
----
-<div style="display:grid;grid-template-columns:1fr 0.8fr;gap:80px;align-items:center;"> <div> <h2 style="font-family:'Space Grotesk',sans-serif;font-size:64px;font-weight:600;letter-spacing:-0.025em;line-height:1.15;margin:0 0 40px;">If the user wants notifications, email is required.</h2> <p style="font-size:34px;color:#8A97A8;line-height:1.4;margin:0 0 56px;">If they don't, email is optional.</p> <p style="font-family:'Space Grotesk',sans-serif;font-size:42px;font-weight:500;color:#2FD8B4;margin:0;">How would we build this today?</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:44px;"> <div style="display:flex;align-items:center;gap:18px;margin-bottom:34px;"> <div style="width:30px;height:30px;border:2px solid #2FD8B4;border-radius:6px;background:#2FD8B4;display:flex;align-items:center;justify-content:center;color:#0A0D12;font-size:24px;font-weight:700;">✓</div> <div style="font-size:28px;color:#E8ECF2;">Notify me by email</div> </div> <div style="font-size:24px;color:#8A97A8;margin-bottom:12px;">Email</div> <div style="background:#0A0D12;border:1px solid #FF7A6B;border-radius:8px;padding:0 20px;height:60px;display:flex;align-items:center;font-family:'JetBrains Mono',monospace;font-size:24px;color:#5E6B7D;"></div> <div style="font-size:24px;color:#FF7A6B;margin-top:14px;">Email is required</div> </div> </div>
-
-<!--
-Pause here. Ask: how would we build this today?
--->
----
-layout: content
-eyebrow: 'Reactive Forms'
-heading: 'Orchestrating the response'
----
-<div style="display:grid;grid-template-columns:1.25fr 0.75fr;gap:52px;align-items:start;"> <div style="background:#0F131A;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;font-family:'JetBrains Mono',monospace;font-size:25px;line-height:1.62;color:#8A97A8;"> <div>notify.valueChanges</div> <div style="padding-left:1.2em;">.pipe(</div> <div style="padding-left:2.4em;">startWith(notify.value),</div> <div style="padding-left:2.4em;">takeUntilDestroyed(),</div> <div style="padding-left:1.2em;">)</div> <div style="padding-left:1.2em;">.subscribe((shouldNotify) =&gt; {</div> <div style="padding-left:2.4em;"><span style="color:#8577CF;">if</span> (shouldNotify) {</div> <div style="padding-left:3.6em;">email.addValidators(Validators.required);</div> <div style="padding-left:2.4em;">} <span style="color:#8577CF;">else</span> {</div> <div style="padding-left:3.6em;">email.removeValidators(Validators.required);</div> <div style="padding-left:2.4em;">}</div> <div style="height:0.85em;"></div> <div style="padding-left:2.4em;">email.updateValueAndValidity();</div> <div style="padding-left:1.2em;">});</div> </div> <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start;font-family:'JetBrains Mono',monospace;font-size:24px;padding-top:8px;"> <div style="border:1px solid #4A5568;border-radius:8px;padding:14px 26px;color:#8A97A8;">notify changed</div> <div style="color:#8A97A8;padding-left:22px;">↓</div> <div style="border:1px solid #4A5568;border-radius:8px;padding:14px 26px;color:#8A97A8;">listen for the change</div> <div style="color:#8A97A8;padding-left:22px;">↓</div> <div style="border:1px solid #4A5568;border-radius:8px;padding:14px 26px;color:#8A97A8;">inspect the new value</div> <div style="color:#8A97A8;padding-left:22px;">↓</div> <div style="border:1px solid #4A5568;border-radius:8px;padding:14px 26px;color:#8A97A8;">mutate email's validators</div> <div style="color:#8A97A8;padding-left:22px;">↓</div> <div style="border:1px solid #4A5568;border-radius:8px;padding:14px 26px;color:#8A97A8;">tell email to recalculate</div> </div> </div>
-
-<!--
-Reveal line by line. This code isn't especially difficult. But look at what we're doing conceptually. Do not over-focus on line count - the benefit is the change in mental model.
--->
----
-layout: content
-eyebrow: 'Signal Forms'
-heading: 'Describe the rule'
+eyebrow: 'Validation · conditional required'
+heading: 'Describe the rule, not the response'
 clicks: 2
 ---
 <div class="code-hero">
@@ -329,354 +953,7 @@ required(p.email, {
 
 
 <!--
-One of the most important scenes in the presentation. We don't subscribe. We don't add a validator. We don't remove one. We don't tell email to recalculate. We describe the rule.
--->
----
-layout: content
-eyebrow: 'Conditional logic'
-heading: 'One rule, or a set of rules'
----
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 40px;max-width:1550px;">All built-in validation rules take an options object for messages and conditional logic, so <code style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;">when</code> is not special to <code style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#C9D4E2;">required</code>. What differs is scope.</p>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;align-items:stretch;"> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:34px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#2FD8B4;margin-bottom:24px;">GATE A SINGLE RULE</div> <div style="font-family:'JetBrains Mono',monospace;font-size:25px;line-height:1.62;color:#C9D4E2;"> <div><span style="color:#7CC4FF;">minLength</span>(p.promoCode, <span style="color:#8B7CF6;">6</span>, {</div> <div style="padding-left:1.2em;">when: ({ valueOf }) =&gt; valueOf(p.applyDiscount),</div> <div>});</div> </div> <p style="font-size:27px;color:#8A97A8;margin:26px 0 0;line-height:1.4;">The rule only runs when the predicate returns true.</p> </div> <div style="background:#12171F;border:1px solid #8B7CF6;border-radius:14px;padding:34px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#8B7CF6;margin-bottom:24px;">APPLY A GROUP OF RULES</div> <div style="font-family:'JetBrains Mono',monospace;font-size:25px;line-height:1.8;color:#E8ECF2;"> <div>applyWhen(…)</div> <div>applyWhenValue(…)</div> </div> <p style="font-size:27px;color:#8A97A8;margin:26px 0 0;line-height:1.4;"><code style="font-family:'JetBrains Mono',monospace;font-size:24px;">applyWhen</code> activates a set of rules from reactive form state, including other fields. <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">applyWhenValue</code> keys off the field's own value.</p> </div> </div>
-<p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:36px 0 0;max-width:1550px;">Reach for the schema-composition functions when the condition governs more than one rule - not because <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">when</code> is missing.</p>
-
-<!--
-All built-in validation rules take an options object for messages and conditional logic, so when is available on them - not just on required. The real distinction is scope: when gates a single rule, applyWhen and applyWhenValue apply a group of rules or a whole schema.
--->
----
-layout: content
-eyebrow: 'applyWhen'
-heading: 'A whole rule set, conditionally'
----
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 44px;max-width:1400px;">When notifications are enabled: email is required, must be valid, and must be at most 200 characters.</p>
-<div style="display:grid;grid-template-columns:1.25fr 0.75fr;gap:52px;align-items:start;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;font-family:'JetBrains Mono',monospace;font-size:27px;line-height:1.65;color:#C9D4E2;"> <div><span style="color:#7CC4FF;">applyWhen</span>(</div> <div style="padding-left:1.2em;">p.email,</div> <div style="padding-left:1.2em;">({ valueOf }) =&gt; valueOf(p.notify),</div> <div style="padding-left:1.2em;">(emailPath) =&gt; {</div> <div style="padding-left:2.4em;"><span style="color:#7CC4FF;">required</span>(emailPath);</div> <div style="padding-left:2.4em;"><span style="color:#7CC4FF;">email</span>(emailPath);</div> <div style="padding-left:2.4em;"><span style="color:#7CC4FF;">maxLength</span>(emailPath, <span style="color:#8B7CF6;">200</span>);</div> <div style="padding-left:1.2em;">},</div> <div>);</div> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px;"> <div style="display:flex;align-items:center;gap:16px;margin-bottom:30px;"> <div style="width:28px;height:28px;border:2px solid #2FD8B4;border-radius:6px;background:#2FD8B4;display:flex;align-items:center;justify-content:center;color:#0A0D12;font-size:24px;font-weight:700;">✓</div> <div style="font-size:26px;color:#E8ECF2;">Notify me by email</div> </div> <div style="font-size:24px;color:#8A97A8;margin-bottom:10px;">Email</div> <div style="background:#0A0D12;border:1px solid #4A5568;border-radius:8px;padding:0 18px;height:60px;display:flex;align-items:center;font-family:'JetBrains Mono',monospace;font-size:24px;color:#5E6B7D;margin-bottom:24px;"></div> <div style="display:flex;gap:10px;flex-wrap:wrap;"> <span style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#2FD8B4;border:1px solid #2FD8B4;border-radius:999px;padding:8px 18px;">required</span> <span style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#2FD8B4;border:1px solid #2FD8B4;border-radius:999px;padding:8px 18px;">email</span> <span style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#2FD8B4;border:1px solid #2FD8B4;border-radius:999px;padding:8px 18px;">maxLength 200</span> </div> <p style="font-size:24px;color:#5E6B7D;margin:24px 0 0;line-height:1.4;">With Notify off, none of these rules apply.</p> </div> </div>
-
-<!--
-Now the condition controls an entire schema fragment. When notify toggles off, the three rule badges fade out beside the field.
--->
----
-layout: content
-eyebrow: 'applyWhenValue'
-heading: 'Conditions on the field''s own value'
----
-<div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:44px 52px;font-family:'JetBrains Mono',monospace;font-size:34px;line-height:1.65;color:#C9D4E2;margin-bottom:48px;"> <div><span style="color:#7CC4FF;">applyWhenValue</span>(</div> <div style="padding-left:1.2em;">p.payment,</div> <div style="padding-left:1.2em;">(payment): payment <span style="color:#8B7CF6;">is</span> CreditCardPayment =&gt;</div> <div style="padding-left:2.4em;">payment.type === <span style="color:#2FD8B4;">'credit-card'</span>,</div> <div style="padding-left:1.2em;">creditCardSchema,</div> <div>);</div> </div>
-<p style="font-size:32px;color:#8A97A8;line-height:1.45;margin:0;max-width:1500px;">Narrowing only happens if the predicate is a type guard. A plain boolean predicate resolves to the other overload and the schema stays typed to the union.</p>
-
-<!--
-The related API when the condition is based on the field's own value. Narrowing is the reason to reach for it, but only a type-guard predicate gets you there - written as a plain boolean it resolves to the non-narrowing overload. I wouldn't use it in every small form.
--->
----
-layout: content
-eyebrow: 'Rule context'
-heading: 'What a rule can read'
----
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:28px;"> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:34px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:32px;color:#2FD8B4;margin-bottom:16px;">value</div> <p style="font-size:28px;line-height:1.4;margin:0;color:#C9D4E2;">The value signal for the field this rule applies to.</p> </div> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:34px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:32px;color:#2FD8B4;margin-bottom:16px;">valueOf(path)</div> <p style="font-size:28px;line-height:1.4;margin:0;color:#C9D4E2;">Reads another field's value and establishes a reactive dependency on it.</p> </div> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:34px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:32px;color:#2FD8B4;margin-bottom:16px;">stateOf(path)</div> <p style="font-size:28px;line-height:1.4;margin:0;color:#C9D4E2;">A read-only view of another field's state - you cannot write through it.</p> </div> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:34px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:32px;color:#2FD8B4;margin-bottom:16px;">fieldTreeOf(path)</div> <p style="font-size:28px;line-height:1.4;margin:0;color:#C9D4E2;">The runtime FieldTree associated with another SchemaPath.</p> </div> </div>
-<div style="margin-top:44px;display:flex;gap:18px;align-items:center;flex-wrap:wrap;"> <span style="font-size:26px;color:#5E6B7D;">Also available:</span> <span style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#8A97A8;border:1px solid #4A5568;border-radius:999px;padding:10px 24px;">state</span> <span style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#8A97A8;border:1px solid #4A5568;border-radius:999px;padding:10px 24px;">fieldTree</span> <span style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#8A97A8;border:1px solid #4A5568;border-radius:999px;padding:10px 24px;">pathKeys</span> <span style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#B9A9FF;border:1px solid #8B7CF6;border-radius:999px;padding:10px 24px;">key - child paths only</span> <span style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#B9A9FF;border:1px solid #8B7CF6;border-radius:999px;padding:10px 24px;">index - array items only</span> </div>
-
-<!--
-Rules often need more than the field they're attached to. Four APIs to remember. key, index and pathKeys matter in advanced reusable rules but we won't make them central today.
--->
----
-layout: content
-eyebrow: 'Cross-field · reactive forms'
-heading: 'A validator that sees more than one control'
----
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 32px;max-width:1550px;">Confirm password must match password. A control validator only sees its own control, so the rule has to move up to the group.</p>
-<div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:56px;align-items:center;"> <div style="background:#0F131A;border:1px solid #4A5568;border-radius:14px;padding:38px 44px;font-family:'JetBrains Mono',monospace;font-size:25px;line-height:1.7;color:#8A97A8;"> <div style="color:#5E6B7D;">// a group-level validator</div> <div><span style="color:#8577CF;">const</span> passwordsMatch: ValidatorFn = (group) =&gt; {</div> <div style="padding-left:1.2em;"><span style="color:#8577CF;">const</span> pw = group.get(<span style="color:#3FBFA2;">'password'</span>)?.value;</div> <div style="padding-left:1.2em;"><span style="color:#8577CF;">const</span> confirm = group.get(<span style="color:#3FBFA2;">'confirmPassword'</span>)?.value;</div> <div style="height:0.85em;"></div> <div style="padding-left:1.2em;"><span style="color:#8577CF;">return</span> pw === confirm</div> <div style="padding-left:2.4em;">? <span style="color:#8577CF;">null</span></div> <div style="padding-left:2.4em;">: { passwordMismatch: <span style="color:#8577CF;">true</span> };</div> <div>};</div> <div style="height:0.85em;"></div> <div><span style="color:#8577CF;">readonly</span> form = <span style="color:#8577CF;">new</span> FormGroup(</div> <div style="padding-left:1.2em;">{ … },</div> <div style="padding-left:1.2em;">{ validators: passwordsMatch },</div> <div>);</div> </div> <div style="display:flex;flex-direction:column;gap:34px;"> <div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#8B7CF6;margin-bottom:12px;">THE RULE MOVES UP</div> <p style="font-size:30px;line-height:1.4;margin:0;color:#C9D4E2;">The logic lives on the group, one level away from the field it is really about.</p> </div> <div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#8B7CF6;margin-bottom:12px;">SO DOES THE ERROR</div> <p style="font-size:30px;line-height:1.4;margin:0;color:#C9D4E2;">It lands on the group, so the template reaches up to render it beside the confirm input.</p> </div> <div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#8B7CF6;margin-bottom:12px;">AND THE FIELD LOOKS FINE</div> <p style="font-size:30px;line-height:1.4;margin:0;color:#C9D4E2;">The confirm control itself stays valid, because nothing failed on it.</p> </div> </div> </div>
-
-<!--
-The requirement: confirm password must match password. In Reactive Forms this is a group-level validator, because a control validator only sees its own control. The error then lands on the group, not on the field the user is looking at, so the template has to reach up to the group to display it.
--->
----
-layout: content
-eyebrow: 'Cross-field · signal forms'
-heading: 'The rule stays on the field it belongs to'
----
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 34px;max-width:1550px;">The rule attaches to <code style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#C9D4E2;">confirmPassword</code> and reaches sideways for the other value, so the error lands where the user is looking.</p>
-<div style="display:grid;grid-template-columns:1.3fr 0.7fr;gap:52px;align-items:start;"> <div style="background:#0A0D12;border:1px solid #2FD8B4;border-radius:14px;padding:34px 40px;font-family:'JetBrains Mono',monospace;font-size:25px;line-height:1.62;color:#C9D4E2;"> <div><span style="color:#7CC4FF;">validate</span>(p.confirmPassword, ({ value, valueOf }) =&gt; {</div> <div style="padding-left:1.2em;"><span style="color:#8B7CF6;">if</span> (<span style="background:#1E3A33;color:#2FD8B4;">value()</span> === <span style="background:#2A2445;color:#B9A9FF;">valueOf(p.password)</span>) {</div> <div style="padding-left:2.4em;"><span style="color:#8B7CF6;">return</span> <span style="color:#8B7CF6;">null</span>;</div> <div style="padding-left:1.2em;">}</div> <div style="padding-left:1.2em;"><span style="color:#8B7CF6;">return</span> {</div> <div style="padding-left:2.4em;">kind: <span style="color:#2FD8B4;">'passwordMismatch'</span>,</div> <div style="padding-left:2.4em;">message: <span style="color:#2FD8B4;">'Passwords do not match'</span>,</div> <div style="padding-left:1.2em;">};</div> <div>});</div> </div> <div style="background:#0A0D12;border:1px solid #4A5568;border-radius:14px;padding:36px;"> <div style="font-size:24px;color:#8A97A8;margin-bottom:10px;">Password</div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:8px;padding:0 18px;height:60px;display:flex;align-items:center;font-family:'JetBrains Mono',monospace;font-size:24px;color:#E8ECF2;margin-bottom:26px;">••••••••</div> <div style="font-size:24px;color:#8A97A8;margin-bottom:10px;">Confirm password</div> <div style="background:#12171F;border:1px solid #FF7A6B;border-radius:8px;padding:0 18px;height:60px;display:flex;align-items:center;font-family:'JetBrains Mono',monospace;font-size:24px;color:#E8ECF2;">•••••••x</div> <div style="font-size:24px;color:#FF7A6B;margin-top:14px;">Passwords do not match</div> </div> </div>
-<p style="font-size:29px;color:#8A97A8;line-height:1.45;margin:34px 0 0;max-width:1600px;"><code style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#2FD8B4;">value()</code> is the field being validated. <code style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#B9A9FF;">valueOf(p.password)</code> reads another field and establishes a dependency on it, so editing either password reruns this rule.</p>
-
-<!--
-This is where the context API becomes concrete. value() is the field we're validating; valueOf(p.password) reads another field and establishes a dependency on it. Point out that editing the original password reruns this rule, even though confirm itself did not change. We don't subscribe to password and manually revalidate - the dependency is part of the rule.
--->
----
-layout: section
-number: '05'
-transition: fade
----
-## Availability<br/>and async
-
-<p class="lead" style="margin-top:40px">Hidden, disabled, readonly - and validation that has to leave the browser.</p>
-
-<!--
-Hidden, disabled and readonly, then validation that has to leave the browser.
--->
----
-layout: content
-eyebrow: 'Availability'
-heading: 'Country changes. What should happen to State?'
----
-<div style="display:grid;grid-template-columns:0.62fr 1.38fr;gap:56px;align-items:center;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px;"> <div style="font-size:24px;color:#8A97A8;margin-bottom:10px;">Country</div> <div style="background:#0A0D12;border:1px solid #2FD8B4;border-radius:8px;padding:0 18px;height:60px;display:flex;align-items:center;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:24px;color:#E8ECF2;margin-bottom:12px;"><span>United Kingdom</span><span style="color:#5E6B7D;">▾</span></div> <div style="font-size:24px;color:#2FD8B4;margin-bottom:26px;">was “United States”</div> <div style="font-size:24px;color:#8A97A8;margin-bottom:10px;">State</div> <div style="background:#0A0D12;border:1px dashed #FF7A6B;border-radius:8px;padding:0 18px;height:60px;display:flex;align-items:center;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:24px;color:#5E6B7D;"><span>California</span><span style="color:#8A97A8;">▾</span></div> <div style="font-size:24px;color:#FF7A6B;margin-top:12px;">no longer applies - but what does that mean?</div> </div> <div> <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-bottom:32px;"> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:30px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:28px;color:#2FD8B4;margin-bottom:16px;">hidden</div> <p style="font-size:27px;line-height:1.4;margin:0;color:#C9D4E2;">Irrelevant to the current form state.</p> </div> <div style="background:#12171F;border:1px solid #8B7CF6;border-radius:14px;padding:30px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:28px;color:#B9A9FF;margin-bottom:16px;">disabled</div> <p style="font-size:27px;line-height:1.4;margin:0;color:#C9D4E2;">Visible but unavailable. Its <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">when</code> can return a string - the reason, readable via <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">disabledReasons()</code>.</p> </div> <div style="background:#12171F;border:1px solid #7CC4FF;border-radius:14px;padding:30px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:28px;color:#7CC4FF;margin-bottom:16px;">readonly</div> <p style="font-size:27px;line-height:1.4;margin:0;color:#C9D4E2;">Visible and readable, but not editable.</p> </div> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:30px 38px;font-family:'JetBrains Mono',monospace;font-size:26px;line-height:1.65;color:#C9D4E2;"> <div><span style="color:#7CC4FF;">hidden</span>(p.state, {</div> <div style="padding-left:1.2em;">when: ({ valueOf }) =&gt; valueOf(p.country) !== <span style="color:#2FD8B4;">'US'</span>,</div> <div>});</div> </div> <p style="font-size:28px;color:#8A97A8;line-height:1.45;margin:28px 0 0;">All three are non-interactive from the form's perspective and do not contribute to parent validation while active.</p> </div> </div>
-
-<!--
-Not every conditional field should be treated the same way. The address form has Country and State. The user switches Country from United States to United Kingdom - State no longer applies. Should it disappear because it is irrelevant, stay visible but unavailable, or stay readable but not editable? These three have different semantics, and all three are non-interactive from the form's perspective.
--->
----
-layout: content
-eyebrow: 'Footgun'
-heading: 'Why is the control still here?'
----
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:52px;align-items:center;"> <div style="background:#12171F;border:1px solid #FF7A6B;border-radius:14px;padding:40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#C9D4E2;margin-bottom:30px;">userForm.state().hidden() <span style="color:#FF7A6B;">true</span></div> <div style="font-size:24px;color:#8A97A8;margin-bottom:10px;">State</div> <div style="background:#0A0D12;border:1px solid #4A5568;border-radius:8px;padding:16px 18px;font-family:'JetBrains Mono',monospace;font-size:24px;color:#E8ECF2;">California</div> <p style="font-size:25px;color:#FF7A6B;margin:24px 0 0;">… still rendered.</p> </div> <div> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:36px 40px;font-family:'JetBrains Mono',monospace;font-size:26px;line-height:1.65;color:#C9D4E2;"> <div>@<span style="color:#8B7CF6;">if</span> (!userForm.state().hidden()) {</div> <div style="padding-left:1.2em;">&lt;select [formField]=<span style="color:#2FD8B4;">"userForm.state"</span>&gt;&lt;/select&gt;</div> <div>}</div> </div> <p style="font-size:30px;color:#8A97A8;line-height:1.45;margin:36px 0 0;">If a field may be hidden, your template still needs to decide whether to render it.</p> </div> </div>
-
-<!--
-Important footgun. hidden() sets form state. It does not remove the control from your template.
--->
----
-layout: content
-eyebrow: 'Availability'
-heading: 'Hidden does not mean deleted.'
----
-<div style="display:flex;gap:36px;align-items:center;margin-bottom:52px;"> <div style="background:#0A0D12;border:1px solid #4A5568;border-radius:14px;padding:32px 40px;font-family:'JetBrains Mono',monospace;font-size:28px;color:#5E6B7D;">State field hidden</div> <div style="font-size:36px;color:#8A97A8;">→</div> <div style="background:#0A0D12;border:1px solid #2FD8B4;border-radius:14px;padding:32px 40px;font-family:'JetBrains Mono',monospace;font-size:28px;color:#E8ECF2;">model().state <span style="color:#2FD8B4;">"CA"</span></div> </div>
-<p style="font-size:32px;color:#8A97A8;line-height:1.45;margin:0 0 36px;max-width:1600px;">If a field becomes hidden, disabled or readonly, its value stays in the model. Deciding what to send is yours to make.</p>
-<div style="display:grid;grid-template-columns:1.05fr 0.95fr;gap:44px;align-items:center;"> <div style="background:#0A0D12;border:1px solid #4A5568;border-radius:14px;padding:30px 36px;font-family:'JetBrains Mono',monospace;font-size:24px;line-height:1.6;color:#C9D4E2;"> <div style="color:#5E6B7D;">// from @angular/forms/signals/compat</div> <div><span style="color:#8B7CF6;">const</span> payload = <span style="color:#7CC4FF;">extractValue</span>(userForm, { enabled: <span style="color:#8B7CF6;">true</span> });</div> <div><span style="color:#8B7CF6;">const</span> patch = <span style="color:#7CC4FF;">extractValue</span>(userForm, { dirty: <span style="color:#8B7CF6;">true</span> });</div> </div> <div style="background:#12171F;border:1px solid #FF7A6B;border-radius:14px;padding:26px 34px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.14em;color:#FF7A6B;margin-bottom:14px;">BUT NOT THIS CASE</div> <p style="font-size:27px;line-height:1.4;margin:0;color:#C9D4E2;"><code style="font-family:'JetBrains Mono',monospace;font-size:24px;">enabled</code> means <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">!disabled()</code>. Hidden fields are not disabled, so <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">state: "CA"</code> is still included. Pair <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">hidden()</code> with <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">disabled()</code> if it must not be sent.</p> </div> </div>
-
-<!--
-Availability state does not erase the model value. The form stops considering that field for parent validation, but the data is still there. This is one reason your form model and API DTO do not always have to be the same shape.
--->
----
-layout: content
-eyebrow: 'Async validation'
-heading: 'Username availability, today'
----
-<div style="display:grid;grid-template-columns:1.1fr 0.9fr;gap:52px;align-items:center;"> <div style="background:#0F131A;border:1px solid #4A5568;border-radius:14px;padding:34px 40px;font-family:'JetBrains Mono',monospace;font-size:24px;line-height:1.7;color:#8A97A8;"> <div><span style="color:#8577CF;">const</span> usernameTaken: AsyncValidatorFn = (control) =&gt;</div> <div style="padding-left:1.2em;">control.valueChanges.pipe(</div> <div style="padding-left:2.4em;">debounceTime(<span style="color:#8577CF;">300</span>),</div> <div style="padding-left:2.4em;">distinctUntilChanged(),</div> <div style="padding-left:2.4em;">switchMap((value) =&gt; api.checkUsername(value)),</div> <div style="padding-left:2.4em;">map((res) =&gt;</div> <div style="padding-left:3.6em;">res.available ? <span style="color:#8577CF;">null</span> : { usernameTaken: <span style="color:#8577CF;">true</span> },</div> <div style="padding-left:2.4em;">),</div> <div style="padding-left:2.4em;">catchError(() =&gt; of(<span style="color:#8577CF;">null</span>)),</div> <div style="padding-left:2.4em;">first(),</div> <div style="padding-left:1.2em;">);</div> <div style="height:0.85em;"></div> <div>username: <span style="color:#8577CF;">new</span> FormControl(<span style="color:#3FBFA2;">''</span>, {</div> <div style="padding-left:1.2em;">asyncValidators: [usernameTaken],</div> <div>});</div> </div> <div style="display:flex;flex-direction:column;gap:22px;"> <div style="display:flex;flex-direction:column;gap:2px;align-items:flex-start;font-family:'JetBrains Mono',monospace;font-size:24px;"> <div style="border:1px solid #4A5568;border-radius:8px;padding:5px 22px;color:#8A97A8;">valueChanges</div> <div style="color:#8A97A8;padding-left:22px;font-size:24px;line-height:1.1;">↓</div> <div style="border:1px solid #4A5568;border-radius:8px;padding:5px 22px;color:#8A97A8;">debounceTime</div> <div style="color:#8A97A8;padding-left:22px;font-size:24px;line-height:1.1;">↓</div> <div style="border:1px solid #4A5568;border-radius:8px;padding:5px 22px;color:#8A97A8;">distinctUntilChanged</div> <div style="color:#8A97A8;padding-left:22px;font-size:24px;line-height:1.1;">↓</div> <div style="border:1px solid #4A5568;border-radius:8px;padding:5px 22px;color:#8A97A8;">switchMap</div> <div style="color:#8A97A8;padding-left:22px;font-size:24px;line-height:1.1;">↓</div> <div style="border:1px solid #4A5568;border-radius:8px;padding:5px 22px;color:#8A97A8;">HTTP request</div> <div style="color:#8A97A8;padding-left:22px;font-size:24px;line-height:1.1;">↓</div> <div style="border:1px solid #8B7CF6;border-radius:8px;padding:5px 22px;color:#B9A9FF;">manage error state</div> <div style="color:#8A97A8;padding-left:22px;font-size:24px;line-height:1.1;">↓</div> <div style="border:1px solid #8B7CF6;border-radius:8px;padding:5px 22px;color:#B9A9FF;">Angular tracks pending</div> </div> <p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:0;">Valid RxJS - but the debouncing and the stale-response handling are plumbing. What we are modelling is one asynchronous validation rule.</p> </div> </div>
-
-<!--
-Check whether a username is available. That is valid RxJS and it does work - Angular subscribes before valueChanges emits, so four rapid keystrokes produce one request. Do not claim it never fires. What is true: distinctUntilChanged and switchMap cancellation are dead code here, since first() completes the observable after one emission; and Angular manages pending for an AsyncValidatorFn, we do not. The real trap is that any update made with emitEvent false strands the control in PENDING forever - which is exactly the edit-form load pattern from earlier.
--->
----
-layout: content
-eyebrow: 'validateHttp'
-heading: 'Async validation as a rule'
----
-<div style="display:grid;grid-template-columns:1.3fr 0.7fr;gap:52px;align-items:start;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;font-family:'JetBrains Mono',monospace;font-size:25px;line-height:1.62;color:#C9D4E2;"> <div><span style="color:#7CC4FF;">validateHttp</span>(p.username, {</div> <div style="padding-left:1.2em;">debounce: <span style="color:#8B7CF6;">300</span>,</div> <div style="padding-left:1.2em;">request: ({ value }) =&gt; ({</div> <div style="padding-left:2.4em;">url: <span style="color:#2FD8B4;">`/api/users/${value()}/available`</span>,</div> <div style="padding-left:1.2em;">}),</div> <div style="padding-left:1.2em;">onSuccess: (result: { available: <span style="color:#8B7CF6;">boolean</span> }) =&gt;</div> <div style="padding-left:2.4em;">result.available</div> <div style="padding-left:3.6em;">? <span style="color:#8B7CF6;">null</span></div> <div style="padding-left:3.6em;">: {</div> <div style="padding-left:4.8em;">kind: <span style="color:#2FD8B4;">'usernameTaken'</span>,</div> <div style="padding-left:4.8em;">message: <span style="color:#2FD8B4;">'Username is already taken'</span>,</div> <div style="padding-left:3.6em;">},</div> <div style="padding-left:1.2em;">onError: () =&gt; <span style="color:#8B7CF6;">null</span>,</div> <div>});</div> </div> <div style="display:flex;flex-direction:column;gap:24px;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:30px 32px;"> <div style="font-size:24px;color:#8A97A8;margin-bottom:10px;">Username</div> <div style="background:#0A0D12;border:1px solid #8B7CF6;border-radius:8px;padding:14px 18px;font-family:'JetBrains Mono',monospace;font-size:24px;color:#E8ECF2;">samt_</div> <div style="font-size:24px;color:#B9A9FF;margin-top:12px;">Checking…</div> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:30px 32px;"> <div style="font-size:24px;color:#8A97A8;margin-bottom:10px;">Username</div> <div style="background:#0A0D12;border:1px solid #FF7A6B;border-radius:8px;padding:14px 18px;font-family:'JetBrains Mono',monospace;font-size:24px;color:#E8ECF2;">samtaylor</div> <div style="font-size:24px;color:#FF7A6B;margin-top:12px;">Username is already taken</div> </div> </div> </div>
-<p style="font-size:29px;color:#8A97A8;line-height:1.45;margin:36px 0 0;max-width:1550px;">While it runs, the field exposes <code style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#2FD8B4;">pending()</code>. Stale work is handled by the resource-based validation mechanism, and async validation only starts once synchronous validation is passing.</p>
-
-<!--
-onError is required, not optional - an HTTP or network failure has to be turned into a validation outcome explicitly, so the field cannot sit in limbo when the check itself fails. onSuccess receives the response, so annotate it or pass type arguments; TResult defaults to unknown.
--->
----
-layout: content
----
-<div style="display:flex;align-items:center;gap:28px;margin-bottom:40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.2em;color:#FF7A6B;">FOOTGUN</div> <div style="flex:1;height:1px;background:#3A2A28;"></div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#5E6B7D;">VALID VS INVALID</div> </div>
-<p style="font-size:34px;color:#8A97A8;line-height:1.4;margin:0 0 48px;">Async validation is currently running. No validator has failed yet.</p>
-<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:28px;margin-bottom:52px;"> <div style="background:#0A0D12;border:1px solid #4A5568;border-radius:14px;padding:40px;text-align:center;"> <div style="font-family:'JetBrains Mono',monospace;font-size:34px;color:#C9D4E2;margin-bottom:20px;">valid()</div> <div style="font-family:'JetBrains Mono',monospace;font-size:44px;color:#5E6B7D;">false</div> </div> <div style="background:#0A0D12;border:1px solid #4A5568;border-radius:14px;padding:40px;text-align:center;"> <div style="font-family:'JetBrains Mono',monospace;font-size:34px;color:#C9D4E2;margin-bottom:20px;">invalid()</div> <div style="font-family:'JetBrains Mono',monospace;font-size:44px;color:#5E6B7D;">false</div> </div> <div style="background:#0A0D12;border:1px solid #2FD8B4;border-radius:14px;padding:40px;text-align:center;"> <div style="font-family:'JetBrains Mono',monospace;font-size:34px;color:#C9D4E2;margin-bottom:20px;">pending()</div> <div style="font-family:'JetBrains Mono',monospace;font-size:44px;color:#2FD8B4;">true</div> </div> </div>
-<div style="border-left:4px solid #FF7A6B;padding-left:28px;font-family:'Space Grotesk',sans-serif;font-size:40px;font-weight:500;color:#E8ECF2;">Do not assume <code style="font-family:'JetBrains Mono',monospace;font-size:36px;">invalid() === !valid()</code>.</div>
-
-<!--
-Pose the three questions, pause a beat, then reveal.
--->
----
-layout: content
-eyebrow: 'Debounce'
-heading: 'Two different kinds of debounce'
----
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#8A97A8;margin-bottom:28px;">FIELD DEBOUNCE</div> <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start;font-family:'JetBrains Mono',monospace;font-size:24px;margin-bottom:30px;"> <div style="color:#C9D4E2;">UI control value</div> <div style="color:#8A97A8;">↓</div> <div style="color:#8B7CF6;">300 ms</div> <div style="color:#8A97A8;">↓</div> <div style="color:#C9D4E2;">model value</div> <div style="color:#8A97A8;">↓</div> <div style="color:#C9D4E2;">everything downstream</div> </div> <div style="background:#0A0D12;border:1px solid #4A5568;border-radius:8px;padding:20px 24px;font-family:'JetBrains Mono',monospace;font-size:24px;color:#E8ECF2;"><span style="color:#7CC4FF;">debounce</span>(p.username, <span style="color:#8B7CF6;">300</span>);</div> </div> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:36px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#2FD8B4;margin-bottom:28px;">VALIDATOR DEBOUNCE</div> <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start;font-family:'JetBrains Mono',monospace;font-size:24px;margin-bottom:30px;"> <div style="color:#C9D4E2;">model updates immediately</div> <div style="color:#8A97A8;">↓</div> <div style="color:#C9D4E2;">sync validation immediately</div> <div style="color:#8A97A8;">↓</div> <div style="color:#8B7CF6;">300 ms</div> <div style="color:#8A97A8;">↓</div> <div style="color:#C9D4E2;">HTTP validation</div> </div> <div style="background:#0A0D12;border:1px solid #4A5568;border-radius:8px;padding:20px 24px;font-family:'JetBrains Mono',monospace;font-size:24px;color:#E8ECF2;"><span style="color:#7CC4FF;">validateHttp</span>(p.username, { debounce: <span style="color:#8B7CF6;">300</span>, request, onSuccess, onError });</div> </div> </div>
-<p style="font-size:29px;color:#8A97A8;line-height:1.45;margin:40px 0 0;max-width:1550px;">Immediate required and min-length feedback, without a server request on every keystroke: debounce the validator, not the whole field.</p>
-
-<!--
-If you want required and min-length feedback immediately while avoiding a server request on every keystroke, debounce the validator, not the whole field.
--->
----
-layout: section
-number: '06'
-transition: fade
----
-## Structure
-
-<p class="lead" style="margin-top:40px">Nested objects, reusable schemas, dynamic arrays, and what reset actually means.</p>
-
-<!--
-Nesting, reusable schemas, Zod interop, arrays and reset.
--->
----
-layout: content
-eyebrow: 'Nested data'
-heading: 'Nested objects are just nested data'
----
-<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:44px;align-items:center;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;font-family:'JetBrains Mono',monospace;font-size:26px;line-height:1.65;color:#C9D4E2;"> <div><span style="color:#8B7CF6;">const</span> <span>profileModel</span> = <span style="color:#7CC4FF;">signal</span>({</div> <div style="padding-left:1.2em;">name: <span style="color:#2FD8B4;">''</span>,</div> <div style="padding-left:1.2em;">address: {</div> <div style="padding-left:2.4em;">line1: <span style="color:#2FD8B4;">''</span>,</div> <div style="padding-left:2.4em;">city: <span style="color:#2FD8B4;">''</span>,</div> <div style="padding-left:2.4em;">postcode: <span style="color:#2FD8B4;">''</span>,</div> <div style="padding-left:1.2em;">},</div> <div>});</div> <div style="height:0.85em;"></div> <div><span style="color:#8B7CF6;">const</span> <span>profileForm</span> = <span style="color:#7CC4FF;">form</span>(profileModel);</div> </div> <div style="font-family:'JetBrains Mono',monospace;font-size:44px;color:#2FD8B4;">→</div> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:36px 40px;font-family:'JetBrains Mono',monospace;font-size:26px;line-height:1.8;color:#E8ECF2;"> <div>profileForm</div> <div><span style="color:#8A97A8;">├──</span> name</div> <div><span style="color:#8A97A8;">└──</span> address</div> <div><span style="color:#8A97A8;">    ├──</span> line1</div> <div><span style="color:#8A97A8;">    ├──</span> city</div> <div><span style="color:#8A97A8;">    └──</span> postcode</div> </div> </div>
-<p style="font-size:30px;color:#8A97A8;line-height:1.45;margin:48px 0 0;max-width:1500px;">We don't separately construct a nested <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">FormGroup</code> hierarchy.</p>
-
-<!--
-Nested Signal Forms are not a separate feature. The data structure already defines the hierarchy.
--->
----
-layout: content
-eyebrow: 'Reusable schemas'
-heading: 'Define behaviour once, apply it where needed'
----
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:34px 40px;font-family:'JetBrains Mono',monospace;font-size:25px;line-height:1.62;color:#C9D4E2;"> <div><span style="color:#8B7CF6;">const</span> <span>addressSchema</span> = <span style="color:#7CC4FF;">schema</span>&lt;Address&gt;((p) =&gt; {</div> <div style="padding-left:1.2em;"><span style="color:#7CC4FF;">required</span>(p.line1);</div> <div style="padding-left:1.2em;"><span style="color:#7CC4FF;">required</span>(p.city);</div> <div style="padding-left:1.2em;"><span style="color:#7CC4FF;">required</span>(p.postcode);</div> <div>});</div> </div> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:34px 40px;font-family:'JetBrains Mono',monospace;font-size:25px;line-height:1.62;color:#C9D4E2;"> <div><span style="color:#7CC4FF;">form</span>(model, (p) =&gt; {</div> <div style="padding-left:1.2em;"><span style="color:#7CC4FF;">apply</span>(p.billingAddress, addressSchema);</div> <div style="padding-left:1.2em;"><span style="color:#7CC4FF;">apply</span>(p.shippingAddress, addressSchema);</div> <div>});</div> </div> </div>
-<div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#5E6B7D;margin:52px 0 22px;">COMPOSITION PRIMITIVES</div>
-<div style="display:flex;gap:14px;flex-wrap:wrap;"> <span style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#C9D4E2;background:#12171F;border:1px solid #4A5568;border-radius:8px;padding:14px 28px;">schema()</span> <span style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#C9D4E2;background:#12171F;border:1px solid #4A5568;border-radius:8px;padding:14px 28px;">apply()</span> <span style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#C9D4E2;background:#12171F;border:1px solid #4A5568;border-radius:8px;padding:14px 28px;">applyEach()</span> <span style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#C9D4E2;background:#12171F;border:1px solid #4A5568;border-radius:8px;padding:14px 28px;">applyWhen()</span> <span style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#C9D4E2;background:#12171F;border:1px solid #4A5568;border-radius:8px;padding:14px 28px;">applyWhenValue()</span> </div>
-
-<!--
-We don't want every form to become one enormous schema callback. Think of these as composition primitives, not a list to memorise.
--->
----
-layout: content
-eyebrow: 'Standard Schema'
-heading: 'Bring a Zod schema you already have'
----
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 36px;max-width:1600px;">Signal Forms supports libraries conforming to <a href="https://standardschema.dev/">Standard Schema</a> - Zod, Valibot - through <code style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;">validateStandardSchema</code>.</p>
-<div style="display:grid;grid-template-columns:1.25fr 0.75fr;gap:52px;align-items:center;"> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:34px 40px;font-family:'JetBrains Mono',monospace;font-size:25px;line-height:1.65;color:#C9D4E2;"> <div><span style="color:#8B7CF6;">import</span> * <span style="color:#8B7CF6;">as</span> z <span style="color:#8B7CF6;">from</span> <span style="color:#2FD8B4;">'zod'</span>;</div> <div style="height:0.85em;"></div> <div><span style="color:#8B7CF6;">const</span> <span>zodUserSchema</span> = z.<span style="color:#7CC4FF;">object</span>({</div> <div style="padding-left:1.2em;">email: z.<span style="color:#7CC4FF;">email</span>(),</div> <div style="padding-left:1.2em;">password: z.<span style="color:#7CC4FF;">string</span>().<span style="color:#7CC4FF;">min</span>(<span style="color:#8B7CF6;">8</span>),</div> <div>});</div> <div style="height:0.85em;"></div> <div><span style="color:#8B7CF6;">const</span> <span>userForm</span> = <span style="color:#7CC4FF;">form</span>(model, (p) =&gt; {</div> <div style="padding-left:1.2em;"><span style="color:#7CC4FF;">validateStandardSchema</span>(p, zodUserSchema);</div> <div>});</div> </div> <div style="display:flex;flex-direction:column;gap:30px;"> <div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#8B7CF6;margin-bottom:12px;">ONE DEFINITION</div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">The schema that already validates the API payload can drive the form too.</p> </div> <div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#8B7CF6;margin-bottom:12px;">APPLIES AT ANY PATH</div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">Pass the root path or a subtree, exactly like the built-in rules.</p> </div> <div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#8B7CF6;margin-bottom:12px;">CAN BE DYNAMIC</div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">Pass a function of the field context instead of a static schema. A zero-argument signal satisfies it, which is why <span style="color:#8A97A8;">() =&gt; this.schema()</span> works.</p> </div> </div> </div>
-
-<!--
-Signal Forms has built-in support for libraries that conform to Standard Schema, like Zod and Valibot, through validateStandardSchema. If a team already has Zod schemas for API payloads, they can drive form validation from the same definition. The second argument is a schema or a function of the field context - not a Signal type. A zero-argument signal is structurally assignable, which is why passing one works, but there is no Signal overload to look for.
--->
----
-layout: content
-eyebrow: 'Arrays'
-heading: 'Where did <code style="font-family:''JetBrains Mono'',monospace;font-size:50px;color:#8A97A8;">FormArray</code> go?'
----
-<div style="display:grid;grid-template-columns:1.2fr 0.8fr;gap:52px;align-items:start;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;font-family:'JetBrains Mono',monospace;font-size:26px;line-height:1.62;color:#C9D4E2;"> <div>contactModel.<span style="color:#7CC4FF;">update</span>((value) =&gt; ({</div> <div style="padding-left:1.2em;">...value,</div> <div style="padding-left:1.2em;">contacts: [</div> <div style="padding-left:2.4em;">...value.contacts,</div> <div style="padding-left:2.4em;">{ name: <span style="color:#2FD8B4;">''</span>, email: <span style="color:#2FD8B4;">''</span> },</div> <div style="padding-left:1.2em;">],</div> <div>}));</div> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:34px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#5E6B7D;margin-bottom:20px;">CONTACT 1</div> <div style="background:#0A0D12;border:1px solid #4A5568;border-radius:8px;padding:14px 18px;font-family:'JetBrains Mono',monospace;font-size:24px;color:#5E6B7D;margin-bottom:12px;">Name</div> <div style="background:#0A0D12;border:1px solid #4A5568;border-radius:8px;padding:14px 18px;font-family:'JetBrains Mono',monospace;font-size:24px;color:#5E6B7D;margin-bottom:26px;">Email</div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#2FD8B4;margin-bottom:20px;">CONTACT 2</div> <div style="background:#0A0D12;border:1px solid #2FD8B4;border-radius:8px;padding:14px 18px;font-family:'JetBrains Mono',monospace;font-size:24px;color:#5E6B7D;margin-bottom:12px;">Name</div> <div style="background:#0A0D12;border:1px solid #2FD8B4;border-radius:8px;padding:14px 18px;font-family:'JetBrains Mono',monospace;font-size:24px;color:#5E6B7D;margin-bottom:24px;">Email</div> <div style="border:1px solid #4A5568;border-radius:8px;padding:14px 18px;text-align:center;font-size:24px;color:#8A97A8;">+ Add contact</div> </div> </div>
-<div style="margin-top:44px;border-left:4px solid #2FD8B4;padding-left:28px;font-family:'Space Grotesk',sans-serif;font-size:34px;font-weight:500;color:#E8ECF2;">There is no second array-shaped control structure to synchronise.</div>
-
-<!--
-One of my favourite examples of the model-driven approach. There is no separate FormArray to grow. The array in the model is the array.
--->
----
-layout: content
-eyebrow: 'applyEach'
-heading: 'One schema for every item'
----
-<div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:48px 56px;font-family:'JetBrains Mono',monospace;font-size:36px;line-height:1.6;color:#E8ECF2;margin-bottom:52px;"> <div><span style="color:#7CC4FF;">applyEach</span>(p.contacts, (contact) =&gt; {</div> <div style="padding-left:1.2em;"><span style="color:#7CC4FF;">required</span>(contact.name);</div> <div style="padding-left:1.2em;"><span style="color:#7CC4FF;">email</span>(contact.email);</div> <div>});</div> </div>
-<p style="font-size:32px;color:#8A97A8;line-height:1.45;margin:0;max-width:1500px;">That also applies to items added later. Press Add, and the new item already has its rules.</p>
-
-<!--
-applyEach describes the schema for every item, including items added later. We don't create new controls and attach validators every time the user presses Add.
--->
----
-layout: content
-eyebrow: 'Array identity'
-heading: 'Array item identity'
----
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:52px;align-items:start;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:34px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#5E6B7D;margin-bottom:24px;">BEFORE REORDER</div> <div style="font-family:'JetBrains Mono',monospace;font-size:25px;line-height:2;color:#C9D4E2;"> <div>0  Alice   dirty <span style="color:#2FD8B4;">✓</span>  touched <span style="color:#2FD8B4;">✓</span></div> <div>1  Bob     dirty <span style="color:#5E6B7D;">✗</span>  touched <span style="color:#5E6B7D;">✗</span></div> </div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#5E6B7D;margin:34px 0 24px;">AFTER REORDER</div> <div style="font-family:'JetBrains Mono',monospace;font-size:25px;line-height:2;color:#C9D4E2;"> <div>0  Bob     dirty <span style="color:#5E6B7D;">✗</span>  touched <span style="color:#5E6B7D;">✗</span></div> <div>1  Alice   dirty <span style="color:#2FD8B4;">✓</span>  touched <span style="color:#2FD8B4;">✓</span></div> </div> <p style="font-size:26px;color:#8A97A8;margin:30px 0 0;line-height:1.4;">Alice's state moves with Alice.</p> </div> <div style="display:flex;flex-direction:column;gap:24px;"> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:30px 34px;font-family:'JetBrains Mono',monospace;font-size:24px;line-height:1.6;color:#8A97A8;text-decoration:line-through;"> <div>@for (contact of contactForm.contacts; track $index) {</div> </div> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:30px 34px;font-family:'JetBrains Mono',monospace;font-size:24px;line-height:1.6;color:#E8ECF2;"> <div>@for (contact of contactForm.contacts; <span style="background:#1E3A33;color:#2FD8B4;">track contact</span>) {</div> <div style="padding-left:1.2em;">&lt;input [formField]=<span style="color:#2FD8B4;">"contact.name"</span> /&gt;</div> <div>}</div> </div> <p style="font-size:28px;color:#8A97A8;line-height:1.45;margin:8px 0 0;">Form state follows the item either way - it is keyed by a hidden symbol on the model object. What <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">track</code> governs is DOM reuse: with <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">$index</code> you re-bind Bob's existing input to Alice, losing focus and anything held inside a custom control.</p> </div> </div>
-
-<!--
-Be careful with the reason here. Touched, dirty and validation follow the item however you write @for - they are keyed by a hidden symbol stamped on the model object, not by the track expression. Tracking the field makes the DOM element follow it too, so you do not re-bind Bob's input to Alice and lose focus or custom-control state. Two caveats: only object items get identity, so for string[] or number[] track item behaves exactly like track $index; and the symbol is an enumerable own property, so spread-duplicating an item copies it and both rows resolve to the same node - typing in row two edits row one.
--->
----
-layout: content
-eyebrow: 'Reset'
-heading: 'Reset clears state, not data'
----
-<p style="font-size:31px;color:#8A97A8;line-height:1.45;margin:0 0 48px;max-width:1600px;">“Reset” is an ambiguous word, so it is worth being precise. <code style="font-family:'JetBrains Mono',monospace;font-size:28px;color:#C9D4E2;">reset()</code> resets interaction state - touched and dirty - for the field and its descendants. It does not clear the values and it does not restore the ones the form loaded with, unless you explicitly pass a value to reset to.</p>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 42px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:29px;color:#E8ECF2;margin-bottom:28px;">form().reset()</div> <div style="font-family:'JetBrains Mono',monospace;font-size:26px;line-height:2;color:#C9D4E2;"> <div>touched → <span style="color:#2FD8B4;">reset</span></div> <div>dirty   → <span style="color:#2FD8B4;">reset</span></div> <div>model   → <span style="color:#8A97A8;">unchanged</span></div> </div> </div> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:36px 42px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:29px;color:#E8ECF2;margin-bottom:28px;">form().reset(initialValue)</div> <div style="font-family:'JetBrains Mono',monospace;font-size:26px;line-height:2;color:#C9D4E2;"> <div>touched → <span style="color:#2FD8B4;">reset</span></div> <div>dirty   → <span style="color:#2FD8B4;">reset</span></div> <div>model   → <span style="color:#2FD8B4;">initialValue</span></div> </div> </div> </div>
-<p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:44px 0 0;max-width:1600px;">So restoring the original API response is a product decision you make explicitly, not something the form can infer for you.</p>
-
-<!--
-The word reset is ambiguous. In Signal Forms it resets interaction state - touched and dirty - for the field and its descendants. It does not clear or restore any values unless you pass one. Restoring the original API data is a product decision, not something the form can infer for you.
--->
----
-layout: section
-number: '07'
-transition: fade
----
-## Submission
-
-<p class="lead" style="margin-top:40px">The lifecycle we usually write ourselves, as form state.</p>
-
-<!--
-The submission lifecycle we usually hand-roll, as form state.
--->
----
-layout: content
-eyebrow: 'Submission'
-heading: 'The lifecycle we write by hand'
----
-<div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:52px;align-items:center;"> <div style="background:#0F131A;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;font-family:'JetBrains Mono',monospace;font-size:26px;line-height:1.62;color:#8A97A8;"> <div><span style="color:#8577CF;">if</span> (userForm.invalid) {</div> <div style="padding-left:1.2em;">userForm.markAllAsTouched();</div> <div style="padding-left:1.2em;"><span style="color:#8577CF;">return</span>;</div> <div>}</div> <div style="height:0.85em;"></div> <div>saving = <span style="color:#8577CF;">true</span>;</div> <div style="height:0.85em;"></div> <div><span style="color:#8577CF;">try</span> {</div> <div style="padding-left:1.2em;"><span style="color:#8577CF;">await</span> api.save(userForm.getRawValue());</div> <div>} <span style="color:#8577CF;">finally</span> {</div> <div style="padding-left:1.2em;">saving = <span style="color:#8577CF;">false</span>;</div> <div>}</div> </div> <div style="display:flex;flex-direction:column;gap:16px;"> <div style="border:1px solid #4A5568;border-radius:8px;padding:16px 26px;font-size:27px;color:#8A97A8;">Mark things touched</div> <div style="border:1px solid #4A5568;border-radius:8px;padding:16px 26px;font-size:27px;color:#8A97A8;">Check validity</div> <div style="border:1px solid #4A5568;border-radius:8px;padding:16px 26px;font-size:27px;color:#8A97A8;">Prevent duplicate saves</div> <div style="border:1px solid #4A5568;border-radius:8px;padding:16px 26px;font-size:27px;color:#8A97A8;">Manage saving state</div> <div style="border:1px solid #4A5568;border-radius:8px;padding:16px 26px;font-size:27px;color:#8A97A8;">Extract values</div> <div style="border:1px solid #4A5568;border-radius:8px;padding:16px 26px;font-size:27px;color:#8A97A8;">Handle server errors</div> </div> </div>
-
-<!--
-Mark things touched. Check validity. Prevent duplicate saves. Manage saving state. Extract values. Handle server errors. Signal Forms have a form-level API for this.
--->
----
-layout: content
-eyebrow: 'FormRoot'
-heading: 'FormRoot'
----
-<div style="display:grid;grid-template-columns:1.2fr 0.8fr;gap:52px;align-items:start;"> <div style="display:flex;flex-direction:column;gap:24px;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:32px 38px;font-family:'JetBrains Mono',monospace;font-size:25px;line-height:1.6;color:#C9D4E2;"> <div>&lt;form [formRoot]=<span style="color:#2FD8B4;">"userForm"</span>&gt;</div> <div style="padding-left:1.2em;">&lt;input [formField]=<span style="color:#2FD8B4;">"userForm.email"</span> /&gt;</div> <div style="padding-left:1.2em;">&lt;button type=<span style="color:#2FD8B4;">"submit"</span>&gt;Save&lt;/button&gt;</div> <div>&lt;/form&gt;</div> </div> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:32px 38px;font-family:'JetBrains Mono',monospace;font-size:25px;line-height:1.6;color:#C9D4E2;"> <div><span style="color:#8B7CF6;">readonly</span> <span>userForm</span> = <span style="color:#7CC4FF;">form</span>(<span style="color:#8B7CF6;">this</span>.userModel, userFormSchema, {</div> <div style="padding-left:1.2em;">submission: {</div> <div style="padding-left:2.4em;">action: <span style="color:#8B7CF6;">async</span> (field) =&gt; {</div> <div style="padding-left:3.6em;"><span style="color:#8B7CF6;">await</span> api.save(field().value());</div> <div style="padding-left:2.4em;">},</div> <div style="padding-left:1.2em;">},</div> <div>});</div> </div> </div> <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start;font-family:'JetBrains Mono',monospace;font-size:24px;"> <div style="border:1px solid #4A5568;border-radius:8px;padding:14px 26px;color:#E8ECF2;">submit</div> <div style="color:#8A97A8;padding-left:22px;">↓</div> <div style="border:1px solid #4A5568;border-radius:8px;padding:14px 26px;color:#E8ECF2;">mark interactive fields touched</div> <div style="color:#8A97A8;padding-left:22px;">↓</div> <div style="border:1px solid #8B7CF6;border-radius:8px;padding:14px 26px;color:#B9A9FF;">validation gate</div> <div style="color:#8A97A8;padding-left:22px;">↓</div> <div style="border:1px solid #2FD8B4;border-radius:8px;padding:14px 26px;color:#2FD8B4;">submitting()</div> <div style="color:#8A97A8;padding-left:22px;">↓</div> <div style="border:1px solid #4A5568;border-radius:8px;padding:14px 26px;color:#E8ECF2;">action</div> </div> </div>
-<div style="margin-top:40px;border-top:1px solid #4A5568;padding-top:26px;max-width:1660px;font-size:26px;line-height:1.5;color:#8A97A8;"><code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#B9A9FF;">ignoreValidators</code> names which validators to <span style="color:#E8ECF2;">skip</span>, not which to enforce. <code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#E8ECF2;">'pending'</code> <span style="color:#5E6B7D;">(default)</span> still blocks on errors, but submits while an async validator is <span style="color:#FF7A6B;">still in flight</span>. <code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#E8ECF2;">'none'</code> blocks on both. <code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#E8ECF2;">'all'</code> never blocks.</div>
-
-<!--
-FormRoot binds the FieldTree to a real form element. It sets novalidate, prevents default navigation and calls the submission flow.
-
-The option name is the confusing part: ignoreValidators says which validators to SKIP.
-  'pending' (default) - skip pending ones, so errors block but an async validator still in
-     flight does not. A uniqueness check can be mid-request and the form submits anyway.
-  'none'  - skip none, so submission requires valid(); pending blocks.
-  'all'   - skip all, always submits.
-
-Verified against @angular/forms 22.1.1: shouldRunAction() returns true for 'all',
-valid() for 'none', and !invalid() by default.
-
-Two more things worth saying if asked. markAsTouched() runs before the gate and skips
-hidden, disabled and readonly fields, which is why the step says 'interactive'. If the gate
-fails, onInvalid() runs instead of the action and submit() resolves to false; calling submit()
-while one is already in flight returns false immediately.
--->
----
-layout: content
-eyebrow: 'Submission state'
-heading: 'Submission state is form state'
----
-<div style="display:grid;grid-template-columns:1.3fr 0.7fr;gap:52px;align-items:center;"> <div style="background:#0A0D12;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;font-family:'JetBrains Mono',monospace;font-size:25px;line-height:1.62;color:#C9D4E2;"> <div>&lt;button type=<span style="color:#2FD8B4;">"submit"</span> [disabled]=<span style="color:#2FD8B4;">"userForm().submitting()"</span>&gt;</div> <div style="padding-left:1.2em;">@<span style="color:#8B7CF6;">if</span> (userForm().submitting()) {</div> <div style="padding-left:2.4em;">Saving…</div> <div style="padding-left:1.2em;">} @<span style="color:#8B7CF6;">else</span> {</div> <div style="padding-left:2.4em;">Save</div> <div style="padding-left:1.2em;">}</div> <div>&lt;/button&gt;</div> </div> <div style="display:flex;flex-direction:column;gap:24px;align-items:flex-start;"> <div style="background:#2FD8B4;color:#0A0D12;border-radius:8px;padding:18px 44px;font-size:28px;font-weight:600;">Save</div> <div style="font-size:30px;color:#8A97A8;">↓</div> <div style="background:#0A0D12;border:1px solid #4A5568;color:#5E6B7D;border-radius:8px;padding:18px 44px;font-size:28px;font-weight:600;">Saving…</div> </div> </div>
-<p style="font-size:30px;color:#8A97A8;line-height:1.45;margin:52px 0 0;max-width:1500px;">No separate <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">saving</code> boolean. The submission API also guards concurrent submission.</p>
-
-<!--
-We do not need a separate saving boolean just to represent the form's submission lifecycle. The submission API also guards concurrent submission.
--->
----
-layout: content
-eyebrow: 'Invalid submission'
-heading: 'Invalid submission, and where focus goes'
----
-<div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:40px 48px;font-family:'JetBrains Mono',monospace;font-size:30px;line-height:1.62;color:#C9D4E2;margin-bottom:48px;"> <div>onInvalid: (field) =&gt; {</div> <div style="padding-left:1.2em;"><span style="color:#8B7CF6;">const</span> <span>firstError</span> = field().<span style="color:#7CC4FF;">errorSummary</span>()[<span style="color:#8B7CF6;">0</span>];</div> <div style="padding-left:1.2em;">firstError?.fieldTree().<span style="color:#7CC4FF;">focusBoundControl</span>();</div> <div>},</div> </div>
-<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:28px;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:32px 36px;"> <p style="font-size:28px;line-height:1.4;margin:0;color:#C9D4E2;">All interactive fields are already marked touched, so errors can be shown.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:32px 36px;"> <p style="font-size:28px;line-height:1.4;margin:0;color:#C9D4E2;"><code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#2FD8B4;">errorSummary()</code> aggregates errors through the tree.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:32px 36px;"> <p style="font-size:28px;line-height:1.4;margin:0;color:#C9D4E2;">Errors know their FieldTree, so we can focus the bound control.</p> </div> </div>
-
-<!--
-A good place to implement consistent keyboard and accessibility behaviour rather than scattering focus logic through individual controls.
--->
----
-layout: content
-eyebrow: 'Server errors'
-heading: 'Not every rule can run in the browser'
----
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 34px;max-width:1600px;">The submission action returns errors rather than throwing them. Each one names the field it belongs to.</p>
-<div style="display:grid;grid-template-columns:1.25fr 0.75fr;gap:52px;align-items:center;"> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:34px 40px;font-family:'JetBrains Mono',monospace;font-size:24px;line-height:1.65;color:#C9D4E2;"> <div><span style="color:#7CC4FF;">submit</span>(<span style="color:#8B7CF6;">this</span>.userForm, {</div> <div style="padding-left:1.2em;">action: <span style="color:#8B7CF6;">async</span> (form) =&gt; {</div> <div style="padding-left:2.4em;"><span style="color:#8B7CF6;">const</span> res = <span style="color:#8B7CF6;">await</span> api.save(form().value());</div> <div style="height:0.85em;"></div> <div style="padding-left:2.4em;"><span style="color:#8B7CF6;">if</span> (res.emailTaken) {</div> <div style="padding-left:3.6em;"><span style="color:#8B7CF6;">return</span> {</div> <div style="padding-left:4.8em;">fieldTree: <span style="background:#1E3A33;color:#2FD8B4;">userForm.email</span>,</div> <div style="padding-left:4.8em;">kind: <span style="color:#2FD8B4;">'emailExists'</span>,</div> <div style="padding-left:4.8em;">message: <span style="color:#2FD8B4;">'This email is already registered'</span>,</div> <div style="padding-left:3.6em;">};</div> <div style="padding-left:2.4em;">}</div> <div style="height:0.85em;"></div> <div style="padding-left:2.4em;"><span style="color:#8B7CF6;">return</span> <span style="color:#8B7CF6;">null</span>;</div> <div style="padding-left:1.2em;">},</div> <div>});</div> </div> <div style="display:flex;flex-direction:column;gap:26px;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:32px;"> <div style="font-size:24px;color:#8A97A8;margin-bottom:10px;">Email</div> <div style="background:#0A0D12;border:1px solid #FF7A6B;border-radius:8px;padding:0 18px;height:60px;display:flex;align-items:center;font-family:'JetBrains Mono',monospace;font-size:24px;color:#E8ECF2;">sam.taylor@example.com</div> <div style="font-size:24px;color:#FF7A6B;margin-top:14px;">This email is already registered</div> </div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;line-height:1.6;color:#5E6B7D;"> <div>userForm.email().errors()</div> <div style="color:#2FD8B4;">  → [{ kind: 'emailExists', … }]</div> </div> <p style="font-size:28px;color:#8A97A8;line-height:1.45;margin:0;">It joins the same field error state the template already renders. No separate path for API errors.</p> </div> </div>
-
-<!--
-Not every validation rule can run in the browser. The submission action returns errors instead of throwing, and each error names the FieldTree it belongs to - so it lands in that field's errors() and renders through the same template code as any client-side rule. Verify the exact submission-error type against the workshop codebase before delivery.
--->
----
-layout: content
-eyebrow: 'Interop'
-heading: 'Our existing controls keep working'
----
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 44px;max-width:1600px;">Signal Forms support <code style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#C9D4E2;">ControlValueAccessor</code> controls, so the components we already have bind to <code style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;">[formField]</code> with no rewrite.</p>
-<div style="display:grid;grid-template-columns:1.1fr 0.9fr;gap:56px;align-items:center;"> <div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:32px 40px;font-family:'JetBrains Mono',monospace;font-size:26px;line-height:1.6;color:#C9D4E2;margin-bottom:36px;"> <div style="color:#5E6B7D;">&lt;!-- an existing CVA control, unchanged --&gt;</div> <div>&lt;my-input [formField]=<span style="color:#2FD8B4;">"userForm.email"</span> /&gt;</div> </div> <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start;font-family:'JetBrains Mono',monospace;font-size:25px;"> <div style="border:1px solid #2FD8B4;border-radius:8px;padding:14px 28px;color:#2FD8B4;">Signal Forms</div> <div style="color:#8A97A8;padding-left:24px;">↓</div> <div style="border:1px solid #4A5568;border-radius:8px;padding:14px 28px;color:#E8ECF2;">FormField</div> <div style="color:#8A97A8;padding-left:24px;">↓</div> <div style="border:1px solid #4A5568;border-radius:8px;padding:14px 28px;color:#8A97A8;">existing CVA control</div> </div> </div> <div style="display:flex;flex-direction:column;gap:32px;"> <p style="font-size:31px;line-height:1.45;margin:0;color:#C9D4E2;">This is what makes adoption incremental: no component-library migration has to land before the first signal form ships.</p> <p style="font-size:29px;line-height:1.45;margin:0;color:#8A97A8;">Angular also provides newer signal-native control contracts. That is a component-library design decision, not a prerequisite for using Signal Forms.</p> <div style="border-left:4px solid #2FD8B4;padding-left:26px;font-family:'Space Grotesk',sans-serif;font-size:32px;font-weight:500;color:#E8ECF2;line-height:1.3;">The form owns business rules. The control library owns presentation, accessibility and control behaviour.</div> </div> </div>
-
-<!--
-Custom-control authoring is not the focus here. Our component library controls already implement ControlValueAccessor, and Signal Forms support CVA controls for interoperability - so they work with [formField] without rewriting the library first. Angular also provides newer signal-native control contracts, but that is a component-library design topic rather than something we need in order to use Signal Forms.
--->
----
-layout: content
-eyebrow: 'Custom controls · before'
-heading: 'The ControlValueAccessor handshake'
----
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 32px;max-width:1600px;">A provider registration, four interface methods, and a private copy of the value with callbacks to store and invoke.</p>
-<div style="display:grid;grid-template-columns:1.2fr 0.8fr;gap:48px;align-items:center;"> <div style="background:#0F131A;border:1px solid #4A5568;border-radius:14px;padding:32px 38px;font-family:'JetBrains Mono',monospace;font-size:24px;line-height:1.6;color:#8A97A8;"> <div>@Component({</div> <div style="padding-left:1.2em;">providers: [{</div> <div style="padding-left:2.4em;">provide: NG_VALUE_ACCESSOR,</div> <div style="padding-left:2.4em;">useExisting: forwardRef(() =&gt; CustomInput),</div> <div style="padding-left:2.4em;">multi: <span style="color:#8577CF;">true</span>,</div> <div style="padding-left:1.2em;">}],</div> <div>})</div> <div><span style="color:#8577CF;">export class</span> CustomInput <span style="color:#8577CF;">implements</span> ControlValueAccessor {</div> <div style="padding-left:1.2em;">value = <span style="color:#3FBFA2;">''</span>;</div> <div style="padding-left:1.2em;"><span style="color:#8577CF;">private</span> <span>onChange</span> = (v: string) =&gt; {};</div> <div style="padding-left:1.2em;"><span>onTouched</span> = () =&gt; {};</div> <div style="height:0.85em;"></div> <div style="padding-left:1.2em;">writeValue(v: string) { <span style="color:#8577CF;">this</span>.value = v; }</div> <div style="padding-left:1.2em;">registerOnChange(fn: (v: string) =&gt; <span style="color:#8577CF;">void</span>) { <span style="color:#8577CF;">this</span>.onChange = fn; }</div> <div style="padding-left:1.2em;">registerOnTouched(fn: () =&gt; <span style="color:#8577CF;">void</span>) { <span style="color:#8577CF;">this</span>.onTouched = fn; }</div> <div style="padding-left:1.2em;">setDisabledState(d: boolean) { … }</div> <div>}</div> </div> <div style="display:flex;flex-direction:column;gap:26px;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:24px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#8B7CF6;margin-bottom:10px;">REGISTRATION</div> <p style="font-size:27px;line-height:1.4;margin:0;color:#C9D4E2;">A multi-provider and a <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">forwardRef</code> pointing at the class being defined.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:24px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#8B7CF6;margin-bottom:10px;">FOUR METHODS</div> <p style="font-size:27px;line-height:1.4;margin:0;color:#C9D4E2;">Write, change, touch and disable - none of which describe the control itself.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:24px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#8B7CF6;margin-bottom:10px;">A SECOND COPY</div> <p style="font-size:27px;line-height:1.4;margin:0;color:#C9D4E2;">The control holds the value locally and pushes changes back through a stored callback.</p> </div> </div> </div>
-
-<!--
-Writing a control today: a provider registration with forwardRef, four ControlValueAccessor methods, and a private copy of the value plus callbacks the component has to store and invoke. None of this is about what the control looks like or how it behaves - it is the handshake with the forms system.
+The requirement: email is required only when the user opts in to notifications. One of the most important scenes in the presentation. We don't subscribe. We don't add a validator. We don't remove one. We don't tell email to recalculate. We describe the rule.
 -->
 ---
 layout: content
@@ -689,150 +966,63 @@ heading: 'Implement an interface, declare a signal'
 <!--
 The same control against Signal Forms: implement FormValueControl and declare a value model signal. That is the required surface. The formField directive detects the interface and binds the field's value to it. Add a touch output if you want blur tracking, and any of the optional state inputs the control actually uses. Two rules: a FormValueControl must not have a checked property, and a FormCheckboxControl must not have a value property. Note there is no valid input - TypeScript lets you declare one because extra members are permitted when implementing an interface, and it then never updates. And do not put validation logic in the control - the schema validates, the control displays.
 -->
----
-layout: section
-number: '08'
-transition: fade
----
-## Footguns
 
-<p class="lead" style="margin-top:40px">Common pitfalls, and what to reach for instead.</p>
-
-<!--
-A fast round through the mistakes people actually hit with signal forms.
--->
 ---
 layout: content
+eyebrow: 'Footguns'
+heading: 'Four that catch everybody'
 ---
-<div style="display:flex;align-items:center;gap:28px;margin-bottom:44px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.2em;color:#FF7A6B;">SHIP IT?</div> <div style="flex:1;height:1px;background:#4A5568;"></div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#5E6B7D;">SCHEMA CALLBACK</div> </div>
-<h2 style="font-family:'Space Grotesk',sans-serif;font-size:48px;font-weight:600;letter-spacing:-0.02em;line-height:1.15;margin:0 0 36px;">A plain <code style="font-family:'JetBrains Mono',monospace;font-size:44px;color:#FF7A6B;">if</code> in the schema</h2>
-<div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:36px 48px;font-family:'JetBrains Mono',monospace;font-size:32px;line-height:1.55;color:#C9D4E2;margin-bottom:36px;"> <div><span style="color:#7CC4FF;">form</span>(model, (p) =&gt; {</div> <div style="padding-left:1.2em;"><span style="color:#8B7CF6;">if</span> (model().notify) {</div> <div style="padding-left:2.4em;"><span style="color:#7CC4FF;">required</span>(p.email);</div> <div style="padding-left:1.2em;">}</div> <div>});</div> </div>
-<div style="display:grid;grid-template-columns:0.45fr 0.55fr;gap:44px;align-items:center;"> <div> <div style="font-family:'Space Grotesk',sans-serif;font-size:64px;font-weight:600;color:#FF7A6B;margin-bottom:20px;">No.</div> <p style="font-size:29px;line-height:1.4;margin:0;color:#8A97A8;">The schema callback constructs the form rules. It does not rerun like an effect when <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">notify</code> changes.</p> </div> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:32px 38px;font-family:'JetBrains Mono',monospace;font-size:26px;line-height:1.6;color:#C9D4E2;"> <div><span style="color:#7CC4FF;">required</span>(p.email, {</div> <div style="padding-left:1.2em;">when: ({ valueOf }) =&gt; valueOf(p.notify),</div> <div>});</div> </div> </div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;"> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:32px 38px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:18px;">THE SCHEMA IS NOT AN EFFECT</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">The callback builds the rules once. A plain <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">if</code> around a rule is evaluated at construction and never again. Conditions belong inside the rule.</p> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:32px 38px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:18px;">MISSING MEANS ABSENT</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">A field left out of the model is not in the tree. The rule type-checks, never runs, and the form reports itself valid. Initialise every field you want.</p> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:32px 38px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:18px;">SHAPE IS STRUCTURE</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">The tree follows the model, so swapping one object shape for another destroys field state. Keep a stable shape and switch behaviour with rules. Arrays are the exception.</p> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:32px 38px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:18px;">VALIDATION IS NOT THE BROWSER'S</div> <p style="font-size:28px;line-height:1.45;margin:0;color:#C9D4E2;">Validity lives in the field tree, not in native validity, and the old status classes are opt-in. CSS keyed on them stops applying, silently.</p> </div> </div>
+<p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:40px 0 0;max-width:1600px;">Also worth knowing: <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">required</code> treats an empty array as present, class instances lose their prototype on the first write, and hidden or disabled fields do not validate and do not count towards the parent.</p>
 
 <!--
-This looks completely reasonable if we think of the schema callback as reactive code. But the callback constructs the form rules - it does not rerun like an effect.
+Two of these are the same lesson as the rest of the deck in different clothes. The schema callback not being reactive is the constructor-sees-defaults problem again: code that runs once, in a place that looks reactive. And a rule that silently never runs is the silent-failure problem again: no error, no warning, form says valid.
 -->
+
 ---
 layout: content
+eyebrow: 'Guidance'
+heading: 'What we do about it'
 ---
-<div style="display:flex;align-items:center;gap:28px;margin-bottom:44px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.2em;color:#FF7A6B;">SHIP IT?</div> <div style="flex:1;height:1px;background:#4A5568;"></div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#5E6B7D;">MODEL VALUES</div> </div>
-<h2 style="font-family:'Space Grotesk',sans-serif;font-size:48px;font-weight:600;letter-spacing:-0.02em;line-height:1.15;margin:0 0 40px;">Optional properties and <code style="font-family:'JetBrains Mono',monospace;font-size:44px;color:#FF7A6B;">undefined</code></h2>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;"> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:34px 40px;font-family:'JetBrains Mono',monospace;font-size:27px;line-height:1.62;color:#8A97A8;"> <div style="font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:22px;">AVOID</div> <div><span style="color:#8577CF;">interface</span> UserFormModel {</div> <div style="padding-left:1.2em;">name: string;</div> <div style="padding-left:1.2em;">email?: string;</div> <div>}</div> <div style="height:0.85em;"></div> <div><span style="color:#8577CF;">const</span> model = signal({</div> <div style="padding-left:1.2em;">name: <span style="color:#3FBFA2;">''</span>,</div> <div style="padding-left:1.2em;color:#5E6B7D;">// email omitted entirely</div> <div>});</div> </div> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:34px 40px;font-family:'JetBrains Mono',monospace;font-size:27px;line-height:1.62;color:#C9D4E2;"> <div style="font-size:24px;letter-spacing:0.12em;color:#2FD8B4;margin-bottom:22px;">PREFER</div> <div><span style="color:#8B7CF6;">const</span> model = <span style="color:#7CC4FF;">signal</span>({</div> <div style="padding-left:1.2em;">name: <span style="color:#2FD8B4;">''</span>,</div> <div style="padding-left:1.2em;">email: <span style="color:#2FD8B4;">''</span>,</div> <div>});</div> <div style="height:0.85em;"></div> <div style="color:#5E6B7D;">// null suits a select or date control</div> <div>phoneNumber: <span style="color:#8B7CF6;">null</span></div> <div style="height:0.85em;"></div> <div style="color:#5E6B7D;">// for text inputs and textareas</div> <div style="color:#5E6B7D;">// Angular recommends '' over null</div> </div> </div>
-<p style="font-size:30px;color:#8A97A8;line-height:1.45;margin:44px 0 0;max-width:1550px;">With <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">{ email: undefined }</code> and <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">required(p.email)</code> in the schema, TypeScript accepts the rule, the rule silently never runs, and the form reports <code style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#FF7A6B;">valid() === true</code>. Initialise every field you want in the tree.</p>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:28px;"> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:34px 38px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#2FD8B4;margin-bottom:20px;">NEW FORMS</div> <p style="font-size:29px;line-height:1.45;margin:0;color:#C9D4E2;">Signal Forms. It is stable, it is semver-protected, and it is where the framework is going.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:34px 38px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#8B7CF6;margin-bottom:20px;">EXISTING FORMS</div> <p style="font-size:29px;line-height:1.45;margin:0;color:#C9D4E2;">Leave them. Reactive Forms are supported and fine. Migrate when the form is being changed anyway, not as a project.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:34px 38px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#8B7CF6;margin-bottom:20px;">EXISTING CONTROLS</div> <p style="font-size:29px;line-height:1.45;margin:0;color:#C9D4E2;">They keep working. Bridges exist in both directions, so a signal form can hold reactive controls and the reverse.</p> </div> </div>
+<p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:48px 0 0;max-width:1600px;">Be careful with examples online. The API was renamed repeatedly through its experimental phase, so a lot of material published before v22 uses names that no longer exist.</p>
 
 <!--
-A big one. In Signal Forms, undefined can mean the field is not present in the form structure. When a field conceptually exists, initialise it with a meaningful empty value for the control.
+Say plainly that this is not a migration mandate, because that is the question everyone in the room is actually holding. New forms use the new thing. Nothing existing needs rewriting. And if you are following a blog post and something does not exist, check the version - the churn was real, and it is over.
 -->
----
-layout: content
----
-<div style="display:flex;align-items:center;gap:28px;margin-bottom:44px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.2em;color:#FF7A6B;">SHIP IT?</div> <div style="flex:1;height:1px;background:#4A5568;"></div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#5E6B7D;">OBJECT SHAPE</div> </div>
-<h2 style="font-family:'Space Grotesk',sans-serif;font-size:48px;font-weight:600;letter-spacing:-0.02em;line-height:1.15;margin:0 0 40px;">Swapping one object shape for another</h2>
-<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:36px;align-items:center;margin-bottom:44px;"> <div style="background:#0F131A;border:1px solid #4A5568;border-radius:14px;padding:32px 38px;font-family:'JetBrains Mono',monospace;font-size:26px;line-height:1.6;color:#8A97A8;"> <div>{</div> <div style="padding-left:1.2em;">type: <span style="color:#3FBFA2;">'person'</span>,</div> <div style="padding-left:1.2em;">firstName: <span style="color:#3FBFA2;">''</span>,</div> <div style="padding-left:1.2em;">lastName: <span style="color:#3FBFA2;">''</span>,</div> <div>}</div> </div> <div style="font-size:40px;color:#FF7A6B;">⇄</div> <div style="background:#0F131A;border:1px solid #4A5568;border-radius:14px;padding:32px 38px;font-family:'JetBrains Mono',monospace;font-size:26px;line-height:1.6;color:#8A97A8;"> <div>{</div> <div style="padding-left:1.2em;">type: <span style="color:#3FBFA2;">'company'</span>,</div> <div style="padding-left:1.2em;">companyName: <span style="color:#3FBFA2;">''</span>,</div> <div>}</div> </div> </div>
-<p style="font-size:31px;color:#C9D4E2;line-height:1.45;margin:0 0 24px;max-width:1550px;">Prefer a stable shape and use hidden, disabled or conditional schemas to determine what is active.</p>
-<p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:0;max-width:1550px;">Arrays are the major exception - adding and removing list items is genuinely part of the form model.</p>
 
-<!--
-Because the FieldTree follows the model structure, casually replacing object shapes can destroy form structure and state. Arrays are the major exception.
--->
----
-layout: content
----
-<div style="display:flex;align-items:center;gap:28px;margin-bottom:44px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.2em;color:#FF7A6B;">SHIP IT?</div> <div style="flex:1;height:1px;background:#4A5568;"></div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#5E6B7D;">ARRAYS</div> </div>
-<h2 style="font-family:'Space Grotesk',sans-serif;font-size:48px;font-weight:600;letter-spacing:-0.02em;line-height:1.15;margin:0 0 16px;"><code style="font-family:'JetBrains Mono',monospace;font-size:44px;color:#FF7A6B;">required()</code> on an array</h2>
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 32px;">The requirement: the user must select at least one permission.</p>
-<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:36px;align-items:center;margin-bottom:48px;"> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:36px 44px;font-family:'JetBrains Mono',monospace;font-size:34px;color:#8A97A8;text-decoration:line-through;">required(p.permissions);</div> <div style="font-size:40px;color:#8A97A8;">→</div> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:36px 44px;font-family:'JetBrains Mono',monospace;font-size:34px;color:#E8ECF2;"><span style="color:#7CC4FF;">minLength</span>(p.permissions, <span style="color:#8B7CF6;">1</span>);</div> </div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;"> <p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:0;"><code style="font-family:'JetBrains Mono',monospace;font-size:27px;">required</code> treats an empty array as present. For “at least one item”, use a length constraint.</p> <p style="font-size:30px;color:#8A97A8;line-height:1.45;margin:0;">It treats <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">false</code> as missing, which is what you want for a required checkbox. But a whitespace-only string passes - nothing is trimmed anywhere.</p> </div>
-
-<!--
-required treats an empty array as present. Also note: required treats false as missing, which is what you want for a required checkbox such as accepting terms.
--->
----
-layout: content
----
-<div style="display:flex;align-items:center;gap:28px;margin-bottom:44px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.2em;color:#FF7A6B;">SHIP IT?</div> <div style="flex:1;height:1px;background:#4A5568;"></div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#5E6B7D;">STRUCTURAL TYPES</div> </div>
-<h2 style="font-family:'Space Grotesk',sans-serif;font-size:48px;font-weight:600;letter-spacing:-0.02em;line-height:1.15;margin:0 0 16px;">Classes, <code style="font-family:'JetBrains Mono',monospace;font-size:44px;color:#FF7A6B;">Map</code> and <code style="font-family:'JetBrains Mono',monospace;font-size:44px;color:#FF7A6B;">Set</code> in the model</h2>
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 36px;max-width:1600px;">TypeScript accepts them and Signal Forms does not check the shape at runtime, so nothing throws at the point you write it. Each one fails differently later.</p>
-<div style="display:grid;grid-template-columns:0.78fr 1.22fr;gap:44px;align-items:center;"> <div style="display:flex;flex-direction:column;gap:20px;"> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:26px 32px;font-family:'JetBrains Mono',monospace;font-size:24px;line-height:1.7;color:#8A97A8;"> <div style="font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:14px;">AVOID</div> <div><span style="color:#8577CF;">new</span> Address(…)</div> <div><span style="color:#8577CF;">new</span> Map()</div> <div><span style="color:#8577CF;">new</span> Set()</div> </div> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:26px 32px;font-family:'JetBrains Mono',monospace;font-size:24px;line-height:1.7;color:#C9D4E2;"> <div style="font-size:24px;letter-spacing:0.12em;color:#2FD8B4;margin-bottom:14px;">PREFER</div> <div>{ street: <span style="color:#2FD8B4;">''</span>, city: <span style="color:#2FD8B4;">''</span> }</div> <div>[]</div> </div> </div> <div style="display:flex;flex-direction:column;gap:22px;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:24px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#B9A9FF;margin-bottom:10px;">CLASS INSTANCES</div> <p style="font-size:27px;line-height:1.4;margin:0;color:#C9D4E2;">Lose their prototype on the first write to them <em>or any descendant</em> - every object on the path from root to the written leaf is copied. Methods, getters and <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">instanceof</code> are gone afterwards.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:24px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#B9A9FF;margin-bottom:10px;">MAP AND SET</div> <p style="font-size:27px;line-height:1.4;margin:0;color:#C9D4E2;">Produce empty field trees, because children are enumerated with <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">Object.keys</code>. <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">required()</code> on an empty one reports nothing.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:24px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#B9A9FF;margin-bottom:10px;">FROZEN OBJECT ITEMS</div> <p style="font-size:27px;line-height:1.4;margin:0;color:#C9D4E2;">Only as <em>object items of an array</em>, and not at <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">form()</code> - lazily, when children are first materialised. A raw <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">TypeError</code>, because a tracking symbol cannot be added.</p> </div> </div> </div>
-<p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:32px 0 0;max-width:1600px;">This applies to the structural layer the form walks through. Leaf values can still be richer where the bound control treats them atomically - and if we model the domain with classes, translate at the form boundary.</p>
-
-<!--
-Signal Forms walks the structural layer to build the field tree and does not validate the shape at runtime, so these are accepted and then misbehave. Class instances lose their prototype on the first write to them or any descendant - every object on the path from root to the written leaf is copied. Map and Set produce empty field trees because children are enumerated with Object.keys, and required() on an empty Map or Set reports no error at all, though minLength does work. Frozen objects throw only as object items of an array, and lazily - form() succeeds and the raw TypeError fires when children are first materialised, so it points at the wrong line. Object.seal and preventExtensions fail the same way. If we model the domain with classes, translate at the form boundary.
--->
----
-layout: content
----
-<div style="display:flex;align-items:center;gap:28px;margin-bottom:44px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.2em;color:#FF7A6B;">SHIP IT?</div> <div style="flex:1;height:1px;background:#4A5568;"></div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#5E6B7D;">BROWSER &amp; CSS</div> </div>
-<h2 style="font-family:'Space Grotesk',sans-serif;font-size:48px;font-weight:600;letter-spacing:-0.02em;line-height:1.15;margin:0 0 16px;">Trusting native validity and old CSS hooks</h2>
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 36px;max-width:1600px;">Validation runs entirely in Angular, so the browser's own view of the field is not the authority - and neither are the class names we styled against before.</p>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:28px;line-height:1.6;color:#C9D4E2;margin-bottom:28px;"> <div>Signal Forms validation state</div> <div style="color:#FF7A6B;font-size:34px;">≠</div> <div>browser :valid / :invalid</div> </div> <p style="font-size:28px;color:#8A97A8;line-height:1.45;margin:0;">Some constraints are mirrored to native attributes for behaviour and accessibility - <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">required</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">min</code>/<code style="font-family:'JetBrains Mono',monospace;font-size:25px;">max</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">minlength</code>/<code style="font-family:'JetBrains Mono',monospace;font-size:25px;">maxlength</code>, but not <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">pattern</code>. Never treat <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">validity</code> as authoritative. Read from the field.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:26px;line-height:1.6;color:#8A97A8;margin-bottom:28px;"> <div>.ng-invalid.ng-touched { … }</div> </div> <p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:0 0 22px;">Signal Forms does not add these classes to your controls.</p> <p style="font-size:28px;color:#8A97A8;line-height:1.45;margin:0 0 18px;">Any styling that relies on them stops applying.</p> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;line-height:1.5;color:#C9D4E2;">provideSignalFormsConfig({ classes: NG_STATUS_CLASSES })</div> <p style="font-size:26px;color:#5E6B7D;line-height:1.4;margin:14px 0 0;">Seven classes, opt-in, spanning two entry points. There is no <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">ng-submitted</code>.</p> </div> </div>
-
-<!--
-Some built-in constraints are mirrored to native attributes for behaviour and accessibility, but read validation from the FieldTree. And Signal Forms does not add the ng-* status classes by default, so CSS keyed on them silently stops applying. They are opt-in: provideSignalFormsConfig({ classes: NG_STATUS_CLASSES }), with the token from the compat entry point. Seven classes - touched, untouched, dirty, pristine, valid, invalid, pending - and no ng-submitted, so anything keyed on that is gone for good. And because ng-valid/ng-invalid follow signal-forms semantics, an element gets neither while an async validator is pending.
--->
----
-layout: content
-eyebrow: 'Deprecations'
-heading: 'Be careful with older examples online'
----
-<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:36px;align-items:center;margin-bottom:48px;"> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:14px;padding:32px 38px;font-family:'JetBrains Mono',monospace;font-size:26px;line-height:1.9;color:#8A97A8;text-decoration:line-through;"> <div>hidden(p.field, condition)</div> <div>disabled(p.field, condition)</div> <div>readonly(p.field, condition)</div> </div> <div style="font-size:40px;color:#8A97A8;">→</div> <div style="background:#0A0D12;border:1px solid #2FD8B4;border-radius:14px;padding:32px 38px;font-family:'JetBrains Mono',monospace;font-size:26px;line-height:1.6;color:#C9D4E2;"> <div><span style="color:#7CC4FF;">hidden</span>(p.field, { when: condition });</div> <div><span style="color:#7CC4FF;">disabled</span>(p.field, { when: condition });</div> <div><span style="color:#7CC4FF;">readonly</span>(p.field, { when: condition });</div> </div> </div>
-<div style="border-left:4px solid #8B7CF6;padding-left:28px;font-family:'Space Grotesk',sans-serif;font-size:36px;font-weight:500;color:#E8ECF2;line-height:1.3;">The <code style="font-family:'JetBrains Mono',monospace;font-size:30px;">{when}</code> change still compiles, so it fails quietly. The renames below do not compile at all.</div>
-<div style="margin-top:32px;display:grid;grid-template-columns:repeat(3,1fr);gap:24px;font-family:'JetBrains Mono',monospace;font-size:24px;line-height:1.6;"> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:12px;padding:22px 28px;color:#8A97A8;"> <div style="font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:12px;">WON'T BIND</div> <div>[field] → [formField]</div> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:12px;padding:22px 28px;color:#8A97A8;"> <div style="font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:12px;">COMPILE ERROR</div> <div>ctx.field → ctx.fieldTree</div> </div> <div style="background:#0F131A;border:1px solid #FF7A6B;border-radius:12px;padding:22px 28px;color:#8A97A8;"> <div style="font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:12px;">REMOVED IN 22</div> <div>WithField, WithoutField,</div> <div>WithOptionalField</div> </div> </div>
-<p style="font-size:26px;color:#5E6B7D;line-height:1.45;margin:24px 0 0;"><code style="font-family:'JetBrains Mono',monospace;font-size:24px;">{when}</code> is the quiet one - it arrived in 22.0, so every pre-v22 example passes the condition positionally. The renames both happened inside v21, and those three removed types were already deprecated aliases for the <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">*FieldTree</code> names.</p>
-
-<!--
-Signal Forms evolved quickly while the API was experimental, so anything written before v22 is worth checking twice.
-
-The {when} config is the quiet one: passing the condition positionally still compiles, it just emits a deprecation. That landed in 22.0 - v21.2 only had the positional overload.
-
-The renames both happened inside v21: [field] became [formField] in 21.0.9, and ctx.field became ctx.fieldTree in 21.0.6. Those two do fail loudly.
-
-Two more from the same window, if anyone asks: customError() went in 21.1, and the metadata API was rewritten in 21.0.4. Both are gone, but neither is a v22 change - createMetadataKey and MetadataKey are very much still here.
-
-The only public exports actually removed in 22.0 are WithField, WithoutField and WithOptionalField, each replaced by its WithFieldTree-style name.
--->
 ---
 layout: section
 number: '09'
 transition: fade
 ---
-## Testing
+## In review
 
-<p class="lead" style="margin-top:40px">What you can assert without rendering anything.</p>
+<p class="lead" style="margin-top:40px">The whole deck as questions you can ask about a diff.</p>
 
 <!--
-Short chapter, but worth its own beat. The point I want to land: most of what we have covered - validation, conditional rules, cross-field logic - is plain function calls over a signal, so it tests without a fixture, without a DOM, and without change detection.
+This is the slide to photograph. Everything else was explanation.
 -->
+
 ---
 layout: content
-eyebrow: 'Testing'
-heading: 'Most form logic needs no DOM'
+eyebrow: 'Checklist'
+heading: 'Symptom, and what to reach for'
 ---
-<p style="font-size:30px;color:#8A97A8;line-height:1.35;margin:0 0 16px;max-width:1600px;">One setup detail: Signal Forms needs an injection context when the form is created. Call <code style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#C9D4E2;">form()</code> without one and the test throws before it can assert anything.</p>
-<div style="display:grid;grid-template-columns:1.35fr 0.65fr;gap:44px;align-items:start;"> <div style="display:flex;flex-direction:column;gap:16px;"> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:24px 32px;font-family:'JetBrains Mono',monospace;font-size:24px;line-height:1.55;color:#C9D4E2;"> <div style="color:#5E6B7D;">// pass the injector when the test builds the form</div> <div><span style="color:#8B7CF6;">const</span> <span>profileForm</span> = <span style="color:#7CC4FF;">form</span>(</div> <div style="padding-left:1.2em;">model,</div> <div style="padding-left:1.2em;">(path) =&gt; { <span style="color:#7CC4FF;">required</span>(path.name); },</div> <div style="padding-left:1.2em;">{ injector: TestBed.<span style="color:#7CC4FF;">inject</span>(Injector) },</div> <div>);</div> <div style="height:0.85em;"></div> <div><span style="color:#7CC4FF;">expect</span>(profileForm.name().errors()).<span style="color:#7CC4FF;">toEqual</span>([</div> <div style="padding-left:1.2em;">expect.<span style="color:#7CC4FF;">objectContaining</span>({ kind: <span style="color:#2FD8B4;">'required'</span> }),</div> <div>]);</div> </div> <div style="background:#0F131A;border:1px solid #4A5568;border-radius:14px;padding:24px 32px;font-family:'JetBrains Mono',monospace;font-size:24px;line-height:1.55;color:#8A97A8;"> <div style="color:#5E6B7D;">// or wrap the call in an injection context</div> <div>TestBed.<span style="color:#7CC4FF;">runInInjectionContext</span>(() =&gt; {</div> <div style="padding-left:1.2em;"><span style="color:#8B7CF6;">const</span> <span>profileForm</span> = <span style="color:#7CC4FF;">form</span>(model, profileSchema);</div> <div style="padding-left:1.2em;"><span style="color:#7CC4FF;">expect</span>(profileForm.name().valid()).<span style="color:#7CC4FF;">toBe</span>(<span style="color:#8B7CF6;">false</span>);</div> <div>});</div> </div> </div> <div style="display:flex;flex-direction:column;gap:22px;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:26px 30px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#2FD8B4;margin-bottom:18px;">ISOLATED</div> <div style="font-size:25px;line-height:1.65;color:#C9D4E2;"> <div>validation and errors</div> <div>disabled, required, readonly</div> <div>cross-field dependencies</div> <div>conditional schemas</div> </div> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:26px 30px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#8B7CF6;margin-bottom:18px;">COMPONENT-BOUND</div> <div style="font-size:25px;line-height:1.65;color:#C9D4E2;"> <div>values rendering in the DOM</div> <div>typing updating the model</div> <div>custom controls</div> <div>focus and accessibility</div> </div> </div> </div> </div>
-<p style="font-size:28px;color:#8A97A8;line-height:1.45;margin:12px 0 0;max-width:1600px;">Prefer <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">errors()</code> over <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">valid()</code> in assertions - it tells you which rule failed. Full guide: <a href="https://angular.dev/guide/forms/signals/testing">angular.dev/guide/forms/signals/testing</a></p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:44px;align-items:start;"> <div><div class="compare" style="grid-template-columns:1fr 1.1fr;font-size:24px;"> <div class="head">IF YOU SEE</div> <div class="head teal">REACH FOR</div> <div class="row-label">An effect that writes a signal</div> <div class="new"><code style="font-family:'JetBrains Mono',monospace;">computed</code>, or <code style="font-family:'JetBrains Mono',monospace;">linkedSignal</code></div> <div class="row-label">An effect that writes another component's signal</div> <div class="new">An input, or an explicit method on the owner</div> <div class="row-label">An <code style="font-family:'JetBrains Mono',monospace;">await</code> inside an effect</div> <div class="new">A resource keyed on a computed of the parameters</div> <div class="row-label">A non-signal read inside derived state</div> <div class="new">Bring it into the graph, or read it at render time</div> <div class="row-label">A decision taken in a constructor</div> <div class="new">Derived state, or a post-input hook</div> <div class="row-label last">A DOM write in a plain effect</div> <div class="new last"><code style="font-family:'JetBrains Mono',monospace;">afterRenderEffect</code> with a phase</div> </div></div> <div><div class="compare" style="grid-template-columns:1fr 1.1fr;font-size:24px;"> <div class="head">IF YOU SEE</div> <div class="head teal">REACH FOR</div> <div class="row-label">A fresh array or object per read</div> <div class="new">A <code style="font-family:'JetBrains Mono',monospace;">computed</code>, so identity is cached</div> <div class="row-label">A method call in a binding</div> <div class="new">A precomputed view object, bound field by field</div> <div class="row-label">An error mapped to an empty value</div> <div class="new">A distinct error state, carried to the template</div> <div class="row-label">Side effects in derived state</div> <div class="new">An owner that can also tear it down</div> <div class="row-label">A public writable signal</div> <div class="new"><code style="font-family:'JetBrains Mono',monospace;">protected readonly</code>, readonly at boundaries</div> <div class="row-label last">A fixed number of ticks in a test</div> <div class="new last">A predicate the test can wait on</div> </div></div></div>
 
 <!--
-A lot of form logic can be tested without rendering a component, because the logic lives in the schema and schemas do not need a template to run. The one setup detail: Signal Forms needs an injection context during form creation - call form() without one in a test and it throws before you can assert anything. Pass {injector: TestBed.inject(Injector)} when the test creates the form itself; use TestBed.runInInjectionContext() when the code under test calls form() internally. errors() is usually the most useful assertion, because it shows which rule failed. Render a component only when the behaviour crosses into the DOM.
+Read two or three of these out and then move on - the value is in having it written down, not in narrating it. The single highest-frequency row is the first one, and the single most damaging row is the error one.
 -->
+
 ---
 layout: content
-eyebrow: 'Closing'
+center: true
 ---
-<div style="display:flex;flex-direction:column;gap:36px;"> <div style="display:flex;gap:36px;align-items:baseline;border-bottom:1px solid #4A5568;padding-bottom:32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:52px;font-weight:600;color:#2FD8B4;line-height:1;">1</div> <div style="font-family:'Space Grotesk',sans-serif;font-size:52px;font-weight:500;letter-spacing:-0.02em;color:#E8ECF2;">The model owns the data.</div> </div> <div style="display:flex;gap:36px;align-items:baseline;border-bottom:1px solid #4A5568;padding-bottom:32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:52px;font-weight:600;color:#2FD8B4;line-height:1;">2</div> <div style="font-family:'Space Grotesk',sans-serif;font-size:52px;font-weight:500;letter-spacing:-0.02em;color:#E8ECF2;">The FieldTree adds form state and behaviour.</div> </div> <div style="display:flex;gap:36px;align-items:baseline;border-bottom:1px solid #4A5568;padding-bottom:32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:52px;font-weight:600;color:#2FD8B4;line-height:1;">3</div> <div style="font-family:'Space Grotesk',sans-serif;font-size:52px;font-weight:500;letter-spacing:-0.02em;color:#E8ECF2;">Describe relationships instead of orchestrating changes.</div> </div> <div style="display:flex;gap:36px;align-items:baseline;"> <div style="font-family:'JetBrains Mono',monospace;font-size:52px;font-weight:600;color:#2FD8B4;line-height:1;">4</div> <div style="font-family:'Space Grotesk',sans-serif;font-size:52px;font-weight:500;letter-spacing:-0.02em;color:#E8ECF2;">Good form modelling still matters.</div> </div> </div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.18em;text-transform:uppercase;color:#2FD8B4;margin-bottom:36px;">One thing to take away</div>
+<h2 style="font-size:64px;line-height:1.15;margin:0 0 44px;max-width:1600px;">These bugs do not throw. They render.</h2>
+<p style="font-size:32px;color:#8A97A8;line-height:1.5;margin:0;max-width:1500px;">Nothing in this deck fails loudly. A stale label, an empty list, a chart of zeroes and a form that says it is valid all look like working software. That is why the habits matter more than the review: by the time it reaches review, it already looks fine.</p>
 
 <!--
-If you forget most of the individual API names tomorrow, that's fine. Remember these four things. If those ideas are clear, the rest of the API is much easier to discover and reason about.
--->
----
-layout: content
----
-
-<div style="width:120px;height:5px;background:#2FD8B4;margin-bottom:56px;"></div>
-<h2 style="font-family:&#x27;Space Grotesk&#x27;,sans-serif;font-size:150px;font-weight:600;letter-spacing:-0.035em;line-height:1;margin:0;">Questions?</h2>
-<p style="font-size:32px;color:#8A97A8;line-height:1.45;margin:64px 0 0;max-width:1500px;">Reactive Forms model a control tree and often require us to coordinate it. Signal Forms start with our data and let us describe form behaviour around it.</p>
-<div style="display:flex;gap:56px;margin-top:72px;font-family:&#x27;JetBrains Mono&#x27;,monospace;font-size:25px;color:#5E6B7D;"> <span>angular.dev/guide/forms/signals</span> </div>
-
-<!--
-Close on the thesis, then open the floor. The goal is not to convince anyone that Reactive Forms were bad - it is that Signal Forms make the difficult parts of forms easier to reason about.
+Close on this rather than on a summary. The reason we keep shipping these is not that they are hard to fix, it is that they are invisible when they work and invisible when they do not. Then open it up for questions.
 -->
