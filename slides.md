@@ -56,16 +56,6 @@ Three pieces. Data lives in a normal writable signal. We pass it to form(). We b
 -->
 ---
 layout: content
-eyebrow: 'Mental model'
-heading: 'The basic mental model'
----
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:center;"> <div style="display:flex;flex-direction:column;align-items:center;gap:14px;"> <div style="background:#0A0D12;border:1px solid #2FD8B4;border-radius:999px;padding:18px 42px;font-family:'JetBrains Mono',monospace;font-size:26px;color:#2FD8B4;">Model signal</div> <div style="font-size:30px;color:#8A97A8;">↓</div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#5E6B7D;">form()</div> <div style="font-size:30px;color:#8A97A8;">↓</div> <div style="background:#0A0D12;border:1px solid #4A5568;border-radius:999px;padding:18px 42px;font-family:'JetBrains Mono',monospace;font-size:26px;color:#E8ECF2;">FieldTree</div> <div style="font-size:30px;color:#8A97A8;">↓</div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#5E6B7D;">[formField]</div> <div style="font-size:30px;color:#8A97A8;">↓</div> <div style="background:#0A0D12;border:1px solid #4A5568;border-radius:999px;padding:18px 42px;font-family:'JetBrains Mono',monospace;font-size:26px;color:#E8ECF2;">UI control</div> </div> <div style="display:flex;flex-direction:column;gap:36px;"> <div> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#8B7CF6;margin-bottom:10px;">FIELDTREE</div> <p style="font-size:30px;line-height:1.4;margin:0;color:#C9D4E2;">Provides form-specific state and behaviour.</p> </div> <p style="font-size:28px;line-height:1.45;margin:0;color:#5E6B7D;">Model and UI stay in sync in both directions. The FieldTree is the layer between them, not a second copy.</p> </div> </div>
-
-<!--
-This is the picture I want us to keep coming back to. We haven't explained FieldTree properly yet - that's intentional. For now, think of it as the form layer around the data.
--->
----
-layout: content
 eyebrow: 'Side by side'
 heading: 'The same form in both APIs'
 ---
