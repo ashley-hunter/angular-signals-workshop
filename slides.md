@@ -315,10 +315,12 @@ heading: 'An effect stops tracking the moment it goes async'
 ```ts
 // AVOID
 readonly #render = effect(async () => {
-  const id = this.teamId();          // tracked
+  const id = this.teamId();      // tracked
   const rows = await loadUsers(id);
+
+  // this.format() is NOT tracked
   this.grid.render(rows, this.format());
-});                                  // format NOT tracked
+});
 ```
 
 </div>
@@ -332,7 +334,8 @@ readonly users = resource({
 });
 
 readonly #render = effect(() => {
-  this.grid.render(this.users.value(), this.format());
+  const rows = this.users.value();
+  this.grid.render(rows, this.format());
 });
 ```
 
@@ -731,7 +734,9 @@ heading: 'Templates call. Computeds cache.'
 ```html
 <!-- AVOID -->
 @for (row of rows(); track row.id) {
-  <a [href]="buildUrl(row)">{{ formatNextRun(row.nextRunAt) }}</a>
+  <a [href]="buildUrl(row)">
+    {{ formatNextRun(row.nextRunAt) }}
+  </a>
 }
 ```
 
@@ -787,10 +792,19 @@ readonly users = httpResource<User[]>(
 <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:32px 38px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#2FD8B4;margin-bottom:20px;">YOU GET, FOR FREE</div> <p style="font-size:28px;line-height:1.5;margin:0 0 14px;color:#C9D4E2;">Refetch when the parameters change</p> <p style="font-size:28px;line-height:1.5;margin:0 0 14px;color:#C9D4E2;">Cancellation of superseded requests</p> <p style="font-size:28px;line-height:1.5;margin:0 0 14px;color:#C9D4E2;">Loading, error and status as signals</p> <p style="font-size:28px;line-height:1.5;margin:0;color:#C9D4E2;">No race between two in-flight responses</p> </div>
 </div>
 </div>
-<p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:40px 0 0;max-width:1600px;">Reads driven by signals belong in a resource. Writes do not - a resource re-issues its request on every parameter change and every reload.</p>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin:36px 0 0;font-size:26px;line-height:1.4;color:#C9D4E2;"> <div style="border-top:2px solid #2FD8B4;padding-top:16px;"><code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#2FD8B4;">httpResource</code><br>an HTTP GET</div> <div style="border-top:2px solid #4A5568;padding-top:16px;"><code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#8A97A8;">rxResource</code><br>an observable pipeline you already have</div> <div style="border-top:2px solid #4A5568;padding-top:16px;"><code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#8A97A8;">resource</code><br>a promise, or a stream you own</div> </div>
+<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:32px 0 0;max-width:1600px;">Reads driven by signals belong in a resource. Writes do not - a resource re-issues its request on every parameter change and every reload.</p>
 
 <!--
-The shape on the left is the one to have in your fingers. A function that returns the request, reading whatever signals it needs. Because it is a function of signals, the team ID changing is the trigger - you do not wire anything up, and you do not write the cancellation yourself. Everything in the green box comes with it. One thing to watch inside that function: it reruns when the signals it reads change, so key it on the few values the request is actually made of. Hand it a whole state object and every unrelated field on that object becomes a refetch. Also note there is no default value here, so the type of value is User array or undefined, and you will be branching on that. Reads driven by signals go in a resource. Writes do not. Nothing stops you setting method to POST, the request type has method and body on it, but a resource re-issues its request whenever the parameters change and again every time you reload it, and "send the delete a second time" is not a thing you want happening on a parameter change. A write is an action with a moment. It stays on the HTTP client. And the last point there was a real argument in review, settled the right way. Taking a resource as an input couples a shared component to one loading mechanism. Take the finished value, and let the consumer decide where it came from - it might be a resource, it might be three of them, it might be a constant in a test.
+The shape on the left is the one to have in your fingers. A function that returns the request, reading whatever signals it needs. Because it is a function of signals, the team ID changing is the trigger - you do not wire anything up, and you do not write the cancellation yourself. Everything in the green box comes with it.
+
+One thing to watch inside that function: it reruns when the signals it reads change, so key it on the few values the request is actually made of. Hand it a whole state object and every unrelated field on that object becomes a refetch. Also note there is no default value here, so the type of value is User array or undefined, and you will be branching on that.
+
+The row underneath is how you choose between the three, because you will see all three in our codebase. If it is a plain HTTP GET, use httpResource - it builds the request for you and you never touch HttpClient. If what you have is already an observable pipeline, use rxResource and hand it the stream. And if it is a promise, or something you are driving yourself, use resource with a loader. That is the one you will see on the next few slides, because the examples are calling a service function rather than a URL.
+
+Reads driven by signals go in a resource. Writes do not. Nothing stops you setting method to POST, the request type has method and body on it, but a resource re-issues its request whenever the parameters change and again every time you reload it, and "send the delete a second time" is not a thing you want happening on a parameter change. A write is an action with a moment. It stays on the HTTP client.
+
+And one design point that came up in review and was settled the right way: taking a resource as an input couples a shared component to one loading mechanism. Take the finished value, and let the consumer decide where it came from - it might be a resource, it might be three of them, it might be a constant in a test.
 -->
 
 ---
@@ -939,7 +953,8 @@ heading: 'Signals do not make your data immutable'
 // AVOID
 readonly items: Signal<Item[]> = this.#items;
 
-service.items().pop();          // compiles fine
+// compiles fine
+service.items().pop();
 ```
 
 </div>
@@ -949,7 +964,8 @@ service.items().pop();          // compiles fine
 // PREFER
 readonly items: Signal<readonly Item[]> = this.#items;
 
-service.items().pop();          // Property 'pop' does not exist
+// Property 'pop' does not exist
+service.items().pop();
 ```
 
 <p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:24px 0 24px;">The signal protects the reference, not the contents. Every later reader sees the edit; the graph sees nothing change.</p>
