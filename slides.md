@@ -849,38 +849,52 @@ Two cautions on that last one. The comparator runs on every recomputation, so it
 layout: content
 eyebrow: 'Templates'
 heading: 'Templates call. Computeds cache.'
+clicks: 1
 ---
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 32px;max-width:1600px;">A method call in a binding runs on every check of that view, including checks caused by something completely unrelated. A signal read is a cache lookup.</p>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
-<div>
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 22px;max-width:1660px;">The work does not go away. It moves out of the view and into something that caches it.</p>
 
-```html
-<!-- AVOID -->
-@for (row of rows(); track row.id) {
-  <a [href]="buildUrl(row)">
-    {{ formatNextRun(row.nextRunAt) }}
-  </a>
-}
+````md magic-move
+```ts
+template: `
+  @for (row of rows(); track row.id) {
+    <a [href]="buildUrl(row)">
+      {{ formatNextRun(row.nextRunAt) }}
+    </a>
+  }
+`,
+
+// two calls per row, on every check of this view
 ```
 
-</div>
-<div>
+```ts
+template: `
+  @for (row of rowViews(); track row.id) {
+    <a [href]="row.url">{{ row.nextRun }}</a>
+  }
+`,
 
-```html
-<!-- PREFER -->
-@for (row of rowViews(); track row.id) {
-  <a [href]="row.url">{{ row.nextRun }}</a>
-}
+readonly rowViews = computed(() =>
+  this.rows().map((row) => ({
+    id: row.id, url: buildUrl(row),
+    nextRun: formatNextRun(row.nextRunAt),
+  })),
+);   // two calls per row, per change to rows()
 ```
-
-</div>
-</div>
-<p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:36px 0 0;max-width:1600px;">Map the rows to view objects once, then bind to their fields. Cheapest fix on the list: a move, not a redesign.</p>
+````
 
 <!--
-I want to push on the word "unrelated", because that is where the cost hides. A resource resolving in a completely different corner of this component marks the view dirty, Angular re-checks the template, and your date formatting runs again for every visible row - even though nothing about those dates changed. The row did not ask for that work. Something else did, and the row paid for it. The fix on the right is to build the view objects once and bind to their fields, and it is the cheapest change on the whole list: it is a move, not a redesign. And while we are here, @let earns its keep twice over. It is how you name a repeated deep read so you are not writing the same three-level dereference in six bindings, and it is how you subscribe to an async pipe once instead of once per usage - every pipe in a template is its own instance and its own subscription, so lifting it into a single @let collapses six subscriptions into one.
--->
+The word I want you to notice on this slide is "unrelated".
 
+A method call in a binding runs on every check of that view. Not when the row changes - every check. So a resource resolving in a completely different corner of this component marks the view dirty, Angular re-checks the template, and your date formatting runs again for every visible row. The rows did not ask for that work. Something else did, and the rows paid for it.
+
+Watch what actually happens between these two versions, because it is not a redesign. Both calls are still there. buildUrl still runs, formatNextRun still runs, once per row. All that changed is where they live. In the first version they live in the template, so they run on every check. In the second they live in a computed, so they run when rows changes and not otherwise.
+
+That is why I call this the cheapest fix on the list. You are not rewriting anything, you are moving two lines and binding to fields instead of calling functions.
+
+And the shape it leaves behind is worth having a name for - a view model. One computed that turns your domain objects into exactly what the template needs, so the template does no work at all beyond reading properties. It also makes the template much easier to read, which is a nice side effect.
+
+One related thing while we are here: at-let is the tool for the same problem at a smaller scale. If you have got the same three-level dereference in six bindings, name it once with at-let. And it is how you subscribe to an async pipe once instead of once per usage, because every pipe instance in a template is its own subscription.
+-->
 ---
 layout: section
 number: '05'
