@@ -951,52 +951,6 @@ transition: fade
 
 ---
 layout: content
-eyebrow: 'Resources'
-heading: 'Signal-driven fetches belong in a resource'
-clicks: 1
----
-<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 24px;max-width:1660px;">Fetch a team's members whenever the team changes. This is what we write by hand.</p>
-<div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:40px;align-items:start;">
-<div>
-
-````md magic-move
-```ts
-// AVOID
-readonly users = signal<User[]>([]);
-readonly loading = signal(false);
-
-readonly #fetch = effect(async () => {
-  this.loading.set(true);
-  this.users.set(await api.users(this.teamId()));
-  this.loading.set(false);
-});
-```
-
-```ts
-// PREFER
-readonly users = httpResource<User[]>(
-  () => `/api/teams/${this.teamId()}/users`,
-);
-```
-````
-
-</div>
-<div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:28px 30px;"><div style="font-size:22px;color:#8A97A8;margin-bottom:10px;"><span class="swap"><span v-click.hide="1">What you are maintaining</span><span v-click="1">What you get for free</span></span></div><div class="swap"><div v-click.hide="1"><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid #1E252F;"><span style="color:#FF7A6B;font-size:20px;">&#9679;</span><span style="font-size:24px;color:#C9D4E2;line-height:1.3;">a <code style="font-family:'JetBrains Mono',monospace;font-size:22px;">loading</code> flag, set on both sides</span></div><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid #1E252F;"><span style="color:#FF7A6B;font-size:20px;">&#9679;</span><span style="font-size:24px;color:#C9D4E2;line-height:1.3;">nothing cancels a superseded request</span></div><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid #1E252F;"><span style="color:#FF7A6B;font-size:20px;">&#9679;</span><span style="font-size:24px;color:#C9D4E2;line-height:1.3;">two responses can land out of order</span></div><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid #1E252F;"><span style="color:#FF7A6B;font-size:20px;">&#9679;</span><span style="font-size:24px;color:#C9D4E2;line-height:1.3;">no error state anywhere</span></div></div><div v-click="1"><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid #1E252F;"><span style="color:#2FD8B4;font-size:20px;">&#9679;</span><span style="font-size:24px;color:#C9D4E2;line-height:1.3;"><code style="font-family:'JetBrains Mono',monospace;font-size:22px;">value</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:22px;">isLoading</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:22px;">error</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:22px;">status</code></span></div><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid #1E252F;"><span style="color:#2FD8B4;font-size:20px;">&#9679;</span><span style="font-size:24px;color:#C9D4E2;line-height:1.3;"><code style="font-family:'JetBrains Mono',monospace;font-size:22px;">reload()</code> when you need it</span></div><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid #1E252F;"><span style="color:#2FD8B4;font-size:20px;">&#9679;</span><span style="font-size:24px;color:#C9D4E2;line-height:1.3;">superseded requests cancelled</span></div><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid #1E252F;"><span style="color:#2FD8B4;font-size:20px;">&#9679;</span><span style="font-size:24px;color:#C9D4E2;line-height:1.3;">no race between two responses</span></div></div></div></div>
-</div>
-<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin:30px 0 0;font-size:25px;line-height:1.4;color:#C9D4E2;"> <div style="border-top:2px solid #2FD8B4;padding-top:14px;"><code style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#2FD8B4;">httpResource</code><br>an HTTP GET</div> <div style="border-top:2px solid #4A5568;padding-top:14px;"><code style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#8A97A8;">rxResource</code><br>an observable pipeline you already have</div> <div style="border-top:2px solid #4A5568;padding-top:14px;"><code style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#8A97A8;">resource</code><br>a promise, or a stream you own</div> </div>
-
-<!--
-- The first version isn't a strawman - it's what we all wrote for years, and plenty are still in the codebase
-- It manages to be three separate mistakes at once: an effect that writes signals, an async effect so the teamId read after the await isn't tracked, and two pieces of state kept in step by hand
-- Then it collapses to one expression: a function returning the request, reading whatever signals it needs. That's the whole wiring. The team id changing is the trigger - no subscription, no cancellation code
-- The panel is the point - every line of it is something the hand-written version doesn't do and would be tedious to add. value, isLoading, error, status and reload as signals. Superseded requests cancelled, so three quick team clicks don't leave you with whichever lands last. And no race between two in-flight responses - the bug you'd only find in production on a slow connection
-- Watch inside that function: it reruns on the signals it reads, so key it on the few values the request is made of. A whole state object makes every unrelated field a refetch
-- Choosing, and you'll see all three in our code: plain GET → **httpResource**, never touch HttpClient. Existing observable pipeline → **rxResource**, hand it the stream. Anything else, a promise or something you drive → **resource** with a loader - the general form, and it takes any promise
-- **Reads only.** Nothing stops you setting POST, but a resource re-issues on every parameter change and every reload, and "send the delete again" isn't something you want on a parameter change. A write is an action with a moment - it stays on the HTTP client
--->
-
----
-layout: content
 eyebrow: 'Interop'
 heading: 'An unguarded toSignal is a state you did not model'
 clicks: 2
@@ -1039,6 +993,52 @@ readonly user = toSignal(this.user$, { initialValue: GUEST });
 - **Initial value**, for sources that genuinely can't emit immediately. The starting state is something you chose, not something inherited from the type system. A real User - guest, anonymous - keeps the type Signal<User> and the undefined problem leaves the template
 - Fourth answer, not on the slide: keep undefined because it means something - not loaded yet, show a skeleton. Fine. **The bug is picking none of the four and hoping**
 - Last line, separate point people do without thinking: toObservable is implemented as an effect writing into a ReplaySubject - the actual implementation, not an analogy. Signal → observable → pipe → back reintroduces every chapter-one problem and pays for two conversions. Stay in signals: a computed, or a resource if it's async
+-->
+
+---
+layout: content
+eyebrow: 'Resources'
+heading: 'Signal-driven fetches belong in a resource'
+clicks: 1
+---
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 24px;max-width:1660px;">Fetch a team's members whenever the team changes. This is what we write by hand.</p>
+<div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:40px;align-items:start;">
+<div>
+
+````md magic-move
+```ts
+// AVOID
+readonly users = signal<User[]>([]);
+readonly loading = signal(false);
+
+readonly #fetch = effect(async () => {
+  this.loading.set(true);
+  this.users.set(await api.users(this.teamId()));
+  this.loading.set(false);
+});
+```
+
+```ts
+// PREFER
+readonly users = httpResource<User[]>(
+  () => `/api/teams/${this.teamId()}/users`,
+);
+```
+````
+
+</div>
+<div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:28px 30px;"><div style="font-size:22px;color:#8A97A8;margin-bottom:10px;"><span class="swap"><span v-click.hide="1">What you are maintaining</span><span v-click="1">What you get for free</span></span></div><div class="swap"><div v-click.hide="1"><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid #1E252F;"><span style="color:#FF7A6B;font-size:20px;">&#9679;</span><span style="font-size:24px;color:#C9D4E2;line-height:1.3;">a <code style="font-family:'JetBrains Mono',monospace;font-size:22px;">loading</code> flag, set on both sides</span></div><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid #1E252F;"><span style="color:#FF7A6B;font-size:20px;">&#9679;</span><span style="font-size:24px;color:#C9D4E2;line-height:1.3;">nothing cancels a superseded request</span></div><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid #1E252F;"><span style="color:#FF7A6B;font-size:20px;">&#9679;</span><span style="font-size:24px;color:#C9D4E2;line-height:1.3;">two responses can land out of order</span></div><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid #1E252F;"><span style="color:#FF7A6B;font-size:20px;">&#9679;</span><span style="font-size:24px;color:#C9D4E2;line-height:1.3;">no error state anywhere</span></div></div><div v-click="1"><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid #1E252F;"><span style="color:#2FD8B4;font-size:20px;">&#9679;</span><span style="font-size:24px;color:#C9D4E2;line-height:1.3;"><code style="font-family:'JetBrains Mono',monospace;font-size:22px;">value</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:22px;">isLoading</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:22px;">error</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:22px;">status</code></span></div><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid #1E252F;"><span style="color:#2FD8B4;font-size:20px;">&#9679;</span><span style="font-size:24px;color:#C9D4E2;line-height:1.3;"><code style="font-family:'JetBrains Mono',monospace;font-size:22px;">reload()</code> when you need it</span></div><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid #1E252F;"><span style="color:#2FD8B4;font-size:20px;">&#9679;</span><span style="font-size:24px;color:#C9D4E2;line-height:1.3;">superseded requests cancelled</span></div><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid #1E252F;"><span style="color:#2FD8B4;font-size:20px;">&#9679;</span><span style="font-size:24px;color:#C9D4E2;line-height:1.3;">no race between two responses</span></div></div></div></div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin:30px 0 0;font-size:25px;line-height:1.4;color:#C9D4E2;"> <div style="border-top:2px solid #2FD8B4;padding-top:14px;"><code style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#2FD8B4;">httpResource</code><br>an HTTP GET</div> <div style="border-top:2px solid #4A5568;padding-top:14px;"><code style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#8A97A8;">rxResource</code><br>an observable pipeline you already have</div> <div style="border-top:2px solid #4A5568;padding-top:14px;"><code style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#8A97A8;">resource</code><br>a promise, or a stream you own</div> </div>
+
+<!--
+- The first version isn't a strawman - it's what we all wrote for years, and plenty are still in the codebase
+- It manages to be three separate mistakes at once: an effect that writes signals, an async effect so the teamId read after the await isn't tracked, and two pieces of state kept in step by hand
+- Then it collapses to one expression: a function returning the request, reading whatever signals it needs. That's the whole wiring. The team id changing is the trigger - no subscription, no cancellation code
+- The panel is the point - every line of it is something the hand-written version doesn't do and would be tedious to add. value, isLoading, error, status and reload as signals. Superseded requests cancelled, so three quick team clicks don't leave you with whichever lands last. And no race between two in-flight responses - the bug you'd only find in production on a slow connection
+- Watch inside that function: it reruns on the signals it reads, so key it on the few values the request is made of. A whole state object makes every unrelated field a refetch
+- Choosing, and you'll see all three in our code: plain GET → **httpResource**, never touch HttpClient. Existing observable pipeline → **rxResource**, hand it the stream. Anything else, a promise or something you drive → **resource** with a loader - the general form, and it takes any promise
+- **Reads only.** Nothing stops you setting POST, but a resource re-issues on every parameter change and every reload, and "send the delete again" isn't something you want on a parameter change. A write is an action with a moment - it stays on the HTTP client
 -->
 
 ---
@@ -1126,7 +1126,7 @@ readonly users = resource({
 
 <!--
 - Filed five separate times, and every one reads as defensive good practice in a diff. Somebody added a catch so the page wouldn't blow up. Reasonable instinct
-- What it does: the promise no longer rejects → the resource never reaches error → error() is never true → last slide's template takes hasValue and renders an empty list. **The request failed and the user is told the team has no members**
+- What it does: the promise no longer rejects → the resource never reaches error → error() is never true → the four-state template takes its hasValue branch and renders an empty list. **The request failed and the user is told the team has no members**
 - I like this fix because the fix is deleting code. Let the loader reject. The resource has an error state and you already wrote the branch
 - Four costumes, worth knowing by sight: catch to an empty array (this one), a default value so the template needn't branch, no-value quietly treated as no-data, and a ternary returning an empty string - the meanest, because the link doesn't break, it just isn't there, and nobody files a bug about a button they never saw
 - Be fair about the pressure behind all four: reading value() in the error state throws. Inside a computed it isn't absorbed - the computed stores and rethrows to every consumer, so one failed request takes out everything downstream. People hit that and reach for a fallback
