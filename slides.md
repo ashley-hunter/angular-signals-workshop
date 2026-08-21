@@ -775,48 +775,46 @@ transition: fade
 layout: content
 eyebrow: 'Purity'
 heading: 'A computed has no way to clean up after itself'
+clicks: 1
 ---
-<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">Its only options are <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">equal</code> and <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">debugName</code>. There is no teardown hook, so whatever it builds, it also abandons.</p>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">This builds a worker out of derived state. The config changes twice - how many are running?</p>
+<div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:40px;align-items:start;">
 <div>
 
+````md magic-move
 ```ts
 // AVOID
-readonly worker = computed(() =>
-  new Worker(this.config()),
+readonly worker = computed(
+  () => new Worker(`${this.base()}/${this.name()}`),
 );
-
-// config changes -> a second Worker,
-// and the first one is still running
 ```
 
-</div>
-<div>
-
 ```ts
-// PREFER: derive the config, own the thing
-readonly #config = computed(() =>
-  this.config(),
+// PREFER
+readonly #url = computed(
+  () => `${this.base()}/${this.name()}`,
 );
 
 readonly #worker = effect((onCleanup) => {
-  const w = new Worker(this.#config());
+  const w = new Worker(this.#url());
   onCleanup(() => w.terminate());
 });
 ```
+````
 
 </div>
+<div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:28px 30px;"><div style="font-size:22px;color:#8A97A8;margin-bottom:10px;">After the config changes twice</div><div class="swap"><div v-click.hide="1"><div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding:11px 0;border-bottom:1px solid #1E252F;"><span style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#C9D4E2;">Worker #1</span><span style="font-size:23px;color:#FF7A6B;">still running</span></div><div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding:11px 0;border-bottom:1px solid #1E252F;"><span style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#C9D4E2;">Worker #2</span><span style="font-size:23px;color:#FF7A6B;">still running</span></div><div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding:11px 0;border-bottom:1px solid #1E252F;"><span style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#5E6B7D;">Worker #3</span><span style="font-size:23px;color:#5E6B7D;">current</span></div></div><div v-click="1"><div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding:11px 0;border-bottom:1px solid #1E252F;"><span style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#5E6B7D;">Worker #1</span><span style="font-size:23px;color:#5E6B7D;">terminated</span></div><div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding:11px 0;border-bottom:1px solid #1E252F;"><span style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#5E6B7D;">Worker #2</span><span style="font-size:23px;color:#5E6B7D;">terminated</span></div><div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding:11px 0;border-bottom:1px solid #1E252F;"><span style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#C9D4E2;">Worker #3</span><span style="font-size:23px;color:#2FD8B4;">current</span></div></div></div><div class="swap" style="margin-top:20px;"><div v-click.hide="1" style="font-size:24px;color:#FF7A6B;line-height:1.4;">Nothing holds a reference to the first two. They never stop.</div><div v-click="1" style="font-size:24px;color:#2FD8B4;line-height:1.4;">The old one is terminated before the new one starts.</div></div></div>
 </div>
-<p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:26px 0 0;max-width:1660px;">Sockets, observers, subscriptions, timers - same shape. If it needs disposing, it needs an owner, and a <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">computed</code> cannot be one.</p>
+<p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:30px 0 0;max-width:1660px;">A <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">computed</code> takes exactly two options, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">equal</code> and <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">debugName</code> - there is no teardown hook. If it needs disposing, it needs an owner. Sockets, observers, subscriptions, timers, all the same shape.</p>
 
 <!--
 - Invisible until the source changes twice. That's why it survives review
-- First evaluation builds the worker, fine. Config changes, it builds another - and the first is still running, with nobody holding a reference to stop it
+- First evaluation builds the worker, fine. Config changes, it builds another - and the first is still running, with nobody holding a reference to stop it. Change it twice and the panel is three workers, two of them abandoned
 - There's no hook you could have used: computed takes exactly two options, equal and debugName
 - Under load: memory climbing and CPU you can't account for, and you'll look in completely the wrong place
 - The author pushed back when we filed it, and the pushback is fair - purity is about mutating state outside the graph, and constructing an object mutates nothing. True as far as it goes
 - The answer: the problem isn't the allocation, it's the **lifetime**. A computed has no lifecycle to hang it on. Build plain objects all day; build something that needs stopping and you've made the computed responsible for something it can't do
-- The right splits the jobs: computed derives the config (genuinely derived state), effect owns the worker - and being an effect it has onCleanup, so the old worker is terminated before the new one starts, and goes on destroy
+- Then it splits the jobs: the computed still derives - it builds the url out of two signals - and the effect owns the worker. Being an effect it has onCleanup, so the old worker is terminated before the new one starts, and goes on destroy
 - Same for anything with an off switch: sockets, resize observers, subscriptions, intervals. If you'd write code to dispose of it, it isn't derived state
 -->
 
