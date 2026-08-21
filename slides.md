@@ -562,53 +562,64 @@ transition: fade
 layout: content
 eyebrow: 'Lifecycle'
 heading: 'The constructor sees defaults, not inputs'
+clicks: 2
 ---
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 32px;max-width:1600px;">Template-bound inputs are not set when the constructor runs. Any decision taken there sees the default value, and keeps that answer forever.</p>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">The parent binds <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">mode</code> to <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">'flat'</code>, then later switches it to <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">'tree'</code>. What does this check see?</p>
+<div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:40px;align-items:start;">
 <div>
 
+````md magic-move
 ```ts
 // AVOID
 readonly mode = input<'tree' | 'flat'>('tree');
 
 constructor() {
-  // always sees 'tree'
   if (this.mode() === 'tree') {
     this.startObserving();
   }
 }
 ```
 
-</div>
-<div>
+```ts
+// STILL WRONG
+readonly mode = input<'tree' | 'flat'>('tree');
+
+ngOnInit() {
+  if (this.mode() === 'tree') {
+    this.startObserving();
+  }
+}
+```
 
 ```ts
 // PREFER
 readonly mode = input<'tree' | 'flat'>('tree');
 
 readonly #observe = effect((onCleanup) => {
-  // set by now, and on every change after
   if (this.mode() === 'tree') {
     onCleanup(this.startObserving());
   }
 });
 ```
+````
 
 </div>
+<div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:28px 30px;"><div style="font-size:22px;color:#8A97A8;margin-bottom:8px;">When the check runs, and what it sees</div><div class="swap"><div v-click.hide="1"><div style="padding:12px 0;border-bottom:1px solid #1E252F;"><div style="font-size:23px;color:#8A97A8;line-height:1.3;">constructor runs</div><div style="font-size:25px;color:#FF7A6B;line-height:1.3;margin-top:4px;">sees 'tree' - the default</div></div><div style="padding:12px 0;border-bottom:1px solid #1E252F;"><div style="font-size:23px;color:#8A97A8;line-height:1.3;">inputs arrive: 'flat'</div><div style="font-size:25px;color:#5E6B7D;line-height:1.3;margin-top:4px;">nothing runs</div></div><div style="padding:12px 0;border-bottom:1px solid #1E252F;"><div style="font-size:23px;color:#8A97A8;line-height:1.3;">user switches to 'tree'</div><div style="font-size:25px;color:#5E6B7D;line-height:1.3;margin-top:4px;">nothing runs</div></div></div><div v-click="[1,2]"><div style="padding:12px 0;border-bottom:1px solid #1E252F;"><div style="font-size:23px;color:#8A97A8;line-height:1.3;">constructor runs</div><div style="font-size:25px;color:#5E6B7D;line-height:1.3;margin-top:4px;">&ndash;</div></div><div style="padding:12px 0;border-bottom:1px solid #1E252F;"><div style="font-size:23px;color:#8A97A8;line-height:1.3;">inputs arrive: 'flat'</div><div style="font-size:25px;color:#2FD8B4;line-height:1.3;margin-top:4px;">sees 'flat'</div></div><div style="padding:12px 0;border-bottom:1px solid #1E252F;"><div style="font-size:23px;color:#8A97A8;line-height:1.3;">user switches to 'tree'</div><div style="font-size:25px;color:#FF7A6B;line-height:1.3;margin-top:4px;">nothing runs</div></div></div><div v-click="2"><div style="padding:12px 0;border-bottom:1px solid #1E252F;"><div style="font-size:23px;color:#8A97A8;line-height:1.3;">constructor runs</div><div style="font-size:25px;color:#5E6B7D;line-height:1.3;margin-top:4px;">&ndash;</div></div><div style="padding:12px 0;border-bottom:1px solid #1E252F;"><div style="font-size:23px;color:#8A97A8;line-height:1.3;">inputs arrive: 'flat'</div><div style="font-size:25px;color:#2FD8B4;line-height:1.3;margin-top:4px;">sees 'flat'</div></div><div style="padding:12px 0;border-bottom:1px solid #1E252F;"><div style="font-size:23px;color:#8A97A8;line-height:1.3;">user switches to 'tree'</div><div style="font-size:25px;color:#2FD8B4;line-height:1.3;margin-top:4px;">sees 'tree'</div></div></div></div><div class="swap" style="margin-top:20px;"><div v-click.hide="1"><div style="font-size:24px;color:#FF7A6B;line-height:1.4;">Wrong from the start, and never asked again.</div></div><div v-click="[1,2]"><div style="font-size:24px;color:#FF7A6B;line-height:1.4;">Right once, then frozen. The bug just got rarer.</div></div><div v-click="2"><div style="font-size:24px;color:#2FD8B4;line-height:1.4;">Asked again every time the answer can change.</div></div></div></div>
 </div>
-<p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:36px 0 0;max-width:1600px;">It hides well, because the default is usually the common case. And an input is not set once - a hook that runs at startup only catches the first value.</p>
+<p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:30px 0 0;max-width:1660px;">It hides well, because the default is usually the common case. And an input is not set once - a hook that runs at startup only catches the first value.</p>
 
 <!--
 - We've shipped this more than once. Both times a careful reviewer caught it, because nothing looks wrong
-- Just ordering: Angular constructs the class, then sets template-bound inputs. At constructor time the signal is on its default
-- Second-order damage here: the guard existed to skip observers for cheap layouts. It never fired once, so every instance paid for machinery the comment above it promised to skip
+- Just ordering: Angular constructs the class, then sets template-bound inputs. At constructor time the signal is still on its default
+- So the check sees 'tree', the parent's 'flat' never arrives, and that answer is kept forever
+- Second-order damage in this one: the guard existed to skip observers for cheap layouts. It never fired once, so every instance paid for machinery the comment above it promised to skip
 - Another: test fixtures seeded from an input in the constructor, rendering empty in every case that mattered
-- ngOnInit is only half right. **It runs once.** If mode can change - and inputs usually do - you've swapped "always saw the default" for "only saw the first real value". Rarer, which is worse
-- So: an effect. Runs once inputs are set, again whenever mode changes. And it starts something non-reactive, so it cleans up - onCleanup tears down the old observer before the new one starts
+- The obvious fix is ngOnInit, and it's only half right. **It runs once.** Inputs are set by then, so it finally sees 'flat' - but when the user switches to 'tree', nothing runs
+- Watch the panel on that step. You've swapped "always saw the default" for "only saw the first real value". **The bug gets rarer, which is worse, not better**
+- The effect is asked again every time the answer can change. And it starts something non-reactive, so it cleans up - onCleanup tears down the old observer before the new one starts
 - If asked whether lifecycle hooks are going away: no. ngOnInit isn't deprecated, style guide still covers it. What's replaced is hooks that existed to **observe change** - ngOnChanges, view queries, DOM timing. One-time imperative setup with no reactive dependency is still fine
 - Takeaway: a decision that depends on an input doesn't belong in the constructor, and probably not in a once-only hook either
 -->
-
 ---
 layout: content
 eyebrow: 'Migration'
@@ -634,23 +645,22 @@ heading: 'Every ngOnChanges has a signals shape'
 layout: content
 eyebrow: 'Render phases'
 heading: 'DOM work belongs to a render phase'
+clicks: 1
 ---
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 36px;max-width:1600px;">An <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">effect</code> runs <em>during</em> change detection, before <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">&#64;if</code> blocks and child components are refreshed - so the element may not be there, and the write is not coordinated with painting.</p>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">Scroll the pane back to the top whenever the selection changes. When does this run, and is the element there yet?</p>
+<div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:40px;align-items:start;">
 <div>
 
+````md magic-move
 ```ts
 // AVOID
 readonly pane = viewChild.required('pane');
 
 readonly #scroll = effect(() => {
-  this.selectedId();               // track
+  this.selectedId();
   this.pane().nativeElement.scrollTop = 0;
 });
 ```
-
-</div>
-<div>
 
 ```ts
 // PREFER
@@ -658,19 +668,22 @@ readonly pane = viewChild.required('pane');
 
 readonly #scroll = afterRenderEffect({
   write: () => {
-    this.selectedId();               // track
+    this.selectedId();
     this.pane().nativeElement.scrollTop = 0;
   },
 });
 ```
+````
 
 </div>
+<div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:28px 30px;"><div style="font-size:22px;color:#8A97A8;margin-bottom:10px;">One change detection pass</div><div class="swap"><div v-click.hide="1"><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;"><span style="font-family:'JetBrains Mono',monospace;font-size:20px;color:#3A4553;">1</span><span style="font-size:24px;color:#5E6B7D;line-height:1.3;">this component's template updates</span></div><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;"><span style="font-family:'JetBrains Mono',monospace;font-size:20px;color:#FF7A6B;">2</span><span style="font-size:24px;color:#FF7A6B;line-height:1.3;">effects attached to this view run</span></div><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;"><span style="font-family:'JetBrains Mono',monospace;font-size:20px;color:#3A4553;">3</span><span style="font-size:24px;color:#5E6B7D;line-height:1.3;">&#64;if / &#64;for content is refreshed</span></div><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;"><span style="font-family:'JetBrains Mono',monospace;font-size:20px;color:#3A4553;">4</span><span style="font-size:24px;color:#5E6B7D;line-height:1.3;">child components are refreshed</span></div><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;"><span style="font-family:'JetBrains Mono',monospace;font-size:20px;color:#3A4553;">5</span><span style="font-size:24px;color:#5E6B7D;line-height:1.3;">render phases run</span></div><div style="font-size:24px;color:#FF7A6B;line-height:1.4;margin-top:14px;border-top:1px solid #1E252F;padding-top:16px;">Your write happens at step 2, so anything created at step 3 or 4 is not there yet.</div></div><div v-click="1"><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;"><span style="font-family:'JetBrains Mono',monospace;font-size:20px;color:#3A4553;">1</span><span style="font-size:24px;color:#5E6B7D;line-height:1.3;">this component's template updates</span></div><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;"><span style="font-family:'JetBrains Mono',monospace;font-size:20px;color:#3A4553;">2</span><span style="font-size:24px;color:#5E6B7D;line-height:1.3;">effects attached to this view run</span></div><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;"><span style="font-family:'JetBrains Mono',monospace;font-size:20px;color:#3A4553;">3</span><span style="font-size:24px;color:#5E6B7D;line-height:1.3;">&#64;if / &#64;for content is refreshed</span></div><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;"><span style="font-family:'JetBrains Mono',monospace;font-size:20px;color:#3A4553;">4</span><span style="font-size:24px;color:#5E6B7D;line-height:1.3;">child components are refreshed</span></div><div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;"><span style="font-family:'JetBrains Mono',monospace;font-size:20px;color:#2FD8B4;">5</span><span style="font-size:24px;color:#2FD8B4;line-height:1.3;">render phases run</span></div><div style="font-size:24px;color:#2FD8B4;line-height:1.4;margin-top:14px;border-top:1px solid #1E252F;padding-top:16px;">Everything is in the DOM, and the write is coordinated with painting.</div></div></div></div>
 </div>
+<p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:30px 0 0;max-width:1660px;">Signal queries are lazy, so reading one is never the problem - the element <em>existing</em> is. Prefer <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">viewChild.required</code>, which throws <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">NG0951</code> rather than handing you nothing.</p>
 
 <!--
-- Be precise about why the left is wrong. I checked the framework source, and the reason isn't the one people give
-- A component effect runs **inside** change detection: this template updates, then this view's effects, then embedded views (if/for), then child components
-- So the element is only guaranteed present if it's plain in this template. Behind an if, or in a child, and on the pass where it first appears your effect has already run
+- Be precise about why the first version is wrong. I checked the framework source, and the reason isn't the one people give
+- The list on the right is one change detection pass, and a component effect runs **inside** it - at step 2
+- So the element is only guaranteed present if it's plain in this template. Anything created at step 3 or 4 - behind an if, or inside a child - does not exist yet on the pass where it first appears
 - Other half: even when it exists, you're writing mid-change-detection, not at a point scheduled for DOM work. afterRenderEffect gives you that point, and write means write - no reading layout back
 - **Correction to something you may have heard, possibly from me:** it is not that view queries haven't resolved. Signal queries are lazy - reading one materialises results there - so viewChild in an effect finds the element if it exists. The failure is existence, not query timing
 - viewChild.required gives NG0951 rather than silence. Good reason to prefer required
@@ -698,26 +711,25 @@ heading: 'Pick the phase, do not take the default'
 layout: content
 eyebrow: 'Forced reflow'
 heading: 'Read everything, then write everything'
+clicks: 1
 ---
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 28px;max-width:1600px;">A read after a write forces layout there and then. Interleave them in a loop and you pay on every iteration.</p>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">A read after a write forces layout there and then. Interleave them in a loop and you pay on every iteration.</p>
+<div style="display:grid;grid-template-columns:1.2fr 0.8fr;gap:40px;align-items:start;">
 <div>
 
+````md magic-move
 ```ts
-// AVOID: a reflow per row
+// AVOID
 afterNextRender(() => {
   for (const row of this.rows()) {
-    const height = row.el.offsetHeight;       // read
-    row.el.style.height = `${height + 8}px`;  // write
+    const height = row.el.offsetHeight;
+    row.el.style.height = `${height + 8}px`;
   }
 });
 ```
 
-</div>
-<div>
-
 ```ts
-// PREFER: one read pass, one write pass
+// PREFER
 afterNextRender({
   earlyRead: () =>
     this.rows().map((row) => row.el.offsetHeight),
@@ -728,14 +740,15 @@ afterNextRender({
   },
 });
 ```
+````
 
 </div>
+<div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:30px 32px;"><div style="font-size:22px;color:#8A97A8;margin-bottom:16px;">Forced layouts, on a 200 row grid</div><div style="display:flex;align-items:baseline;gap:16px;"><span class="swap" style="justify-items:start;"><span v-click.hide="1" style="font-family:'JetBrains Mono',monospace;font-size:72px;line-height:1;color:#FF7A6B;">200</span><span v-click="1" style="font-family:'JetBrains Mono',monospace;font-size:72px;line-height:1;color:#2FD8B4;">1</span></span></div><div class="swap" style="margin-top:22px;"><div v-click.hide="1" style="font-size:24px;color:#FF7A6B;line-height:1.4;">Every read after a write makes the browser lay out again, there and then.</div><div v-click="1" style="font-size:24px;color:#2FD8B4;line-height:1.4;">One read pass, one write pass. The row count stops mattering.</div></div></div>
 </div>
-<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:36px 0 0;max-width:1650px;">Each phase can hand a value to the next. <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">afterNextRender</code> runs once, <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">afterRenderEffect</code> reruns - and hands the next phase a <em>signal</em>, not a value.</p>
-<p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:20px 0 0;max-width:1650px;">Calls that force layout: <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">offsetHeight</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">clientWidth</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">scrollTop</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">getBoundingClientRect()</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">getComputedStyle()</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">scrollIntoView()</code>, even <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">focus()</code>. Cheap once, and multiplied by every row, cell or widget on the page.</p>
+<p style="font-size:27px;color:#5E6B7D;line-height:1.45;margin:28px 0 0;max-width:1660px;">Calls that force layout: <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">offsetHeight</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">clientWidth</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">scrollTop</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">getBoundingClientRect()</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">getComputedStyle()</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">scrollIntoView()</code>, even <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">focus()</code>.</p>
 
 <!--
-- The phase table made concrete. The cost isn't the read - you need that number - it's entirely the ordering. Batching is the whole fix
+- The phase table made concrete. The cost isn't the read - you need that number - it's entirely the ordering. Batching is the whole fix, and the panel is the size of it: 200 forced layouts down to one
 - Two details, both better than people assume
 - **Order is fixed by the framework.** Your four functions go into fixed positions - earlyRead, write, mixed, read - and Angular walks the positions in order. Key order is irrelevant; writing them in firing order is courtesy to the next reader
 - **Batching is global, not per callback.** Outer loop is the phase, inner loop is every registered sequence - so every earlyRead in the application runs before any write. You're batching against everything else that registered. That's really why the phases exist
