@@ -857,8 +857,11 @@ protected readonly visibleRows = computed(() =>
 // a refetch makes new Row objects with the same ids
 protected readonly visibleRows = computed(
   () => this.rows().filter((r) => r.active),
-  { equal: (a, b) => a.length === b.length
-      && a.every((r, i) => r.id === b[i].id) },
+  {
+    equal: (a, b) =>
+      a.length === b.length &&
+      a.every((r, i) => r.id === b[i].id && r.rev === b[i].rev),
+  },
 );   // equal -> old value kept, grid still does nothing
 ```
 ````
@@ -873,7 +876,8 @@ protected readonly visibleRows = computed(
 - The bit to land: moving this to a computed **isn't tidying up. The caching is the entire feature**
 - Third step is a real case, not a flourish. Refetch returns the same data as new objects → new identity → computed reruns → grid rebuilds with nothing visibly changed
 - A custom equal says what counts as different. Here, the ids. Comparator returns true → old value restored, version not bumped, nothing downstream notified
-- Two cautions: it runs on every recomputation, so it must be cheaper than the work it prevents - ids to avoid a grid rebuild is a good trade, deep-comparing a thousand objects to avoid a cheap map isn't
+- The comparator has to cover everything downstream renders. Ids alone would be wrong here - edit a row's name, the id is unchanged, equal returns true, and the grid keeps showing the old text. That is a stale bug you wrote on purpose, so compare a revision field too
+- And it must be cheaper than the work it prevents. Ids and a rev to avoid rebuilding a grid is a good trade; deep-comparing a thousand objects to avoid a cheap map isn't
 - And it's rare: **16 uses against 8,000 computeds**. Reach for it after measuring
 -->
 
