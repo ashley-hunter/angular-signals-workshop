@@ -1279,13 +1279,11 @@ heading: 'The same form in both APIs'
 layout: content
 eyebrow: 'Validation'
 heading: 'Rules live in the schema, beside the data'
-clicks: 1
 ---
-<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 24px;max-width:1660px;">One place describing what has to be true. Built-ins cover most of it, and there is one escape hatch.</p>
-<div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:40px;align-items:start;">
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">One place describing what has to be true about this data.</p>
+<div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:40px;align-items:center;">
 <div>
 
-````md magic-move
 ```ts
 readonly signupForm = form(this.signup, (p) => {
   required(p.email, { message: 'Email is required' });
@@ -1293,33 +1291,19 @@ readonly signupForm = form(this.signup, (p) => {
   minLength(p.password, 8, { message: '8 or more' });
 });
 ```
-
-```ts
-readonly signupForm = form(this.signup, (p) => {
-  required(p.email, { message: 'Email is required' });
-  email(p.email, { message: 'Enter a valid email' });
-  minLength(p.password, 8, { message: '8 or more' });
-
-  validate(p.password, ({ value }) =>
-    /\d/.test(value())
-      ? null
-      : { kind: 'digit', message: 'Needs a number' },
-  );
-});
-```
-````
 
 </div>
-<div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:28px 30px;"><div style="font-size:22px;color:#8A97A8;margin-bottom:14px;"><span class="swap"><span v-click.hide="1">Built in</span><span v-click="1">Your own rule</span></span></div><div class="swap"><div v-click.hide="1"><div style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#2FD8B4;">required &nbsp;email &nbsp;pattern<br>min &nbsp;max &nbsp;minLength &nbsp;maxLength<br>minDate &nbsp;maxDate</div><div style="font-size:24px;color:#C9D4E2;line-height:1.45;margin-top:14px;">Each takes a path and an options object. The message is yours - Angular ships no default copy, so a rule without one has a <code style="font-family:'JetBrains Mono',monospace;font-size:22px;">kind</code> and nothing to display.</div></div><div v-click="1"><div style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#2FD8B4;">validate</div><div style="font-size:24px;color:#C9D4E2;line-height:1.45;margin-top:14px;">Anything the built-ins do not cover. Return <code style="font-family:'JetBrains Mono',monospace;font-size:22px;">{ kind, message }</code>, or <code style="font-family:'JetBrains Mono',monospace;font-size:22px;">null</code> when it passes.</div></div></div></div>
+<div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:28px 30px;"><div style="font-size:22px;color:#8A97A8;margin-bottom:14px;">Built in</div><div style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#2FD8B4;line-height:1.5;">required &nbsp;email &nbsp;pattern<br>min &nbsp;max &nbsp;minLength &nbsp;maxLength<br>minDate &nbsp;maxDate</div><div style="font-size:24px;color:#C9D4E2;line-height:1.45;margin-top:18px;">Each takes a path and an options object. The message is yours - Angular ships no default copy, so a rule without one has a <code style="font-family:'JetBrains Mono',monospace;font-size:22px;">kind</code> and nothing to display.</div></div>
 </div>
 
 <!--
 - Rules go in the schema - the second argument to form. You are not attaching validators to controls one at a time, you are describing in one place what has to be true about this data
-- Each rule takes a path and an options object. That's the whole shape, and the built-ins along the right cover most of what we write
+- Each rule takes a path and an options object. That's the whole shape, and the built-ins on the right cover most of what we write
 - Pause on the message, because it's the part people push back on. Angular ships no default copy at all. A rule without a message produces an error with a kind and nothing to display
-- That sounds like a chore until you see what it buys: because every rule carries its own message, the template never has to know which rules were applied. One loop over the field's errors renders any field in the form. Compare that to an if per error type per field, with the copy living in the template and getting rewritten every time the field is reused
-- Second step is the escape hatch. validate takes the field context and returns an error object - a kind, and a message - or null when it passes. There's no special error class to construct, it's a plain object
-- If somebody asks about checks that have to hit a server - a username availability check - there is a validateHttp for exactly that, built on httpResource. Not covering it here
+- That sounds like a chore until you see what it buys: because every rule carries its own message, the template never has to know which rules were applied. One loop over the field's errors renders any field in the form
+- Compare that to what we write today - an if per error type per field, with the copy living in the template and getting rewritten every time the field is reused
+- Worth noticing what isn't here: no validator objects to construct, nothing to add or remove later, and no control tree to attach any of it to. The rule names the field it applies to
+- If asked, there are two escape hatches - validate for your own rule, and validateHttp when the check has to hit a server. Not covering either here
 -->
 ---
 layout: content
