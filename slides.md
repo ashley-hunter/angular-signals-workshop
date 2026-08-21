@@ -1279,9 +1279,9 @@ heading: 'The same form in both APIs'
 layout: content
 eyebrow: 'Validation'
 heading: 'Rules live in the schema, beside the data'
-clicks: 2
+clicks: 1
 ---
-<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 24px;max-width:1660px;">One place describing what has to be true. Three tiers, and most forms never leave the first.</p>
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 24px;max-width:1660px;">One place describing what has to be true. Built-ins cover most of it, and there is one escape hatch.</p>
 <div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:40px;align-items:start;">
 <div>
 
@@ -1307,25 +1307,10 @@ readonly signupForm = form(this.signup, (p) => {
   );
 });
 ```
-
-```ts
-readonly signupForm = form(this.signup, (p) => {
-  required(p.email, { message: 'Email is required' });
-  email(p.email, { message: 'Enter a valid email' });
-  minLength(p.password, 8, { message: '8 or more' });
-
-  validateHttp(p.email, {
-    request: ({ value }) => `/api/free?email=${value()}`,
-    onSuccess: (free) =>
-      free ? null : { kind: 'taken', message: 'Already used' },
-    onError: () => null,
-  });
-});
-```
 ````
 
 </div>
-<div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:28px 30px;"><div style="font-size:22px;color:#8A97A8;margin-bottom:14px;"><span class="swap"><span v-click.hide="1">Built in</span><span v-click="[1,2]">Your own rule</span><span v-click="2">Off to a server</span></span></div><div class="swap"><div v-click.hide="1"><div style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#2FD8B4;">required &nbsp;email &nbsp;pattern<br>min &nbsp;max &nbsp;minLength &nbsp;maxLength<br>minDate &nbsp;maxDate</div><div style="font-size:24px;color:#C9D4E2;line-height:1.45;margin-top:14px;">Each takes a path and an options object. The message is yours - Angular ships no default copy, so a rule without one has a <code style="font-family:'JetBrains Mono',monospace;font-size:22px;">kind</code> and nothing to display.</div></div><div v-click="[1,2]"><div style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#2FD8B4;">validate</div><div style="font-size:24px;color:#C9D4E2;line-height:1.45;margin-top:14px;">Anything the built-ins do not cover. Return <code style="font-family:'JetBrains Mono',monospace;font-size:22px;">{ kind, message }</code>, or <code style="font-family:'JetBrains Mono',monospace;font-size:22px;">null</code> when it passes.</div></div><div v-click="2"><div style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#2FD8B4;">validateHttp</div><div style="font-size:24px;color:#C9D4E2;line-height:1.45;margin-top:14px;">When the check has to leave the browser. Built on <code style="font-family:'JetBrains Mono',monospace;font-size:22px;">httpResource</code>, so superseded requests are cancelled, and <code style="font-family:'JetBrains Mono',monospace;font-size:22px;">pending()</code> is true while it runs. It only starts once the field's synchronous rules pass.</div></div></div></div>
+<div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:28px 30px;"><div style="font-size:22px;color:#8A97A8;margin-bottom:14px;"><span class="swap"><span v-click.hide="1">Built in</span><span v-click="1">Your own rule</span></span></div><div class="swap"><div v-click.hide="1"><div style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#2FD8B4;">required &nbsp;email &nbsp;pattern<br>min &nbsp;max &nbsp;minLength &nbsp;maxLength<br>minDate &nbsp;maxDate</div><div style="font-size:24px;color:#C9D4E2;line-height:1.45;margin-top:14px;">Each takes a path and an options object. The message is yours - Angular ships no default copy, so a rule without one has a <code style="font-family:'JetBrains Mono',monospace;font-size:22px;">kind</code> and nothing to display.</div></div><div v-click="1"><div style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#2FD8B4;">validate</div><div style="font-size:24px;color:#C9D4E2;line-height:1.45;margin-top:14px;">Anything the built-ins do not cover. Return <code style="font-family:'JetBrains Mono',monospace;font-size:22px;">{ kind, message }</code>, or <code style="font-family:'JetBrains Mono',monospace;font-size:22px;">null</code> when it passes.</div></div></div></div>
 </div>
 
 <!--
@@ -1334,9 +1319,7 @@ readonly signupForm = form(this.signup, (p) => {
 - Pause on the message, because it's the part people push back on. Angular ships no default copy at all. A rule without a message produces an error with a kind and nothing to display
 - That sounds like a chore until you see what it buys: because every rule carries its own message, the template never has to know which rules were applied. One loop over the field's errors renders any field in the form. Compare that to an if per error type per field, with the copy living in the template and getting rewritten every time the field is reused
 - Second step is the escape hatch. validate takes the field context and returns an error object - a kind, and a message - or null when it passes. There's no special error class to construct, it's a plain object
-- Third is for checks that have to leave the browser, and this is the one that would be a real chore by hand. It's built on httpResource, so a superseded request is cancelled rather than landing late, and pending() on the field is true while it's in flight
-- There's a debounce option too, since you rarely want a request per keystroke
-- And the ordering is worth knowing: async validation for a field only starts once that field's synchronous rules are passing. No point asking the server whether an email is taken if it isn't a valid email yet
+- If somebody asks about checks that have to hit a server - a username availability check - there is a validateHttp for exactly that, built on httpResource. Not covering it here
 -->
 ---
 layout: content
