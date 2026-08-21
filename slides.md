@@ -1490,8 +1490,7 @@ layout: content
 center: true
 title: 'Questions?'
 ---
-<h2 style="font-size:88px;line-height:1.1;margin:0 0 40px;">Questions?</h2>
-<p style="font-size:32px;color:#8A97A8;line-height:1.5;margin:0 0 44px;max-width:1500px;">Everything in this deck came out of our own review history.</p>
+<h2 style="font-size:88px;line-height:1.1;margin:0 0 56px;">Questions?</h2>
 <div style="display:flex;gap:44px;font-family:'JetBrains Mono',monospace;font-size:26px;color:#5E6B7D;"> <div>angular.dev/guide/signals</div> <div>angular.dev/guide/forms/signals</div> </div>
 
 <!--
