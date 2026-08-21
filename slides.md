@@ -951,7 +951,7 @@ transition: fade
 
 ---
 layout: content
-eyebrow: 'Interop'
+eyebrow: 'Async state'
 heading: 'An unguarded toSignal is a state you did not model'
 clicks: 2
 ---
