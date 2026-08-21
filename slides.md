@@ -1170,9 +1170,9 @@ heading: 'Template-only state is not public API'
 layout: content
 eyebrow: 'Immutability'
 heading: 'Signals do not make your data immutable'
-clicks: 2
+clicks: 1
 ---
-<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">A consumer edits the array it was handed. Every later reader sees it instantly, and the graph never hears about it.</p>
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">A consumer pops the array it was handed. Every later reader sees it instantly, and the graph never hears about it.</p>
 <div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:40px;align-items:start;">
 <div>
 
@@ -1181,41 +1181,34 @@ clicks: 2
 // AVOID
 readonly items: Signal<Item[]>;
 
+// compiles fine
 service.items().pop();
-service.items()[0].label = 'edited';
 ```
 
 ```ts
-// PREFER: lock the array
+// PREFER
 readonly items: Signal<readonly Item[]>;
 
+// will not compile
 service.items().pop();
-service.items()[0].label = 'edited';
-```
-
-```ts
-// and the elements, if they are shared
-readonly items: Signal<readonly Readonly<Item>[]>;
-
-service.items().pop();
-service.items()[0].label = 'edited';
 ```
 ````
 
 </div>
-<div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:28px 30px;"><div style="font-size:22px;color:#8A97A8;margin-bottom:8px;">What a consumer can still do</div><div class="swap"><div v-click.hide="1"><div style="padding:12px 0;border-bottom:1px solid #1E252F;"><div style="font-family:'JetBrains Mono',monospace;font-size:23px;color:#C9D4E2;line-height:1.3;">items().pop()</div><div style="font-size:23px;color:#FF7A6B;margin-top:5px;">compiles fine</div></div><div style="padding:12px 0;border-bottom:1px solid #1E252F;"><div style="font-family:'JetBrains Mono',monospace;font-size:23px;color:#C9D4E2;line-height:1.3;">items()[0].label = 'x'</div><div style="font-size:23px;color:#FF7A6B;margin-top:5px;">compiles fine</div></div><div style="font-size:24px;color:#FF7A6B;line-height:1.4;margin-top:18px;">The signal protects the reference, not the contents.</div></div><div v-click="[1,2]"><div style="padding:12px 0;border-bottom:1px solid #1E252F;"><div style="font-family:'JetBrains Mono',monospace;font-size:23px;color:#C9D4E2;line-height:1.3;">items().pop()</div><div style="font-size:23px;color:#2FD8B4;margin-top:5px;">Property 'pop' does not exist</div></div><div style="padding:12px 0;border-bottom:1px solid #1E252F;"><div style="font-family:'JetBrains Mono',monospace;font-size:23px;color:#C9D4E2;line-height:1.3;">items()[0].label = 'x'</div><div style="font-size:23px;color:#FF7A6B;margin-top:5px;">compiles fine</div></div><div style="font-size:24px;color:#FF7A6B;line-height:1.4;margin-top:18px;">The array is locked. The items inside it are not.</div></div><div v-click="2"><div style="padding:12px 0;border-bottom:1px solid #1E252F;"><div style="font-family:'JetBrains Mono',monospace;font-size:23px;color:#C9D4E2;line-height:1.3;">items().pop()</div><div style="font-size:23px;color:#2FD8B4;margin-top:5px;">Property 'pop' does not exist</div></div><div style="padding:12px 0;border-bottom:1px solid #1E252F;"><div style="font-family:'JetBrains Mono',monospace;font-size:23px;color:#C9D4E2;line-height:1.3;">items()[0].label = 'x'</div><div style="font-size:23px;color:#2FD8B4;margin-top:5px;">Cannot assign to 'label'</div></div><div style="font-size:24px;color:#2FD8B4;line-height:1.4;margin-top:18px;">Both closed. Only needed when the objects are shared.</div></div></div></div>
+<div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:28px 30px;"><div style="font-size:22px;color:#8A97A8;margin-bottom:8px;">After a consumer calls <code style="font-family:'JetBrains Mono',monospace;font-size:21px;">pop()</code></div><div class="swap"><div v-click.hide="1"><div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding:13px 0;border-bottom:1px solid #1E252F;"><span style="font-size:24px;color:#8A97A8;">count() in the header</span><span style="font-family:'JetBrains Mono',monospace;font-size:34px;color:#FF7A6B;line-height:1;">4</span></div><div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding:13px 0;border-bottom:1px solid #1E252F;"><span style="font-size:24px;color:#8A97A8;">rows in the table</span><span style="font-family:'JetBrains Mono',monospace;font-size:34px;color:#FF7A6B;line-height:1;">3</span></div><div style="font-size:24px;color:#FF7A6B;line-height:1.4;margin-top:18px;">The computed never reran, so it is still handing out the length it cached.</div></div><div v-click="1"><div style="font-family:'JetBrains Mono',monospace;font-size:23px;color:#2FD8B4;line-height:1.45;padding:13px 0 16px;border-bottom:1px solid #1E252F;">Property &#39;pop&#39; does not exist on type<br>&#39;readonly Item[]&#39;.</div><div style="font-size:24px;color:#2FD8B4;line-height:1.4;margin-top:18px;">The edit cannot be written in the first place, so the two can never disagree.</div></div></div></div>
 </div>
-<p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:30px 0 0;max-width:1660px;">Nothing reruns and nothing looks wrong, because the reference never changed. You find out when the count in the header disagrees with the rows in the table.</p>
+<p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:30px 0 0;max-width:1660px;">The signal protects the reference, not the contents. Nothing reruns, because from the graph's point of view nothing changed.</p>
 
 <!--
 - Everything else in this talk is stale: something changed and nobody heard. This is the opposite, which makes it disorienting the first time
-- The moment a consumer pops that array, everyone reading the cached value sees the edit immediately. Not late - instant
-- And the graph hears nothing, because the reference never changed. UI and state genuinely disagree, with no changed reference for anyone to notice
-- Nothing reruns, nothing looks wrong, until a user says the count in the header doesn't match the rows in the table
-- Be precise about the fix, because it is easy to overclaim. A readonly array stops them calling pop, and it's a compile error, which is what you want
-- But watch the second line of the panel on that step. It does **not** stop them reaching into an item and editing a field on it - that still compiles, and it is the same bug
-- Readonly on the elements closes it. Only bother when the objects are genuinely shared, because it spreads into every type that touches them
-- Start with the array either way. That's where this actually bites
+- A consumer pops the array it was handed. That array is the one inside your signal - the signal handed out a reference, not a copy
+- The moment they pop it, everyone reading it sees the edit immediately. Not late - instant
+- And the graph hears nothing at all, because the reference never changed. Nothing reruns, nothing recomputes, nothing looks wrong
+- Look at the panel. The header is a computed over the same array, and it is still handing out the four it cached, while the table renders three rows. UI and state genuinely disagree, and there is no changed reference anywhere for anyone to notice
+- You find out when a user tells you the number at the top doesn't match what's underneath it
+- The fix is a type. readonly on the array means pop isn't there to call - a compile error, at the point somebody writes it, which is exactly where you want it
+- Worth saying it costs nothing at runtime. This is entirely a compile-time guarantee, and the signal is unchanged
+- If asked about editing a field on one of the items: yes, readonly on the array doesn't stop that, and you'd need the elements readonly too. Start with the array, because that's where this actually bites
 -->
 ---
 layout: section
