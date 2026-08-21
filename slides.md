@@ -84,11 +84,13 @@ heading: 'When to use each primitive'
 layout: content
 eyebrow: 'The pattern'
 heading: 'An effect that writes a signal is a computed you maintain by hand'
+clicks: 1
 ---
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 32px;max-width:1600px;">Everything here is signals, so it feels reactive. It is a manual subscription spelled with signals.</p>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 24px;max-width:1660px;">Everything here is signals, so it feels reactive. It is a manual subscription spelled with signals.</p>
+<div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:40px;align-items:start;">
 <div>
 
+````md magic-move
 ```ts
 // AVOID
 readonly rows = input.required<Row[]>();
@@ -99,9 +101,6 @@ readonly #sync = effect(() => {
 });
 ```
 
-</div>
-<div>
-
 ```ts
 // PREFER
 readonly rows = input.required<Row[]>();
@@ -110,10 +109,11 @@ readonly visible = computed(() =>
   this.rows().filter((r) => r.enabled),
 );
 ```
+````
 
 </div>
+<div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:26px 28px;"><div style="font-size:22px;color:#8A97A8;margin-bottom:8px;"><span class="swap"><span v-click.hide="1">A signal kept in step by an effect</span><span v-click="1">A computed</span></span></div><div class="swap"><div v-click.hide="1"><div style="padding:11px 0;border-bottom:1px solid #1E252F;"><div style="font-size:21px;color:#8A97A8;line-height:1.25;">When it lands</div><div style="font-size:24px;color:#FF7A6B;line-height:1.3;margin-top:3px;">After the view was checked</div></div><div style="padding:11px 0;border-bottom:1px solid #1E252F;"><div style="font-size:21px;color:#8A97A8;line-height:1.25;">Who can write it</div><div style="font-size:24px;color:#FF7A6B;line-height:1.3;margin-top:3px;">Anything in the class</div></div><div style="padding:11px 0;border-bottom:1px solid #1E252F;"><div style="font-size:21px;color:#8A97A8;line-height:1.25;">Array identity</div><div style="font-size:24px;color:#FF7A6B;line-height:1.3;margin-top:3px;">New array every run</div></div><div style="padding:11px 0;border-bottom:1px solid #1E252F;"><div style="font-size:21px;color:#8A97A8;line-height:1.25;">Cost per change</div><div style="font-size:24px;color:#FF7A6B;line-height:1.3;margin-top:3px;">A second change detection pass</div></div></div><div v-click="1"><div style="padding:11px 0;border-bottom:1px solid #1E252F;"><div style="font-size:21px;color:#8A97A8;line-height:1.25;">When it lands</div><div style="font-size:24px;color:#2FD8B4;line-height:1.3;margin-top:3px;">On read, always current</div></div><div style="padding:11px 0;border-bottom:1px solid #1E252F;"><div style="font-size:21px;color:#8A97A8;line-height:1.25;">Who can write it</div><div style="font-size:24px;color:#2FD8B4;line-height:1.3;margin-top:3px;">Nothing</div></div><div style="padding:11px 0;border-bottom:1px solid #1E252F;"><div style="font-size:21px;color:#8A97A8;line-height:1.25;">Array identity</div><div style="font-size:24px;color:#2FD8B4;line-height:1.3;margin-top:3px;">Cached until rows() changes</div></div><div style="padding:11px 0;border-bottom:1px solid #1E252F;"><div style="font-size:21px;color:#8A97A8;line-height:1.25;">Cost per change</div><div style="font-size:24px;color:#2FD8B4;line-height:1.3;margin-top:3px;">None</div></div></div></div></div>
 </div>
-<p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:40px 0 0;max-width:1600px;">The left lands after the view has already been checked and forces a second check. Anything can write to it, and it rebuilds the array either way.</p>
 
 <!--
 - Say why the left is worse - "the rule says so" changes nobody's habits. Four things:
@@ -128,11 +128,13 @@ readonly visible = computed(() =>
 layout: content
 eyebrow: 'Derived, and writable'
 heading: 'When the user can override the derived value'
+clicks: 1
 ---
-<p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 32px;max-width:1600px;">The filter resets the page, so it is derived. The pager moves it, so it is writable. Both at once is <code style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;">linkedSignal</code>.</p>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 24px;max-width:1660px;">The filter resets the page, so it is derived. The pager moves it, so it is writable. Both at once is <code style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#2FD8B4;">linkedSignal</code>.</p>
+<div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:40px;align-items:start;">
 <div>
 
+````md magic-move
 ```ts
 // AVOID
 readonly page = signal(1);
@@ -146,9 +148,6 @@ next() { this.page.update((p) => p + 1); }
 prev() { this.page.update((p) => p - 1); }
 ```
 
-</div>
-<div>
-
 ```ts
 // PREFER
 readonly page = linkedSignal(() => {
@@ -159,10 +158,11 @@ readonly page = linkedSignal(() => {
 next() { this.page.update((p) => p + 1); }
 prev() { this.page.update((p) => p - 1); }
 ```
+````
 
 </div>
+<div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:26px 28px;"><div class="swap"><div v-click.hide="1"><div style="display:flex;align-items:baseline;justify-content:space-between;gap:14px;padding:13px 0;border-bottom:1px solid #1E252F;"><span style="font-size:23px;color:#8A97A8;line-height:1.25;">Resets when the filter changes</span><span style="font-size:24px;color:#FF7A6B;line-height:1.25;text-align:right;">an effect you wrote</span></div><div style="display:flex;align-items:baseline;justify-content:space-between;gap:14px;padding:13px 0;border-bottom:1px solid #1E252F;"><span style="font-size:23px;color:#8A97A8;line-height:1.25;">Moves when the pager runs</span><span style="font-size:24px;color:#8A97A8;line-height:1.25;text-align:right;"><code style="font-family:'JetBrains Mono',monospace;font-size:21px;">page.update()</code></span></div><div style="display:flex;align-items:baseline;justify-content:space-between;gap:14px;padding:13px 0;border-bottom:1px solid #1E252F;"><span style="font-size:23px;color:#8A97A8;line-height:1.25;">Things that own <code style="font-family:'JetBrains Mono',monospace;font-size:21px;">page</code></span><span style="font-size:24px;color:#FF7A6B;line-height:1.25;text-align:right;"><span style="font-size:30px;">2</span></span></div></div><div v-click="1"><div style="display:flex;align-items:baseline;justify-content:space-between;gap:14px;padding:13px 0;border-bottom:1px solid #1E252F;"><span style="font-size:23px;color:#8A97A8;line-height:1.25;">Resets when the filter changes</span><span style="font-size:24px;color:#2FD8B4;line-height:1.25;text-align:right;">the computation</span></div><div style="display:flex;align-items:baseline;justify-content:space-between;gap:14px;padding:13px 0;border-bottom:1px solid #1E252F;"><span style="font-size:23px;color:#8A97A8;line-height:1.25;">Moves when the pager runs</span><span style="font-size:24px;color:#8A97A8;line-height:1.25;text-align:right;"><code style="font-family:'JetBrains Mono',monospace;font-size:21px;">page.update()</code></span></div><div style="display:flex;align-items:baseline;justify-content:space-between;gap:14px;padding:13px 0;border-bottom:1px solid #1E252F;"><span style="font-size:23px;color:#8A97A8;line-height:1.25;">Things that own <code style="font-family:'JetBrains Mono',monospace;font-size:21px;">page</code></span><span style="font-size:24px;color:#2FD8B4;line-height:1.25;text-align:right;"><span style="font-size:30px;">1</span></span></div></div></div><div class="swap" style="margin-top:18px;"><div v-click.hide="1" style="font-size:24px;color:#FF7A6B;line-height:1.4;">Two mechanisms, and keeping them in step is your job.</div><div v-click="1" style="font-size:24px;color:#2FD8B4;line-height:1.4;">One signal that is both derived and writable.</div></div></div>
 </div>
-<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:40px 0 0;max-width:1600px;">Same paging on both sides. On the right the reset and the writes are one signal, so there is nothing to keep in sync.</p>
 
 <!--
 - The pager methods force it. Derived from the filter alone → computed, done. But next/prev must write, and computed won't allow it
