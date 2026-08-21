@@ -951,52 +951,6 @@ transition: fade
 
 ---
 layout: content
-eyebrow: 'Async state'
-heading: 'An unguarded toSignal is a state you did not model'
-clicks: 2
----
-<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 30px;max-width:1660px;">Nearly every <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">toSignal</code> in our codebase takes the first of these. Three options, and the first one is a state you have to render.</p>
-
-````md magic-move
-```ts
-readonly user = toSignal(this.user$);
-
-// Signal<User | undefined>
-// undefined until the first emission - and it renders like "no user"
-```
-
-```ts
-readonly user = toSignal(this.user$, { requireSync: true });
-
-// Signal<User>
-// no undefined at all - NG0601 at creation if it does not emit
-```
-
-```ts
-readonly user = toSignal(this.user$, { initialValue: GUEST });
-
-// Signal<User>
-// starts at a value you chose, rather than one you inherited
-```
-````
-
-<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:30px 0 0;max-width:1660px;">Keeping <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">undefined</code> is a fine answer too, as long as you branch on it. Picking none of the three is the bug.</p>
-<p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:20px 0 0;max-width:1660px;">And <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">toObservable</code> is an <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">effect</code> feeding a <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">ReplaySubject</code> - so a signal, out to an observable and back is an effect writing a signal, with extra steps.</p>
-
-<!--
-- Biggest number in the whole research, and we haven't touched it: close to **1,500 toSignal calls**, and around **1,370 look like the first version** - no initial value, no requireSync
-- Every one is typed T-or-undefined, and genuinely undefined for at least one tick
-- In a template: undefined → falsy branch → "not signed in", an empty list, or a dash, before the real value arrives
-- Usually nobody notices, because the gap is a frame. But this is the silent failure - "we don't know yet" rendered as "there is nothing". When the source is slower than a frame it stops being invisible
-- **requireSync**, if the observable emits on subscribe - BehaviorSubject, ReplaySubject, store selector - gives a plain Signal<User>, no undefined in the type
-- Stronger than people expect: not a hint checked later. toSignal subscribes, and throws NG0601 right there if nothing arrived synchronously. Wrong about your source and you find out on first render in dev, not in production six months later
-- **Initial value**, for sources that genuinely can't emit immediately. The starting state is something you chose, not something inherited from the type system. A real User - guest, anonymous - keeps the type Signal<User> and the undefined problem leaves the template
-- Fourth answer, not on the slide: keep undefined because it means something - not loaded yet, show a skeleton. Fine. **The bug is picking none of the four and hoping**
-- Last line, separate point people do without thinking: toObservable is implemented as an effect writing into a ReplaySubject - the actual implementation, not an analogy. Signal → observable → pipe → back reintroduces every chapter-one problem and pays for two conversions. Stay in signals: a computed, or a resource if it's async
--->
-
----
-layout: content
 eyebrow: 'Resources'
 heading: 'Signal-driven fetches belong in a resource'
 clicks: 1
@@ -1132,6 +1086,52 @@ readonly users = resource({
 - Be fair about the pressure behind all four: reading value() in the error state throws. Inside a computed it isn't absorbed - the computed stores and rethrows to every consumer, so one failed request takes out everything downstream. People hit that and reach for a fallback
 - The answer is **guard, don't swallow**. hasValue() is reactive, already false in the error state, and a type guard. Ask the question instead of suppressing the answer
 - Line to leave with: an empty list, a zero, a dash, a missing button - all valid renderings of real data. None can carry "this failed"
+-->
+
+---
+layout: content
+eyebrow: 'Async state'
+heading: 'An unguarded toSignal is a state you did not model'
+clicks: 2
+---
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 30px;max-width:1660px;">Nearly every <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">toSignal</code> in our codebase takes the first of these. Three options, and the first one is a state you have to render.</p>
+
+````md magic-move
+```ts
+readonly user = toSignal(this.user$);
+
+// Signal<User | undefined>
+// undefined until the first emission - and it renders like "no user"
+```
+
+```ts
+readonly user = toSignal(this.user$, { requireSync: true });
+
+// Signal<User>
+// no undefined at all - NG0601 at creation if it does not emit
+```
+
+```ts
+readonly user = toSignal(this.user$, { initialValue: GUEST });
+
+// Signal<User>
+// starts at a value you chose, rather than one you inherited
+```
+````
+
+<p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:30px 0 0;max-width:1660px;">Keeping <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">undefined</code> is a fine answer too, as long as you branch on it. Picking none of the three is the bug.</p>
+<p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:20px 0 0;max-width:1660px;">And <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">toObservable</code> is an <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">effect</code> feeding a <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">ReplaySubject</code> - so a signal, out to an observable and back is an effect writing a signal, with extra steps.</p>
+
+<!--
+- Biggest number in the whole research, and we haven't touched it: close to **1,500 toSignal calls**, and around **1,370 look like the first version** - no initial value, no requireSync
+- Every one is typed T-or-undefined, and genuinely undefined for at least one tick
+- In a template: undefined → falsy branch → "not signed in", an empty list, or a dash, before the real value arrives
+- Usually nobody notices, because the gap is a frame. But this is the silent failure - "we don't know yet" rendered as "there is nothing". When the source is slower than a frame it stops being invisible
+- **requireSync**, if the observable emits on subscribe - BehaviorSubject, ReplaySubject, store selector - gives a plain Signal<User>, no undefined in the type
+- Stronger than people expect: not a hint checked later. toSignal subscribes, and throws NG0601 right there if nothing arrived synchronously. Wrong about your source and you find out on first render in dev, not in production six months later
+- **Initial value**, for sources that genuinely can't emit immediately. The starting state is something you chose, not something inherited from the type system. A real User - guest, anonymous - keeps the type Signal<User> and the undefined problem leaves the template
+- Fourth answer, not on the slide: keep undefined because it means something - not loaded yet, show a skeleton. Fine. **The bug is picking none of the four and hoping**
+- Last line, separate point people do without thinking: toObservable is implemented as an effect writing into a ReplaySubject - the actual implementation, not an analogy. Signal → observable → pipe → back reintroduces every chapter-one problem and pays for two conversions. Stay in signals: a computed, or a resource if it's async
 -->
 
 ---
