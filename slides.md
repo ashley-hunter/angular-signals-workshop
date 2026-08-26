@@ -1473,7 +1473,7 @@ heading: 'Better in every way'
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:36px 56px;">
 <div style="display:flex;flex-direction:column;gap:24px;">
 <div style="display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:start;"><div style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;line-height:1.3;">&#10003;</div><div><div style="font-size:29px;line-height:1.3;color:#E8ECF2;">Everything is a signal</div><p style="font-size:24px;line-height:1.4;margin:6px 0 0;color:#8A97A8;">Value, validity, touched, errors. Read them anywhere, derive from them, no snapshots and no getters.</p></div></div>
-<div style="display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:start;"><div style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;line-height:1.3;">&#10003;</div><div><div style="font-size:29px;line-height:1.3;color:#E8ECF2;">Zoneless compatible</div><p style="font-size:24px;line-height:1.4;margin:6px 0 0;color:#8A97A8;">Every value is read through the graph. Reactive forms lean on change detection noticing a write.</p></div></div>
+<div style="display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:start;"><div style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;line-height:1.3;">&#10003;</div><div><div style="font-size:29px;line-height:1.3;color:#E8ECF2;">Zoneless compatible</div><p style="font-size:24px;line-height:1.4;margin:6px 0 0;color:#8A97A8;">Value and validity are signals, so anything derived from them tracks. Reactive forms expose plain properties and observables, which nothing can derive from.</p></div></div>
 <div style="display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:start;"><div style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;line-height:1.3;">&#10003;</div><div><div style="font-size:29px;line-height:1.3;color:#E8ECF2;">You own the model</div><p style="font-size:24px;line-height:1.4;margin:6px 0 0;color:#8A97A8;">The form reads your signal, it does not copy it. There is no second copy to sync back.</p></div></div>
 <div style="display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:start;"><div style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;line-height:1.3;">&#10003;</div><div><div style="font-size:29px;line-height:1.3;color:#E8ECF2;">Validation is reactive, not static</div><p style="font-size:24px;line-height:1.4;margin:6px 0 0;color:#8A97A8;">Validators were fixed when the control was built. Rules re-evaluate, so conditional required is one line rather than a subscription that adds and clears.</p></div></div>
 <div style="display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:start;"><div style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;line-height:1.3;">&#10003;</div><div><div style="font-size:29px;line-height:1.3;color:#E8ECF2;">Errors are data</div><p style="font-size:24px;line-height:1.4;margin:6px 0 0;color:#8A97A8;">Iterate the field&rsquo;s errors in the template instead of one block per message.</p></div></div>
@@ -1489,8 +1489,8 @@ heading: 'Better in every way'
 
 <!--
 - This is the slide that answers "why would I move" - do not skip it, it is the one that decides whether anyone adopts this
-- Zoneless is the structural reason and the only one the old APIs cannot answer: reactive forms hold snapshots, so something has to tell Angular to look again
-- The middle four are all callbacks to slides you have just seen, so point back rather than re-explaining
+- Be precise on zoneless if asked: reactive forms are not broken there, `@angular/forms` calls `markForCheck` and bindings update. What you cannot do is derive from a form value, because it is a property and an observable, not a signal
+- Most of these are callbacks to slides you have just seen, so point back rather than re-explaining. Standard Schema and reusable schemas are the two that are new
 - "Everything is a signal" is the whole argument in four words - that is why the other nine are true
 - Standard Schema is the one nobody expects: the Zod schema already validating this payload on the server can validate the form
 -->
@@ -1540,7 +1540,7 @@ heading: 'Symptom, and what to reach for'
 
 <!--
 - The whole deck compressed into things you can look for in a diff. Symptom left, what to reach for right
-- Not reading all twelve out - they'll have the slide - but a finger on two
+- Not reading all thirteen out - they'll have the slide - but a finger on two
 - **The first row, the one you'll hit most by a distance:** an effect that reads signals and writes a signal. Largest cluster in everything we looked at, and almost every instance wants to be a computed - or a linkedSignal if it also has to stay writable
 - **The one I'd most like caught**, over on the right: an error mapped to an empty value. That's the row where the cost isn't a wasted render - it's a person told there's nothing there, when the truth is we don't know
 - Everything else we've been through together
