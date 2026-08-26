@@ -126,6 +126,56 @@ readonly visible = computed(() =>
 
 ---
 layout: content
+eyebrow: 'The same shape, older API'
+heading: 'You already refuse to write this in RxJS'
+clicks: 2
+---
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 24px;max-width:1660px;">Writing into a subject from inside a subscribe is the same bug with a different import. It migrates to the same place.</p>
+<div style="max-width:1180px;">
+
+````md magic-move
+```ts
+// AVOID
+readonly rows$ = new BehaviorSubject<Row[]>([]);
+readonly visible$ = new BehaviorSubject<Row[]>([]);
+
+readonly #sync = this.rows$.subscribe((rows) => {
+  this.visible$.next(rows.filter((r) => r.enabled));
+});
+```
+
+```ts
+// BETTER
+readonly rows$ = new BehaviorSubject<Row[]>([]);
+
+readonly visible$ = this.rows$.pipe(
+  map((rows) => rows.filter((r) => r.enabled)),
+);
+```
+
+```ts
+// PREFER
+// no subscription, and no async pipe in the template
+readonly rows = signal<Row[]>([]);
+
+readonly visible = computed(() =>
+  this.rows().filter((r) => r.enabled),
+);
+```
+````
+</div>
+
+<!--
+- Nobody defends the left one in review. A subscribe that nexts into another subject is a `map` you maintain by hand
+- Point back a slide: that is exactly what the effect was doing. Same bug, different import
+- So the fix is not "learn signals", it is the same fix in both worlds - describe the relationship once and let the graph run it
+- Middle frame: the fix already exists in the API you are in. The derived subject stops being storage and becomes a description. No migration needed to stop doing the wrong thing today
+- The subject holding source state becomes a plain signal, and the derived one stops existing as storage. Same destination as the previous slide
+- And the template loses its `async` pipe: no `| async`, no nullable first frame, no `*ngIf` dance to unwrap it
+-->
+
+---
+layout: content
 eyebrow: 'Derived, and writable'
 heading: 'When the user can override the derived value'
 clicks: 1
@@ -1413,6 +1463,36 @@ export class CustomInput implements FormValueControl<string> {
 - Two rules: a FormValueControl must not have a checked property, and a checkbox-style control implements FormCheckboxControl with checked instead. Never both - the types enforce it
 - One trap to see coming: **there is no valid input.** TypeScript will let you declare one, because implementing an interface doesn't stop you adding members, and it will sit there forever never updating. Use invalid
 - Design point to finish on: don't put validation logic in the control. The schema validates, the control displays the result
+-->
+
+---
+layout: content
+eyebrow: 'Why switch'
+heading: 'Better in every way'
+---
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px 56px;">
+<div style="display:flex;flex-direction:column;gap:24px;">
+<div style="display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:start;"><div style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;line-height:1.3;">&#10003;</div><div><div style="font-size:29px;line-height:1.3;color:#E8ECF2;">Everything is a signal</div><p style="font-size:24px;line-height:1.4;margin:6px 0 0;color:#8A97A8;">Value, validity, touched, errors. Read them anywhere, derive from them, no snapshots and no getters.</p></div></div>
+<div style="display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:start;"><div style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;line-height:1.3;">&#10003;</div><div><div style="font-size:29px;line-height:1.3;color:#E8ECF2;">Zoneless compatible</div><p style="font-size:24px;line-height:1.4;margin:6px 0 0;color:#8A97A8;">Every value is read through the graph. Reactive forms lean on change detection noticing a write.</p></div></div>
+<div style="display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:start;"><div style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;line-height:1.3;">&#10003;</div><div><div style="font-size:29px;line-height:1.3;color:#E8ECF2;">You own the model</div><p style="font-size:24px;line-height:1.4;margin:6px 0 0;color:#8A97A8;">The form reads your signal, it does not copy it. There is no second copy to sync back.</p></div></div>
+<div style="display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:start;"><div style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;line-height:1.3;">&#10003;</div><div><div style="font-size:29px;line-height:1.3;color:#E8ECF2;">Validation is reactive, not static</div><p style="font-size:24px;line-height:1.4;margin:6px 0 0;color:#8A97A8;">Validators were fixed when the control was built. Rules re-evaluate, so conditional required is one line rather than a subscription that adds and clears.</p></div></div>
+<div style="display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:start;"><div style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;line-height:1.3;">&#10003;</div><div><div style="font-size:29px;line-height:1.3;color:#E8ECF2;">Errors are data</div><p style="font-size:24px;line-height:1.4;margin:6px 0 0;color:#8A97A8;">Iterate the field&rsquo;s errors in the template instead of one block per message.</p></div></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:24px;">
+<div style="display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:start;"><div style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;line-height:1.3;">&#10003;</div><div><div style="font-size:29px;line-height:1.3;color:#E8ECF2;">Your Zod and Valibot schemas work</div><p style="font-size:24px;line-height:1.4;margin:6px 0 0;color:#8A97A8;">Anything implementing Standard Schema validates a field through <code style="font-family:'JetBrains Mono',monospace;font-size:23px;">validateStandardSchema</code>.</p></div></div>
+<div style="display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:start;"><div style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;line-height:1.3;">&#10003;</div><div><div style="font-size:29px;line-height:1.3;color:#E8ECF2;">Schemas are reusable</div><p style="font-size:24px;line-height:1.4;margin:6px 0 0;color:#8A97A8;">Define the rules for an address or a line item once, then apply them wherever that shape appears.</p></div></div>
+<div style="display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:start;"><div style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;line-height:1.3;">&#10003;</div><div><div style="font-size:29px;line-height:1.3;color:#E8ECF2;">Paths are type-safe</div><p style="font-size:24px;line-height:1.4;margin:6px 0 0;color:#8A97A8;">The schema mirrors your model, so a renamed field is a compile error rather than a silent no-op.</p></div></div>
+<div style="display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:start;"><div style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;line-height:1.3;">&#10003;</div><div><div style="font-size:29px;line-height:1.3;color:#E8ECF2;">Custom controls lose the ceremony</div><p style="font-size:24px;line-height:1.4;margin:6px 0 0;color:#8A97A8;">One interface, no providers, no <code style="font-family:'JetBrains Mono',monospace;font-size:23px;">forwardRef</code>, no <code style="font-family:'JetBrains Mono',monospace;font-size:23px;">ControlValueAccessor</code>.</p></div></div>
+<div style="display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:start;"><div style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;line-height:1.3;">&#10003;</div><div><div style="font-size:29px;line-height:1.3;color:#E8ECF2;">Backwards compatible</div><p style="font-size:24px;line-height:1.4;margin:6px 0 0;color:#8A97A8;">Existing <code style="font-family:'JetBrains Mono',monospace;font-size:23px;">ControlValueAccessor</code> controls bind to a signal form unchanged, and reactive forms keep working alongside it.</p></div></div>
+</div>
+</div>
+
+<!--
+- This is the slide that answers "why would I move" - do not skip it, it is the one that decides whether anyone adopts this
+- Zoneless is the structural reason and the only one the old APIs cannot answer: reactive forms hold snapshots, so something has to tell Angular to look again
+- The middle four are all callbacks to slides you have just seen, so point back rather than re-explaining
+- "Everything is a signal" is the whole argument in four words - that is why the other nine are true
+- Standard Schema is the one nobody expects: the Zod schema already validating this payload on the server can validate the form
 -->
 
 ---
