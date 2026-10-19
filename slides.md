@@ -1,7 +1,8 @@
 ---
 theme: default
 title: Angular Signals
-info: Signals in practice - the patterns we reach for, and the pitfalls we keep shipping.
+info: Signals in practice - the patterns we reach for, and the pitfalls we keep
+  shipping.
 canvasWidth: 1920
 colorSchema: dark
 highlighter: shiki
@@ -16,9 +17,11 @@ eyebrow: 'Workshop'
 The patterns we reach for, and the pitfalls we keep shipping.
 
 <!--
-- Signals aren't new here. Adoption isn't our problem - the codebase is already overwhelmingly signal-based
-- What keeps happening: a small set of mistakes, repeated, in code that reads as perfectly reasonable
-- That's the session - those mistakes, and the shape of each fix
+Hi everyone, I'm Ashley Hunter and today we're going to take a little bit of a deep dive into Angular signals. 
+
+I'm sure most of you are very familiar with signals at this stage, signals themselves are nothing new here and adoption is not our problem. The code base is already overwhelmingly signal based. 
+
+But what does keep happening is a small set of mistakes That keep occurring, or certain patterns that have better alternatives and Today that we should start adopting more widely.  we're going to cover some of those things here.
 -->
 
 ---
@@ -26,20 +29,25 @@ layout: content
 eyebrow: 'Framing'
 heading: 'Adoption is done. Fluency is not.'
 ---
+
 <p style="font-size:32px;color:#8A97A8;line-height:1.45;margin:0 0 44px;max-width:1600px;">The reactivity findings that come back in review are not typos. They are code that reads correctly and behaves incorrectly, and they come in three shapes.</p>
 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:28px;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:20px;">STALE</div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">Something read a value once and never heard that it changed. The UI is simply wrong, and nothing errors.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:20px;">WASTEFUL</div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">Correct, and doing the work again on every pass. Rebuilt objects, repeated formatting, the same request twice.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#FF7A6B;margin-bottom:20px;">SILENT</div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">A request failed and the screen showed an empty list. It is not blank because something went wrong - it is blank because nothing said so.</p> </div> </div>
 <p style="font-size:30px;color:#5E6B7D;line-height:1.45;margin:44px 0 0;max-width:1600px;">A dependency problem, an identity problem and a state-modelling problem. Every chapter after this one is one of the three.</p>
 
 <!--
-- Where these come from, so nobody takes them on trust
-- ~4,000 PR comments, narrowed to reactivity = 290. Sorted by what went wrong, not which API
-- **Stale 44, wasteful 38, silent failure 27**
-- Caveat: comment-level and multi-label, so they don't sum to 290
-- Caveat: reactivity slice only. Overall our big categories are guideline violations, logic bugs, missing tests, stale comments
-- Fourth shape if asked - races/ordering/lifetime, 11. Far behind, hence not up here
-- Warning story on that number: first pass said 124, which would have put it second. The regex was also matching "traces", and we have a lot of tracing. With word boundaries: 11. "race condition" appears zero times
-- A headline finding was a regex artefact. If it happened once it could be hiding in the others
-- On "silent": all three are silent in that nothing throws. What's silent in the third is the failure itself
+So I have taken some time to analyze thousands of pull requests and go through our code base and identify some of the issues that keep coming up, or some of the patterns that we should try and move away from for more modern alternatives. 
+
+Typically the issues fall into three categories. 
+
+The first being stale, which is where a value may have been updated but the ui has not updated to reflect that. 
+
+Next is Wasteful, which is the opposite essentially, where we are performing updates more frequently than necessary, or perhaps making network requests unnecessarily. 
+
+And the last most common category is where errors occur but are maybe not handled in the best way - Sometimes making it unobvious to users, Or perhaps we can handle it better ourselves in the code.
+
+There were a few others such as race conditions and things like that as well, but they weren't quite as prevalent. 
+
+We have made updates to things like our Claude rules to try and prevent these issues from happening. However, sometimes Claude is more familiar with older patterns, or if it sees code written a certain way in our code base, it may replicate that, letting these things slip through, so Hopefully after today you might be a little bit more familiar with a few of these things and catch them whenever you're reviewing your own code or other people's code yourself.
 -->
 
 ---
@@ -47,13 +55,15 @@ layout: section
 number: '01'
 transition: fade
 ---
+
 ## Derived state
 
 <p class="lead" style="margin-top:40px">Where the largest share of review findings live.</p>
 
 <!--
-- Biggest cluster in the review comments, not close
-- If we change one habit as a team today, this is it
+So we'll start off with some of the more basic things and then we'll work into more complicated scenarios. 
+
+So we'll start off with the right state and this is where the largest group of findings were. So even though this is simple in terms of code complexity, it's also the most common place where we can improve.
 -->
 
 ---
@@ -61,6 +71,7 @@ layout: content
 eyebrow: 'Picking one'
 heading: 'When to use each primitive'
 ---
+
 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:28px;margin-bottom:36px;">
 
 <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:32px 34px;display:flex;flex-direction:column;gap:18px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:27px;color:#2FD8B4;">signal()</div> <p style="font-size:27px;line-height:1.4;margin:0;color:#C9D4E2;">Nothing derives it. A user, or an event from outside, decides what it is.</p> <div style="margin-top:auto;font-family:'JetBrains Mono',monospace;font-size:23px;line-height:1.5;color:#8A97A8;border-top:1px solid #2C3542;padding-top:18px;">query = signal('');</div> </div>
@@ -74,10 +85,9 @@ heading: 'When to use each primitive'
 <p style="font-size:29px;color:#8A97A8;line-height:1.45;margin:32px 0 0;max-width:1600px;">Most of us stop at the middle card. The one on the right is where our largest cluster of findings comes from.</p>
 
 <!--
-- We all get signal right, and computed right. The third card is where we fall down
-- linkedSignal used ~1/3 as often as the workaround it replaces - so "derived but writable" becomes an effect, and that's our largest cluster of findings
-- Left to right: nothing derives it → signal. Derived, nothing else may overwrite → computed. Derived, user can overwrite → linkedSignal
-- effect is deliberately not in the row - it holds no value. It's the exit from the graph into something non-reactive
+So Angular gives us multiple primitives to use when working with signals. Signal and computed I'm sure we're all very familiar with. Linked Signal is a fairly recent addition and I'm going to cover it and how to use it in this talk Because this is something we don't use enough. 
+
+And lastly, we have effect. It's not really a reactive primitive, but it is, of course, part of the reactive system, and it's something you need to be careful with it's absolutely fine to use in the right place, but we'll go over some of the caveats around it as well.
 -->
 
 ---
@@ -86,6 +96,7 @@ eyebrow: 'The pattern'
 heading: 'An effect that writes a signal is a computed you maintain by hand'
 clicks: 1
 ---
+
 <p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 24px;max-width:1660px;">Everything here is signals, so it feels reactive. It is a manual subscription spelled with signals.</p>
 <div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:40px;align-items:start;">
 <div>
@@ -116,12 +127,21 @@ readonly visible = computed(() =>
 </div>
 
 <!--
-- Say why the left is worse - "the rule says so" changes nobody's habits. Four things:
-- **Late.** Runs after the view that triggered it was checked, so everything that read the value that pass got the old one. Angular comes round again before the screen agrees with itself
-- **Writable.** Anything in the class can set it - the invariant isn't enforced
-- **Always runs.** An effect is an always-live consumer, so it refilters on every change even if nothing on screen is reading the result. A computed is lazy - no reader, no work
-- **The catch-up pass costs work** on every input change
-- The right can't drift. Nothing to keep in sync
+Okay, so here we have an example where we have a rows input and a visible signal, and essentially we have an effect that updates any time the rows change and populates the visible signal with the enabled rows. 
+
+So I suspect most people will immediately notice that this is something that could be changed to use a computed. But I do just want to go over some of the reasons why, because there is slightly more to it than what meets the eye. 
+
+So first of all the visible signal is writable, which means that any part of this component could make changes to it. And that could result in stale or incorrect data, Or it getting overridden unexpectedly, which is an avenue for bugs Which doesn't need to be there. 
+
+With agents writing The code these days, it may just see a visible signal that is writable and it will make some changes directly to it rather than looking at the bigger picture. So changing this to your computer eliminates thus potential source of bugs.
+
+--- change slide
+
+Secondly, there are some performance aspects to it. Now, this is a very simple case, so it's very unlikely to have a noticeable impact on the page performance, But on a heavy page with more logic performance might be something to consider. 
+
+So the first thing is that the effect reruns every time rows changes, even if nothing is listening to the visible value. So for example, let's say the thing in the UI rendering the visible rows is conditionally shown with an @if - In our current state, that effect is going to rerun even though it's not being rendered in the UI. So completely unnecessary logic running. 
+
+Secondly, the way Angular updates things is effects run after all of the signals have stabilized, So rows gets updated in one change detection pass and then effect runs and we are modifying a signal which would need a second change detection pass. If we were to switch to computed, both of these issues go away. We only need one change detection pass and it would only update the computed whenever something is actually listening to it.
 -->
 
 ---
@@ -130,6 +150,7 @@ eyebrow: 'The same shape, older API'
 heading: 'You already refuse to write this in RxJS'
 clicks: 2
 ---
+
 <p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 24px;max-width:1660px;">Writing into a subject from inside a subscribe is the same bug with a different import. It migrates to the same place.</p>
 <div style="max-width:1180px;">
 
@@ -166,12 +187,15 @@ readonly visible = computed(() =>
 </div>
 
 <!--
-- Nobody defends the left one in review. A subscribe that nexts into another subject is a `map` you maintain by hand
-- Point back a slide: that is exactly what the effect was doing. Same bug, different import
-- So the fix is not "learn signals", it is the same fix in both worlds - describe the relationship once and let the graph run it
-- Middle frame: the fix already exists in the API you are in. The derived subject stops being storage and becomes a description. No migration needed to stop doing the wrong thing today
-- The subject holding source state becomes a plain signal, and the derived one stops existing as storage. Same destination as the previous slide
-- And the template loses its `async` pipe: no `| async`, no nullable first frame, no `*ngIf` dance to unwrap it
+There's also opportunity to improve similar situations in RxJS code. So here we have the exact same scenario, but instead we're using a subscribe on the observable To perform the filtering and you would be using an async pipe in the template to read it. 
+
+--- change slide
+
+Of course one optimization here would be to change this to use pipe and use a map or a filter operator Instead.
+
+--- change slide
+
+But switching this to signals removes the subscription and there's no async pipe needed in the template and we also don't have to deal with the initial null state of an observable, whereas you might have before had to handle this with like an if block.
 -->
 
 ---
@@ -180,6 +204,7 @@ eyebrow: 'Derived, and writable'
 heading: 'When the user can override the derived value'
 clicks: 1
 ---
+
 <p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 24px;max-width:1660px;">The filter resets the page, so it is derived. The pager moves it, so it is writable. Both at once is <code style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#2FD8B4;">linkedSignal</code>.</p>
 <div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:40px;align-items:start;">
 <div>
@@ -215,13 +240,17 @@ prev() { this.page.update((p) => p - 1); }
 </div>
 
 <!--
-- The pager methods force it. Derived from the filter alone → computed, done. But next/prev must write, and computed won't allow it
-- So: plain signal → nothing resets it on filter change → add an effect to reset by hand. That's the left, and every step of it is sensible
-- linkedSignal fits exactly: derived, so the filter resets to page one for free; writable, so next/prev just work
-- The methods are identical on both sides. Only the reset location changes
-- The tell in your own code is a sentence with "but": derived, **but** the user can change it. Selected row, current page, active tab, a field seeded from what you loaded
-- ~300 instances of the left in our codebase against ~95 of the right
-- If asked: a longer form takes source + computation, and the computation gets previous source and previous value. Use it to keep the selection if it still exists in the new data
+Okay, so here is a Slightly different example. In this case it would be a pagination scenario. So we need to store the current page, we need to be able to move to the next and previous pages, and we also need to be able to reset back to the first page any time a filter changes. 
+
+So, yet again, we have a signal that's writable, and we have an effect performing an update. 
+
+We can't use a computed here because while we do want to react whenever a Dependency changes we can't write to your computed.
+
+Fortunately, recently Angular has come up with an alternative here, which is essentially a linked signal, which if you're not familiar with is Essentially a writable computed. 
+
+-- change slide
+
+So now we remove the signal and the effect. And we use a link signal which has a function which gets run anytime any of its dependencies change and returns the appropriate value. In this case, anytime filter changes we are returning a value of 1, so that handles our reset and our next and previous methods stay as they are, as we still allow updates, and those updates don't re-trigger the Computation function.
 -->
 
 ---
@@ -230,6 +259,7 @@ eyebrow: 'Lesser known'
 heading: 'A linkedSignal can write back to its source'
 clicks: 1
 ---
+
 <p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">Both boxes are bound. Somebody types 212 into Fahrenheit - what happens to Celsius?</p>
 <div style="display:grid;grid-template-columns:1.25fr 0.75fr;gap:44px;align-items:start;">
 <div>
@@ -262,13 +292,21 @@ const tempF = linkedSignal(
 </div>
 
 <!--
-- Two bound inputs. Somebody types 212 into Fahrenheit - hold the question, the answer surprises people
-- **Default:** write lands, F holds 212, Celsius still 0. Next write to C wipes it. A local override is real, and temporary
-- **With set:** hook intercepts, converts, writes C. C becomes 100. F updates because the computation reran off the new C - went round and came back, so the two can't disagree
-- The important bit is what's missing: nothing sets tempF directly. The hook replaces the default write, so tempF only ever gets a value from the computation. One owner
-- rawSet (2nd arg) writes the linked signal directly - async save you won't wait on, or expensive derivation you can already predict. Mostly leave alone
-- update goes through the same hook, reading the current value untracked
-- Real shape isn't temperature: a value owned by a parent or store, where the write belongs to somebody else. Without the hook that's a linked signal plus an effect pushing edits back
+Next is another slightly more complicated example, And I'd like you to think about how we could handle this kind of scenario. We have two input fields, and changing one should automatically update the other. 
+
+So when we enter a Celsius value, Fahrenheit should be updated, and vice versa. 
+
+Currently we have a Celsius signal and we have a Fahrenheit length signal. So as it stands, any time I change the Celsius value, the Fahrenheit length signal will rerun and get recomputed. 
+
+However, if I was to currently type in the Fahrenheit input, Celsius wouldn't update. 
+
+Your initial gut feeling might be to change Celsius also to a link signal, but doing that would introduce a circular dependency. 
+
+Luckily, with Angular 22, linked Signal comes with a new option. 
+
+--- change slide
+
+Which is a set function on a link signal. This is an untracked function that gets called whenever a linked signal gets set, And allows us to update the source. By this one simple change, now both fields stay in sync, With no risk of them getting out of date Or showing stale data.
 -->
 
 ---
@@ -276,18 +314,15 @@ layout: content
 eyebrow: 'Reactive context'
 heading: 'Not every callback you pass Angular is tracked'
 ---
+
 <p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 8px;max-width:1660px;">A read only becomes a dependency if it happens somewhere Angular is watching. <span style="color:#2FD8B4;">Green</span> is watched, <span style="color:#FF7A6B;">red</span> is not - and some of these take two callbacks and watch exactly one.</p>
 <div style="font-family:'JetBrains Mono',monospace;font-size:31px;line-height:1.5;color:#C9D4E2;margin-top:26px;"><div style="padding:14px 0;border-bottom:1px solid #1E252F;">computed(<span style="color:#2FD8B4;">fn</span>)</div><div style="padding:14px 0;border-bottom:1px solid #1E252F;">effect(<span style="color:#2FD8B4;">fn</span>)</div><div style="padding:14px 0;border-bottom:1px solid #1E252F;">linkedSignal(<span style="color:#2FD8B4;">computation</span>, { <span style="color:#FF7A6B;">set</span> })</div><div style="padding:14px 0;border-bottom:1px solid #1E252F;">resource({ <span style="color:#2FD8B4;">params</span>, <span style="color:#FF7A6B;">loader</span> })</div><div style="padding:14px 0;border-bottom:1px solid #1E252F;">afterRenderEffect({ <span style="color:#2FD8B4;">write</span> })</div><div style="padding:14px 0;border-bottom:1px solid #1E252F;">afterNextRender({ <span style="color:#FF7A6B;">write</span> })</div><div style="padding:14px 0;border-bottom:1px solid #1E252F;">untracked(<span style="color:#FF7A6B;">fn</span>)</div></div>
 <p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:26px 0 0;max-width:1660px;">The <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">resource</code> row is the one to keep: <code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#2FD8B4;">params</code> decides <em>when</em> to fetch, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#FF7A6B;">loader</code> only decides <em>how</em>. A signal read in the loader will never cause a refetch. And nothing after an <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">await</code> is tracked anywhere.</p>
 
 <!--
-- The fact underneath most of these mistakes, and rarely written down in one place
-- A read is only a dependency inside a reactive consumer. Not "in a component", not "in a signals API"
-- The two middle rows are unguessable from the API shape: linkedSignal and resource each take two callbacks and watch one
-- **resource is the row to memorise.** params tracked = decides *when*. loader wrapped in untracked in the source = decides only *how*. A read in the loader never refetches, and the request keeps whatever it read first time. Stale with no visible cause
-- linkedSignal, same trap smaller: computation tracked, set hook isn't its own reactive computation - it runs wherever set was called
-- Render rows are where the names mislead: same four phase names, but afterRenderEffect gives each phase a reactive node (hence reruns), afterNextRender phases are plain one-shot callbacks
-- Why it bites: every one of these is correct the first time. It works, it demos, it ships. It fails on the second change
+I will not go into too much detail on this, but just something to be aware of whenever you're using any of Angular's signal functions. Some of the functions you pass are tracked, meaning that they rerun automatically whenever any dependencies change, Others are not tracked, so it's just good to have some awareness to ensure that things are updating when you expect and also things aren't running more often than you expect. 
+
+So the green functions are tracked and the red ones are not tracked.
 -->
 
 ---
@@ -295,6 +330,7 @@ layout: content
 eyebrow: 'Legitimate use'
 heading: 'What an effect is actually for'
 ---
+
 <div style="display:grid;grid-template-columns:1.05fr 0.95fr;gap:44px;align-items:start;">
 <div>
 <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.18em;text-transform:uppercase;color:#2FD8B4;margin-bottom:28px;">Bridges out of the graph</div>
@@ -308,6 +344,11 @@ heading: 'What an effect is actually for'
 <p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:40px 0 0;max-width:1600px;">Effects that pass review are the ones that name the non-reactive driver.</p>
 
 <!--
+In the previous slide, we've kind of discussed how to avoid using effect, but I don't want to insinuate that effect should never be used. There are absolutely valid reasons to use effect, it's just we want to make sure you're using them in the right place. 
+
+
+
+
 - Balance needed here or everyone leaves thinking effects are banned
 - They aren't. Genuine bridges are everywhere in our codebase - grids, editors, charts, event streams we don't own
 - What separates an effect that survives review: whether the author could name the thing outside the graph
