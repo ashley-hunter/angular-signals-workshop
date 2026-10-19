@@ -1113,12 +1113,7 @@ The other two Utilities are Rx Resource, Which essentially does the same thing b
 One thing to note is that you want to avoid doing post requests in an HTTP resource, It's intended to be only used for fetching data. 
 
 
-- It manages to be three separate mistakes at once: an effect that writes signals, an async effect so the teamId read after the await isn't tracked, and two pieces of state kept in step by hand
-- Then it collapses to one expression: a function returning the request, reading whatever signals it needs. That's the whole wiring. The team id changing is the trigger - no subscription, no cancellation code
-- The panel is the point - every line of it is something the hand-written version doesn't do and would be tedious to add. value, isLoading, error, status and reload as signals. Superseded requests cancelled, so three quick team clicks don't leave you with whichever lands last. And no race between two in-flight responses - the bug you'd only find in production on a slow connection
-- Watch inside that function: it reruns on the signals it reads, so key it on the few values the request is made of. A whole state object makes every unrelated field a refetch
-- Choosing, and you'll see all three in our code: plain GET → **httpResource**, never touch HttpClient. Existing observable pipeline → **rxResource**, hand it the stream. Anything else, a promise or something you drive → **resource** with a loader - the general form, and it takes any promise
-- **Reads only.** Nothing stops you setting POST, but a resource re-issues on every parameter change and every reload, and "send the delete again" isn't something you want on a parameter change. A write is an action with a moment - it stays on the HTTP client
+Just keep that function to the few signals the request actually needs, otherwise every unrelated change becomes a refetch. And keep resources for reads only, because they reissue the request on every parameter change, and you don't want a delete being sent again.
 -->
 
 ---
@@ -1150,16 +1145,19 @@ heading: 'Four states, not two'
 <p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:28px 0 0;max-width:1660px;">Error first, so a failed reload never renders as stale data. Then <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">hasValue()</code>, so a reload keeps what is on screen instead of flashing a skeleton. Collapse any two of these and you get a bug testers cannot reproduce.</p>
 
 <!--
-- A resource fetching a team's members. This is the part people get wrong - not creating it, rendering it
-- Six statuses, four things you put on screen. loading and reloading both mean waiting - reloading still holds the previous value, which matters in a second. resolved and local both mean you have a value; local just means somebody called set. error means it isn't coming
-- idle is the forgotten one: params returned undefined. Not the same as loading - nothing is in flight and nothing is coming
-- **The order of that template is most of the job**
-- Error first. Check hasValue first and a failed reload renders the old data with no indication - stale rows, and the user has no idea. Error first means a failure always wins
-- hasValue before isLoading, also deliberate. During a reload you're both. isLoading first blows the list away and flashes a skeleton on every refresh - the flicker everybody complains about. hasValue first keeps the old rows while the new ones fetch
-- Then isLoading, which now means a genuine first load with nothing to show
-- Final else is idle - nothing asked for yet, so prompt rather than pretending to load
-- Detail: hasValue is a type guard, so value() is properly typed inside the branch
-- Collapse any two and you get "it showed nothing". Unreproducible, because it depends which of the four you were in
+So creating a resource is the easy part. Where people tend to go wrong is how they render it.
+
+There are four things you need to show on screen: an error, a value, a loading state, and idle, which is when params returns undefined and nothing has been asked for yet.
+
+And the order of this template is actually most of the job.
+
+We check error first. Otherwise a failed reload just renders the old data, and the user has no idea anything went wrong.
+
+Then hasValue comes before isLoading, because during a reload both are true. If isLoading came first, we'd flash a skeleton every time we refresh. This way we keep the old rows on screen while the new ones load.
+
+Then isLoading, which now genuinely means a first load. And the final else is idle, so we prompt the user rather than pretending to load.
+
+If you collapse any two of these, you usually end up with a bug report that just says "it showed nothing", and it's really hard to reproduce.
 -->
 
 ---
@@ -1205,13 +1203,17 @@ readonly users = resource({
 <p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:18px 0 0;max-width:1660px;">With two resources behind one screen, the aggregate <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">error</code> and the retry both have to name both - and a resource lives only as long as its injector.</p>
 
 <!--
-- Filed five separate times, and every one reads as defensive good practice in a diff. Somebody added a catch so the page wouldn't blow up. Reasonable instinct
-- What it does: the promise no longer rejects → the resource never reaches error → error() is never true → the four-state template takes its hasValue branch and renders an empty list. **The request failed and the user is told the team has no members**
-- I like this fix because the fix is deleting code. Let the loader reject. The resource has an error state and you already wrote the branch
-- Four costumes, worth knowing by sight: catch to an empty array (this one), a default value so the template needn't branch, no-value quietly treated as no-data, and a ternary returning an empty string - the meanest, because the link doesn't break, it just isn't there, and nobody files a bug about a button they never saw
-- Be fair about the pressure behind all four: reading value() in the error state throws. Inside a computed it isn't absorbed - the computed stores and rethrows to every consumer, so one failed request takes out everything downstream. People hit that and reach for a fallback
-- The answer is **guard, don't swallow**. hasValue() is reactive, already false in the error state, and a type guard. Ask the question instead of suppressing the answer
-- Line to leave with: an empty list, a zero, a dash, a missing button - all valid renderings of real data. None can carry "this failed"
+This one was filed five separate times, and every time it looked like good defensive code in the diff. Somebody added a catch so the page wouldn't blow up.
+
+But because the promise no longer rejects, the resource never reaches its error state. So our template takes the hasValue branch and renders an empty list. The request failed, and the user is told the team has no members.
+
+The fix here is actually deleting code. Just let the loader reject. The resource already has an error state, and we've already written the branch for it.
+
+To be fair, there is a reason people do this. Reading value in an error state throws, and inside a computed that error gets passed on to everything downstream. So people hit that and reach for a fallback.
+
+But the answer is to guard rather than swallow. Use hasValue, which is already false in the error state.
+
+Because an empty list, a zero or a missing button are all valid ways to render real data. None of them can tell the user that something failed.
 -->
 
 ---
@@ -1220,6 +1222,7 @@ eyebrow: 'Async state'
 heading: 'An unguarded toSignal is a state you did not model'
 clicks: 2
 ---
+
 <p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 30px;max-width:1660px;">Nearly every <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">toSignal</code> in our codebase takes the first of these. Three options, and the first one is a state you have to render.</p>
 
 ````md magic-move
@@ -1249,15 +1252,21 @@ readonly user = toSignal(this.user$, { initialValue: GUEST });
 <p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:20px 0 0;max-width:1660px;">And <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">toObservable</code> is an <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">effect</code> feeding a <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">ReplaySubject</code> - so a signal, out to an observable and back is an effect writing a signal, with extra steps.</p>
 
 <!--
-- Biggest number in the whole research, and we haven't touched it: close to **1,500 toSignal calls**, and around **1,370 look like the first version** - no initial value, no requireSync
-- Every one is typed T-or-undefined, and genuinely undefined for at least one tick
-- In a template: undefined → falsy branch → "not signed in", an empty list, or a dash, before the real value arrives
-- Usually nobody notices, because the gap is a frame. But this is the silent failure - "we don't know yet" rendered as "there is nothing". When the source is slower than a frame it stops being invisible
-- **requireSync**, if the observable emits on subscribe - BehaviorSubject, ReplaySubject, store selector - gives a plain Signal<User>, no undefined in the type
-- Stronger than people expect: not a hint checked later. toSignal subscribes, and throws NG0601 right there if nothing arrived synchronously. Wrong about your source and you find out on first render in dev, not in production six months later
-- **Initial value**, for sources that genuinely can't emit immediately. The starting state is something you chose, not something inherited from the type system. A real User - guest, anonymous - keeps the type Signal<User> and the undefined problem leaves the template
-- Fourth answer, not on the slide: keep undefined because it means something - not loaded yet, show a skeleton. Fine. **The bug is picking none of the four and hoping**
-- Last line, separate point people do without thinking: toObservable is implemented as an effect writing into a ReplaySubject - the actual implementation, not an analogy. Signal → observable → pipe → back reintroduces every chapter-one problem and pays for two conversions. Stay in signals: a computed, or a resource if it's async
+This is actually the biggest number in the whole research. We have close to 1,500 toSignal calls in our code base, and around 1,370 of them look like this where it returns a value or undefined.
+
+That means the signal is undefined for at least one tick. So in a template we fall into the empty branch and show something like "not signed in" or an empty list before the real value arrives.
+
+Usually it's only a frame, so nobody notices. But It's something to keep in mind where our UI might flicker or show stale data temporarily. 
+
+--- Change slide.
+
+So the first option is requireSync. If your observable emits as soon as you subscribe, like a BehaviorSubject or a store selector, you get a plain Signal of User. And if you're wrong about that, it throws straight away in dev, rather than causing a problem in production months later.
+
+--- Change slide.
+
+The second is an initial value, for sources that can't emit straight away. That way the starting state is something you safely show, rather than undefined.
+
+Keeping undefined is also fine if it actually means something to you, like showing a skeleton. The bug is just not picking any of these.
 -->
 
 ---
@@ -1270,10 +1279,7 @@ transition: fade
 <p class="lead" style="margin-top:40px">What a signal exposes, and to whom.</p>
 
 <!--
-- Chapter six, the cheap one. Everything in it takes about a minute to fix
-- Which is the problem: none of it is hard, nobody argues in review, and it's back in the next pull request
-- So take these three as habits you build, not things you catch. By the time review catches them you've already written them, and writing them is the part to change
-- It's about what a signal exposes, and who to
+This next section is a fairly quick one. Everything in here takes about a minute to fix, but because it's so easy, it tends to come back in the next pull request. So think of these more as habits to build.
 -->
 
 ---
@@ -1281,15 +1287,16 @@ layout: content
 eyebrow: 'Visibility'
 heading: 'Template-only state is not public API'
 ---
+
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-bottom:40px;"> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:34px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#2FD8B4;margin-bottom:18px;">protected readonly</div> <p style="font-size:28px;line-height:1.5;margin:0;color:#C9D4E2;">Anything the template reads and nothing outside needs: derived state, signal queries, view helpers.</p> </div> <div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:34px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#2FD8B4;margin-bottom:18px;">#private</div> <p style="font-size:28px;line-height:1.5;margin:0;color:#C9D4E2;">Anything neither the template nor a consumer touches. Enforced at runtime, not just by the compiler.</p> </div> </div>
 <p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:0 0 20px;max-width:1600px;">A signal anything can reach is an invitation, and your invariant now has two owners. <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">protected</code> closes that door; <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">readonly</code> only stops reassignment.</p>
 
 <!--
-- Angular templates can read protected members. Not incidental - it's why protected is the right default. Your template isn't an external consumer, so you don't owe it a public API
-- What I find in review isn't deliberate exposure. It's a signal that ended up public for no reason - nothing outside needs it, nothing outside reads it, that's just how the line got typed
-- Narrowing costs nothing while the change is open. After merge it's a breaking change to somebody, and now it's a conversation instead of a keystroke. **Do it while it's free**
-- Second card is our rule, not Angular's: for genuinely internal state use a #private field - enforced at runtime, not just by the compiler, and nothing can reach past it
-- Last line: if the only reason to widen visibility is that a test wants to see something, the test is asserting on the wrong thing. Bracket-indexing a protected signal is a smell, not an access strategy
+So Angular templates can read protected members, And I believe they recently added support for private members - im not sure if that is availble to use yet. Your template isn't an external consumer, so it doesn't need a public API.
+
+For signals in particular, mark them as read-only. You typically never want to override a signal with a brand new signal, as that completely removes It from the reactive graph. 
+
+For anything that's genuinely internal, our rule is to use a hash private field, which is enforced at runtime as well.
 -->
 
 ---
@@ -1298,6 +1305,7 @@ eyebrow: 'Immutability'
 heading: 'Signals do not make your data immutable'
 clicks: 1
 ---
+
 <p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">A consumer pops the array it was handed. Every later reader sees it instantly, and the graph never hears about it.</p>
 <div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:40px;align-items:start;">
 <div>
@@ -1326,16 +1334,19 @@ service.items().pop();
 <p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:30px 0 0;max-width:1660px;">The signal protects the reference, not the contents. Nothing reruns, because from the graph's point of view nothing changed.</p>
 
 <!--
-- Everything else in this talk is stale: something changed and nobody heard. This is the opposite, which makes it disorienting the first time
-- A consumer pops the array it was handed. That array is the one inside your signal - the signal handed out a reference, not a copy
-- The moment they pop it, everyone reading it sees the edit immediately. Not late - instant
-- And the graph hears nothing at all, because the reference never changed. Nothing reruns, nothing recomputes, nothing looks wrong
-- Look at the panel. The array really did lose an item - four down to three - and yet items() is still the same object it always was. That second line is why nothing happened: the graph only ever compares the reference, and the reference is identical
-- So anything that cached a value derived from this array is now wrong, and will stay wrong until something unrelated happens to invalidate it. You find out when a user tells you two parts of the screen disagree
-- The fix is a type. readonly on the array means pop isn't there to call - a compile error, at the point somebody writes it, which is exactly where you want it
-- Worth saying it costs nothing at runtime. This is entirely a compile-time guarantee, and the signal is unchanged
-- If asked about editing a field on one of the items: yes, readonly on the array doesn't stop that, and you'd need the elements readonly too. Start with the array, because that's where this actually bites
+In most of the examples so far, the signal changed and something wasn't listening. In this one, the signal never changes at all, but the data inside it does.
+
+So here a consumer pops an item off the array it was given. But a signal hands out a reference, not a copy, so that's the exact same array sitting inside the signal.
+
+As you can see on the right, the array went from four items to three, but it's still the same object. And signals only compare the reference, so as far as Angular is concerned, nothing happened. No computed reruns and no effect fires.
+
+So anything that reads the array directly sees three items, but anything derived from it, like a computed count, still thinks there are four. And it stays that way until something unrelated triggers an update. 
+
+--- Change slide.
+
+The fix is just a type. If we mark the array as readonly, pop isn't there to call, so you get a compile error the moment someone writes it. And there's no runtime cost to this at all.
 -->
+
 ---
 layout: section
 number: '07'
@@ -1346,9 +1357,7 @@ transition: fade
 <p class="lead" style="margin-top:40px">The same ideas, applied to the one API built entirely on them.</p>
 
 <!--
-- Last chapter, and it's shorter than it wants to be. Signal Forms deserves its own session and will get one
-- It's here because it's the one API in Angular built entirely on the ideas we have been through
-- So keep recognising things: derived state instead of synchronisation, rules that declare their dependencies instead of code keeping things in step, one source of truth instead of two
+So this is the last section, and it'll be a bit shorter than it deserves, as signal forms really needs a session of its own. But it's the one API in Angular built entirely on the ideas we've just gone through, so you'll probably recognise a lot of it.
 -->
 
 ---
@@ -1356,15 +1365,18 @@ layout: content
 eyebrow: 'Introduction'
 heading: 'A third forms API, built on signals'
 ---
+
 <p style="font-size:32px;color:#8A97A8;line-height:1.45;margin:0 0 52px;max-width:1550px;">Stable in v22. You keep your data in a signal, pass it to <code style="font-family:'JetBrains Mono',monospace;font-size:29px;color:#2FD8B4;">form()</code>, and get a form back - no control tree to keep in sync.</p>
 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:28px;"> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#8B7CF6;margin-bottom:20px;">WHAT IT IS</div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">Your own data is the form's data, and everything the form knows about a field is a signal.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#8B7CF6;margin-bottom:20px;">WHAT IT IS NOT</div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">A migration. Reactive forms still work, and so do the controls we have already built - but new forms should use signal forms.</p> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#8B7CF6;margin-bottom:20px;">WHAT CHANGES</div> <p style="font-size:29px;line-height:1.4;margin:0;color:#C9D4E2;">Validators stop being things you add and remove. They become rules that know when they apply.</p> </div> </div>
 
 <!--
-- Orientation before the API: stable in v22. Public API, semver-protected, still growing
-- What it is **not** is a migration. Reactive Forms are still supported and fine for plenty of screens, and your existing custom controls keep working - how, in a few minutes
-- The difference is where the data lives. Your data is the form's data: keep it in a signal, hand it to form(), and everything the form knows about a field - value, validity, touched - is itself a signal
-- No control tree to build, none to keep in sync
-- And because it's signals underneath, validators stop being static objects you add and remove by hand. They become rules that know when they apply and what they depend on
+So signal forms is stable as of v22.
+
+It isn't a migration though. Reactive forms are still supported, and your existing custom controls will keep working.
+
+The main difference is where the data lives. Your data is the form's data. You keep it in a signal, hand it to form, and everything about each field, so its value, whether it's valid, whether it's been touched, is itself a signal.
+
+So there's no control tree to build or keep in sync, and validators become rules that know when they apply.
 -->
 
 ---
@@ -1373,15 +1385,28 @@ eyebrow: 'What is a signal form?'
 heading: 'Three pieces'
 clicks: 4
 ---
+
 <div style="display:grid;grid-template-columns:1.25fr 0.75fr;gap:52px;align-items:start;"> <div style="display:flex;flex-direction:column;gap:24px;"> <div style="display:flex;gap:24px;align-items:stretch;" v-click="1"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#2FD8B4;padding-top:34px;width:28px;">1</div> <div style="flex:1;background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:28px 34px;font-family:'JetBrains Mono',monospace;font-size:25px;line-height:1.6;color:#C9D4E2;"> <div><span style="color:#8B7CF6;">const</span> <span>loginModel</span> = <span style="color:#7CC4FF;">signal</span>({ email: <span style="color:#2FD8B4;">''</span>, password: <span style="color:#2FD8B4;">''</span> });</div> </div> </div> <div style="display:flex;gap:24px;align-items:stretch;" v-click="2"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#2FD8B4;padding-top:34px;width:28px;">2</div> <div style="flex:1;background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:28px 34px;font-family:'JetBrains Mono',monospace;font-size:25px;line-height:1.6;color:#C9D4E2;"> <div><span style="color:#8B7CF6;">const</span> <span>loginForm</span> = <span style="color:#7CC4FF;">form</span>(loginModel);</div> </div> </div> <div style="display:flex;gap:24px;align-items:stretch;" v-click="3"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#2FD8B4;padding-top:34px;width:28px;">3</div> <div style="flex:1;background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:28px 34px;font-family:'JetBrains Mono',monospace;font-size:25px;line-height:1.6;color:#C9D4E2;"> <div>&lt;input [formField]=<span style="color:#2FD8B4;">"loginForm.email"</span> /&gt;</div> <div>&lt;input [formField]=<span style="color:#2FD8B4;">"loginForm.password"</span> /&gt;</div> </div> </div> </div> <div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px;display:flex;flex-direction:column;gap:22px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#5E6B7D;">RUNNING</div> <div> <div style="font-size:24px;color:#8A97A8;margin-bottom:10px;">Email</div> <div style="background:#0A0D12;border:1px solid #2FD8B4;border-radius:8px;padding:0 18px;height:60px;display:flex;align-items:center;font-family:'JetBrains Mono',monospace;font-size:24px;color:#E8ECF2;white-space:nowrap;">sam.taylor@example.com<span style="color:#2FD8B4;">|</span></div> </div> <div> <div style="font-size:24px;color:#8A97A8;margin-bottom:10px;">Password</div> <div style="background:#0A0D12;border:1px solid #4A5568;border-radius:8px;padding:0 18px;height:60px;display:flex;align-items:center;font-family:'JetBrains Mono',monospace;font-size:24px;color:#5E6B7D;">••••••••</div> </div> <div style="border-top:1px solid #4A5568;padding-top:20px;font-family:'JetBrains Mono',monospace;font-size:24px;line-height:1.55;color:#5E6B7D;"> <div>loginModel().email</div> <div style="color:#2FD8B4;">"sam.taylor@example.com"</div> </div> </div> </div>
 <div style="margin-top:48px;border-left:4px solid #2FD8B4;padding-left:28px;font-family:'Space Grotesk',sans-serif;font-size:36px;font-weight:500;color:#E8ECF2;" v-click="4">The model is the source of truth for the editable data.</div>
 
 <!--
-- Three pieces, and that's genuinely all of it
-- Data in an ordinary writable signal. Nothing special - the same signal call you'd write anywhere
-- Pass it to form, get back a field tree shaped exactly like your data
-- Bind a control with formField, pointing at the field: loginForm.email, loginForm.password
-- The part to hold on to: **loginModel isn't a DTO waiting to be filled in at the end. It is the form's editable data.** Type in that email box and loginModel updates, because the form keeps no copy of anything
+So there are three pieces to a signal form, and that genuinely is all there is to it.
+
+--- Change slide.
+
+First, your data goes in an ordinary writable signal. There's nothing special about it, it's the same signal you'd write anywhere else.
+
+--- Change slide.
+
+Then you pass it to form, and you get back a field tree that's shaped exactly like your data.
+
+--- Change slide.
+
+And then you bind a control using formField, pointing it at the field. So loginForm.email and loginForm.password.
+
+--- Change slide.
+
+So if you type in that email box, loginModel updates, because the form doesn't keep a copy of anything.
 -->
 
 ---
@@ -1394,11 +1419,9 @@ heading: 'The same form in both APIs'
 <p style="font-size:30px;color:#5E6B7D;line-height:1.4;margin:40px 0 0;">And for a form this simple, there really isn't much wrong with this.</p>
 
 <!--
-- Next to something familiar. Left, Reactive Forms: construct a separate control tree - a FormGroup of FormControls - then bind controls out of it
-- Right: a signal holding plain data, a call to form, bindings pointing straight at the fields
-- Deliberately nothing marked red - not trying to make Reactive Forms look bad. At this size the difference is architectural rather than dramatic, and for a form this simple there honestly isn't much wrong with the left
-- It starts to matter when data has to move into and out of the form, or when one field's behaviour depends on another
-- Which is to say: if all our forms were two inputs with no real behaviour, this workshop would be very short
+So here's how it compares to something more familiar. On the left we have reactive forms, where we build a control tree and bind out of it. On the right, we have a signal with plain data, a call to form, and bindings pointing straight at the fields.
+
+I'm not trying to make reactive forms look bad here. For a form this simple, there honestly isn't much wrong with the left side. Where it really starts to matter is when data has to move in and out of the form, or when one field depends on another.
 -->
 
 ---
@@ -1406,6 +1429,7 @@ layout: content
 eyebrow: 'Validation'
 heading: 'Rules live in the schema, beside the data'
 ---
+
 <p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">One place describing what has to be true about this data.</p>
 <div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:40px;align-items:center;">
 <div>
@@ -1423,20 +1447,22 @@ readonly signupForm = form(this.signup, (p) => {
 </div>
 
 <!--
-- Rules go in the schema - the second argument to form. You are not attaching validators to controls one at a time, you are describing in one place what has to be true about this data
-- Each rule takes a path and an options object. That's the whole shape, and the built-ins on the right cover most of what we write
-- Pause on the message, because it's the part people push back on. Angular ships no default copy at all. A rule without a message produces an error with a kind and nothing to display
-- That sounds like a chore until you see what it buys: because every rule carries its own message, the template never has to know which rules were applied. One loop over the field's errors renders any field in the form
-- Compare that to what we write today - an if per error type per field, with the copy living in the template and getting rewritten every time the field is reused
-- Worth noticing what isn't here: no validator objects to construct, nothing to add or remove later, and no control tree to attach any of it to. The rule names the field it applies to
-- If asked, there are two escape hatches - validate for your own rule, and validateHttp when the check has to hit a server. Not covering either here
+So validation rules go in the schema, which is the second argument to form. Rather than attaching validators to controls one at a time, you describe in one place what has to be true about the data.
+
+This schema function gives you what's called a schema path, which is essentially just Another object that has the same structure as your data, and it essentially is a path to each property in your object. So it gives us a type safe way to reference these fields and then we can just use these validator functions to apply rules to them. 
+
+One nice change because every rule can carry its own message, the template doesn't need to know which rules were applied. One loop over the field's errors can render any field in the form, rather than an if block for every error type on every field like we often write today.
+
+And if you need something custom, there's also validate for your own rules, and validateHttp for checks that need to hit a server.
 -->
+
 ---
 layout: content
 eyebrow: 'Validation · conditional required'
 heading: 'Describe the rule, not the response'
 clicks: 2
 ---
+
 <p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 24px;max-width:1660px;">Email is required, but only when notifications are on.</p>
 <div style="display:grid;grid-template-columns:1.3fr 0.7fr;gap:44px;align-items:start;">
 <div>
@@ -1472,13 +1498,19 @@ readonly prefsForm = form(this.prefs, (p) => {
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-top:30px;" v-click="2"> <div style="background:#0F131A;border:1px solid #4A5568;border-radius:14px;padding:26px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#5E6B7D;margin-bottom:14px;">REACTIVE FORMS</div> <div style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#8A97A8;">listen → inspect → mutate → recalculate</div> </div> <div style="background:#0A0D12;border:1px solid #2FD8B4;border-radius:14px;padding:26px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#2FD8B4;margin-bottom:14px;">SIGNAL FORMS</div> <div style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#E8ECF2;">describe the relationship</div> </div> </div>
 
 <!--
-- The requirement, and you've all built this: checkbox on, email required, field showing its error. Turn it off and the requirement disappears
-- Start with how we write it today. Subscribe to notify's valueChanges. startWith so it runs for the initial value. takeUntilDestroyed so it doesn't outlive the component. Then per change: inspect the value, add or remove a validator, tell email to recalculate
-- Four steps, every one of them bookkeeping by hand
-- Now watch: **email is required, when notify is true.** That's the whole thing
-- No subscription. No adding a validator, no removing one, no telling email to recalculate. Describe the relationship once, and the framework works out when it applies and when it stops
-- And the form on the right didn't change. Same behaviour, same error, same checkbox - only how much we had to say
-- Same move as computed: stop orchestrating the response, describe the rule
+Here's an example of where the new forms API starts to shine. When the checkbox is on, email is required, and when it's off, it isn't.
+
+Today we'd typically subscribe to valueChanges, use startWith for the initial value and takeUntilDestroyed for cleanup, and then add or remove the validator and update the validity ourselves. That's four steps of bookkeeping done by hand.
+
+--- Change slide.
+
+With signal forms, this is it. Email is required when notify is true.
+
+No subscription, no adding or removing validators. We describe the relationship once, and the framework works out when it applies. And the form on the right behaves exactly the same.
+
+--- Change slide.
+
+So it's really the same idea as computed. We stop orchestrating the response, and just describe the rule. And Angular provides us with quite a few helpers in this when function for accessing other properties or states of other components. And every validator supports a when property.
 -->
 
 ---
@@ -1487,6 +1519,7 @@ eyebrow: 'Custom controls'
 heading: 'One interface, one signal, no ControlValueAccessor'
 clicks: 1
 ---
+
 <p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 22px;max-width:1660px;">Same control, both ways. The <code style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#2FD8B4;">[formField]</code> directive finds the interface and binds the field's value to your model.</p>
 
 ````md magic-move
@@ -1531,14 +1564,19 @@ export class CustomInput implements FormValueControl<string> {
 </style>
 
 <!--
-- The same control written twice, and the point is the volume
-- Left, ControlValueAccessor: a multi-provider with a forwardRef pointing at the class you're mid-declaration of. A private copy of the value, because the control owns its own state. Two callbacks you store to call later. Four interface methods - write, change, touch, disable - none of which describe anything about your control
-- That's the tax we've all been paying, and none of it is about being an input
-- Right: the whole contract is one property. Implement FormValueControl, declare a value model signal. formField detects the interface and two-way binds. No provider, no forwardRef, no callbacks. Add a touch output for blur tracking and the field marks itself touched
-- The strip along the bottom is all optional - errors, invalid, pending, disabled, readonly, and constraints like required and maxLength. Declare what your control renders, ignore the rest
-- Two rules: a FormValueControl must not have a checked property, and a checkbox-style control implements FormCheckboxControl with checked instead. Never both - the types enforce it
-- One trap to see coming: **there is no valid input.** TypeScript will let you declare one, because implementing an interface doesn't stop you adding members, and it will sit there forever never updating. Use invalid
-- Design point to finish on: don't put validation logic in the control. The schema validates, the control displays the result
+If you've ever had to write a custom form control, you will know very well about how Much boiler pit is required to integrate it. 
+
+With ControlValueAccessor, we need a provider with a forwardRef, a private copy of the value, two stored callbacks, and the interface methods to wire it all together. Very verbose. 
+
+--- Change slide.
+
+With signal forms, we implement FormValueControl and declare a value model signal, and that's it. No provider, no forwardRef and no callbacks. If we add a touch output, the field gets marked as touched on blur.
+
+Everything along the bottom is optional, so you only declare the things your control actually needs.
+
+One trap to watch out for is that there's no valid input. TypeScript will let you add one, but it'll never update, so use invalid instead.
+
+And keep validation out of the control itself. The schema does the validating, and the control just displays the result.
 -->
 
 ---
@@ -1564,29 +1602,17 @@ heading: 'Better in every way'
 </div>
 
 <!--
-- This is the slide that answers "why would I move" - do not skip it, it is the one that decides whether anyone adopts this
-- Be precise on zoneless if asked: reactive forms are not broken there, `@angular/forms` calls `markForCheck` and bindings update. What you cannot do is derive from a form value, because it is a property and an observable, not a signal
-- Most of these are callbacks to slides you have just seen, so point back rather than re-explaining. Standard Schema and reusable schemas are the two that are new
-- "Everything is a signal" is the whole argument in four words - that is why the other nine are true
-- Standard Schema is the one nobody expects: the Zod schema already validating this payload on the server can validate the form
+So this slide really answers why you'd want to switch.
+
+The first one is really the whole argument. Everything is a signal, and that's the reason the rest of this list is true.
+
+Most of these we've already seen, so I won't go over them again. A couple of new ones are reusable schemas, so you can define the rules for something like an address once and use them anywhere, and type-safe paths, so renaming a field gives you a compile error.
+
+And the one that surprises most people is Standard Schema support. So the same Zod schema that's validating a payload on the server can validate your form as well.
+
+It's also backwards compatible, so your existing controls and reactive forms keep working alongside it.
 -->
 
----
-layout: content
-eyebrow: 'Guidance'
-heading: 'What we do about it'
----
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;"><div style="background:#12171F;border:1px solid #2FD8B4;border-radius:14px;padding:36px 40px;"><div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#2FD8B4;margin-bottom:20px;">NEW FORMS</div><p style="font-size:29px;line-height:1.45;margin:0;color:#C9D4E2;">Signal Forms. It is stable, it is semver-protected, and it is where the framework is going.</p></div><div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:36px 40px;"><div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#8B7CF6;margin-bottom:20px;">CXUI</div><p style="font-size:29px;line-height:1.45;margin:0;color:#C9D4E2;">Our component library fully supports Signal Forms. The controls you already use bind straight to a field with <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">[formField]</code> - nothing to wrap, and nothing to wait for.</p></div></div>
-<p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:48px 0 0;max-width:1660px;">Be careful with examples online. The API was renamed repeatedly before v22, so a lot of published material uses names that no longer exist.</p>
-
-<!--
-- The guidance is one line: new forms use Signal Forms. It's stable, it's semver-protected, and it's where the framework is going, so there's no reason to start a new form any other way
-- And the thing that usually blocks this kind of move isn't the framework, it's the component library - you adopt the new API and then discover half your inputs don't bind to it
-- That isn't the case here. CXUI fully supports Signal Forms, so the controls you already use bind straight to a field. Nothing to wrap, no adapter layer, and nothing to wait for
-- So the cost of using this on your next form is close to zero, which is the whole reason I'm comfortable telling you to use it
-- One practical warning to finish on. Be careful with what you find online: the API was renamed repeatedly while it was experimental, so a lot of pre-v22 material uses names that simply don't exist any more
-- If a blog post tells you to import something that isn't there, check the version before assuming you've done something wrong. The churn was real, and it's over
--->
 ---
 layout: section
 number: '08'
@@ -1597,9 +1623,7 @@ transition: fade
 <p class="lead" style="margin-top:40px">The reactivity chapters, as questions you can ask about a diff.</p>
 
 <!--
-- If you photograph one slide today, make it the symptom-to-fix table coming up
-- Everything so far has been the explanation - why these happen, what's underneath
-- This is the part you can take to a code review tomorrow morning and actually use
+So everything up to now has been the explanation. This next part is something you can actually take into a code review tomorrow, and if you're going to take a photo of one slide today, make it the next one.
 -->
 
 ---
@@ -1607,6 +1631,7 @@ layout: content
 eyebrow: 'Checklist'
 heading: 'Symptom, and what to reach for'
 ---
+
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:44px;align-items:start;"> <div><div class="compare" style="grid-template-columns:1fr 1.1fr;font-size:24px;"> <div class="head">IF YOU SEE</div> <div class="head teal">REACH FOR</div> <div class="row-label">An effect that writes a signal</div> <div class="new"><code style="font-family:'JetBrains Mono',monospace;">computed</code>, or <code style="font-family:'JetBrains Mono',monospace;">linkedSignal</code></div> <div class="row-label">An effect that writes another component's signal</div> <div class="new">An input, or an explicit method on the owner</div> <div class="row-label">An <code style="font-family:'JetBrains Mono',monospace;">await</code> inside an effect</div> <div class="new">A resource keyed on a computed of the parameters</div> <div class="row-label">A non-signal read inside derived state</div> <div class="new">Bring it into the graph, or read it at render time</div> <div class="row-label">A decision taken in a constructor</div> <div class="new">A <code style="font-family:'JetBrains Mono',monospace;">computed</code>, or an effect that tracks the input</div> <div class="row-label last">A DOM write in a plain effect</div> <div class="new last"><code style="font-family:'JetBrains Mono',monospace;">afterRenderEffect</code> with a phase</div> </div></div> <div><div class="compare" style="grid-template-columns:1fr 1.1fr;font-size:24px;"> <div class="head">IF YOU SEE</div> <div class="head teal">REACH FOR</div> <div class="row-label">A fresh array or object per read</div> <div class="new">A <code style="font-family:'JetBrains Mono',monospace;">computed</code>, so identity is cached</div> <div class="row-label">A method call in a binding</div> <div class="new">A precomputed view object, bound field by field</div> <div class="row-label">An error mapped to an empty value</div> <div class="new">A distinct error state, carried to the template</div> <div class="row-label">A resource on a component-scoped service</div> <div class="new">Scope it to whatever outlives the interaction</div> <div class="row-label">Side effects in derived state</div> <div class="new">An owner that can also tear it down</div> <div class="row-label">A public writable signal</div> <div class="new"><code style="font-family:'JetBrains Mono',monospace;">protected readonly</code>, readonly at boundaries</div> <div class="row-label last">A mutable array crossing a boundary</div> <div class="new last">Type it <code style="font-family:'JetBrains Mono',monospace;">readonly</code> at the boundary</div> </div></div></div>
 
 <style>
@@ -1615,30 +1640,9 @@ heading: 'Symptom, and what to reach for'
 </style>
 
 <!--
-- The whole deck compressed into things you can look for in a diff. Symptom left, what to reach for right
-- Not reading all thirteen out - they'll have the slide - but a finger on two
-- **The first row, the one you'll hit most by a distance:** an effect that reads signals and writes a signal. Largest cluster in everything we looked at, and almost every instance wants to be a computed - or a linkedSignal if it also has to stay writable
-- **The one I'd most like caught**, over on the right: an error mapped to an empty value. That's the row where the cost isn't a wasted render - it's a person told there's nothing there, when the truth is we don't know
-- Everything else we've been through together
-- The value isn't in me narrating it. It's in having it written down somewhere you'll see it again
--->
+So this is essentially the whole talk compressed down into things you can look out for in a diff, with the symptom on the left and what to reach for on the right.
 
----
-layout: content
-center: true
----
-<div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.18em;text-transform:uppercase;color:#2FD8B4;margin-bottom:36px;">One thing to take away</div>
-<h2 style="font-size:64px;line-height:1.15;margin:0 0 44px;max-width:1600px;">These bugs do not throw. They render.</h2>
-<p style="font-size:32px;color:#8A97A8;line-height:1.5;margin:0;max-width:1500px;">A stale label, an empty list, a chart of zeroes, a form that says it is valid. All of it looks like working software - which is why the habit matters more than the review.</p>
-
-<!--
-- Finishing here rather than on a summary
-- Every bug today shares one property: **not one of them throws**
-- A stale label, an empty list, a chart full of zeroes, a form that says it's valid - all four look exactly like working software
-- And we don't keep shipping them because they're hard to fix. Most are a one-line change once you can see them
-- It's that they're invisible when they work and invisible when they don't - so by the time the code reaches review, it already looks fine
-- That's why the habits matter more than the review does
-- Thank you - and very happy to take questions
+I won't read them all out, but Hopefully this gives you a little bit of an insight into the most common source of bugs and issues around signals and perhaps some More modern approaches that we can take in our code going forward.
 -->
 
 ---
@@ -1650,9 +1654,15 @@ title: 'Questions?'
 <div style="display:flex;gap:44px;font-family:'JetBrains Mono',monospace;font-size:26px;color:#5E6B7D;"> <div>angular.dev/guide/signals</div> <div>angular.dev/guide/forms/signals</div> </div>
 
 <!--
-- Open it up here
-- If nothing comes straight away, two to prime the room: which of these have you actually hit, and is there one you disagree with?
-- The second is more useful than the first - a couple of these findings were argued down when we filed them, and the arguments were good
-- If somebody asks the question I'd ask - how do I find one in a running app, given none of them throw - the honest answer is debugName plus the signal graph in Angular DevTools, and it's better than it sounds
-- Name your signals at creation and the graph becomes readable. A stale value is a missing edge, and the graph draws edges
+So I'll open it up for questions now.
+
+[If nothing comes straight away]
+
+I'm curious, which of these have you actually run into yourselves? And is there one you disagree with?
+
+I'm genuinely more interested in the second one. A couple of these findings were argued down when we first raised them, and the arguments were good.
+
+[If someone asks how to find these in a running app, given none of them throw]
+
+That's a great question. Honestly, the best answer is debugName plus the signal graph in Angular DevTools, and it's a lot better than it sounds. If you name your signals when you create them, the graph becomes really readable. A stale value is essentially a missing edge, and the graph draws the edges for you.
 -->
