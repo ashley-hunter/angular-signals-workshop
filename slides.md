@@ -1045,77 +1045,17 @@ Now only when those exact properties have changed will the computed essentially 
 -->
 
 ---
-layout: content
-eyebrow: 'Templates'
-heading: 'Templates call. Computeds cache.'
-clicks: 1
----
-
-<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 22px;max-width:1660px;">The work does not go away. It moves out of the view and into something that caches it.</p>
-
-````md magic-move
-```ts
-template: `
-  @for (row of rows(); track row.id) {
-    <a [href]="buildUrl(row)">
-      {{ formatNextRun(row.nextRunAt) }}
-    </a>
-  }
-`,
-
-buildUrl(row: Row) { return `/runs/${row.id}`; }
-formatNextRun(at: string) { return this.fmt.format(at); }
-
-// two calls per row, on every check of this view
-```
-
-```ts
-template: `
-  @for (row of rowViews(); track row.id) {
-    <a [href]="row.url">{{ row.nextRun }}</a>
-  }
-`,
-
-buildUrl(row: Row) { return `/runs/${row.id}`; }
-formatNextRun(at: string) { return this.fmt.format(at); }
-
-readonly rowViews = computed(() =>
-  this.rows().map((row) => ({
-    id: row.id, url: this.buildUrl(row),
-    nextRun: this.formatNextRun(row.nextRunAt),
-  })),
-);   // two calls per row, per change to rows()
-```
-````
-
-<!--
-One other thing to consider when working with templates is method calls from a template and how we could optimize them.
-
-Here we have a for loop that calls a build URL method and a format next run method. Both of these rerun any time the rows get re-rendered. 
-
-
-- The word to notice is "unrelated"
-- A method call in a binding runs on every check. So a resource resolving in a completely different corner of this component marks the view dirty, and your date formatting runs again for every visible row
-- The rows didn't ask for that work. Something else did, and the rows paid for it
-- This isn't a redesign. Both calls are still there - buildUrl still runs, formatNextRun still runs, once per row
-- All that changed is **where they live**. Template = every check. Computed = when rows changes, and not otherwise
-- Hence the cheapest fix on the list: move two lines, bind to fields instead of calling functions
-- The shape it leaves is worth naming - a **view model**. One computed turning domain objects into exactly what the template needs, so the template only reads properties. Easier to read, as a bonus
-- Related, smaller scale: @let. Same three-level dereference in six bindings, name it once. Also how you subscribe to an async pipe once rather than once per usage, since every pipe instance is its own subscription
--->
-
----
 layout: section
 number: '05'
 transition: fade
 ---
+
 ## Async state
 
 <p class="lead" style="margin-top:40px">Loading, empty, error, and the difference between them.</p>
 
 <!--
-- Chapter five. Where the damage becomes user-visible, and the part of the research least comfortable to read back
-- Every finding here shipped, or came within a review of shipping, something that looked completely fine on screen and was lying to whoever was looking at it
+Moving on to dealing with asynchronous state. And this is where a lot of issues become user visible, And pretty much every finding here was something that we have shipped or came very close to shipping - These were things that looked completely fine on screen but there was a real issue hiding behind the scenes.
 -->
 
 ---
@@ -1124,6 +1064,7 @@ eyebrow: 'Resources'
 heading: 'Signal-driven fetches belong in a resource'
 clicks: 1
 ---
+
 <p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 24px;max-width:1660px;">Fetch a team's members whenever the team changes. This is what we write by hand.</p>
 <div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:40px;align-items:start;">
 <div>
@@ -1155,7 +1096,23 @@ readonly users = httpResource<User[]>(
 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin:30px 0 0;font-size:25px;line-height:1.4;color:#C9D4E2;"> <div style="border-top:2px solid #2FD8B4;padding-top:14px;"><code style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#2FD8B4;">httpResource</code><br>an HTTP GET</div> <div style="border-top:2px solid #4A5568;padding-top:14px;"><code style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#8A97A8;">rxResource</code><br>an observable pipeline you already have</div> <div style="border-top:2px solid #4A5568;padding-top:14px;"><code style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#8A97A8;">resource</code><br>a promise, or a stream you own</div> </div>
 
 <!--
-- The first version isn't a strawman - it's what we all wrote for years, and plenty are still in the codebase
+This is a similar example to earlier when we touched on avoiding async await in an effect. But typically when we're making requests, there are other things we also want to consider that we didnt touch on.
+
+The first being a loading flag, so that we can show a loading spinner in the UI. Nothing actually cancels the request if another one fires before it finishes. And we're not handling any errors anywhere. 
+
+Angular provides us with three resource types that we can use in our code to Help address all of these issues for us with minimal code.   
+
+--- Change slide. 
+
+The first is HTTP resource. This allows us to simply pass a function That returns a URL. We can also call signals within this function and they are tracked, so any time that signal changes, we re-perform the request. The great thing is what you get for free is access to the value as a signal. We also get access to the loading state and the error state and the status. We get a reload function that we can call manually if we want to perform a manual reload. It automatically handles and prevents release conditions and cancels supersede requests. 
+
+So as you can see, not only is our code much simpler and easier to understand, but we also eliminate several different categories of issues.
+
+The other two Utilities are Rx Resource, Which essentially does the same thing but gives you back an observable pipeline instead of a signal one. And the last one is resource, which is is essentially the same as Act P resource, only rather than returning a string, you would actually perform the request yourself in there. 
+
+One thing to note is that you want to avoid doing post requests in an HTTP resource, It's intended to be only used for fetching data. 
+
+
 - It manages to be three separate mistakes at once: an effect that writes signals, an async effect so the teamId read after the await isn't tracked, and two pieces of state kept in step by hand
 - Then it collapses to one expression: a function returning the request, reading whatever signals it needs. That's the whole wiring. The team id changing is the trigger - no subscription, no cancellation code
 - The panel is the point - every line of it is something the hand-written version doesn't do and would be tedious to add. value, isLoading, error, status and reload as signals. Superseded requests cancelled, so three quick team clicks don't leave you with whichever lands last. And no race between two in-flight responses - the bug you'd only find in production on a slow connection
