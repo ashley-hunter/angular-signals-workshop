@@ -344,16 +344,15 @@ heading: 'What an effect is actually for'
 <p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:40px 0 0;max-width:1600px;">Effects that pass review are the ones that name the non-reactive driver.</p>
 
 <!--
-In the previous slide, we've kind of discussed how to avoid using effect, but I don't want to insinuate that effect should never be used. There are absolutely valid reasons to use effect, it's just we want to make sure you're using them in the right place. 
+In the previous slides, we've kind of discussed how to avoid using effect, but I don't want to insinuate that effect should never be used. There are absolutely valid reasons to use effect, it's just we want to make sure you're using them in the right place. 
 
+Quite often with dealing with third party libraries that may not be using signals, we might need to use effects to bridge that gap of connecting the reactive world to the non-reactive world. 
 
+Also when storing Data, for example, in local storage or a URL, that is also another potential use case for using an effect, or also things like logging etc..
 
+But the key thing to ask yourself any time you're using an effect is what is the non-reactive thing this effect is driving? If you can't answer that question, you're probably using an effect when you don't need to. 
 
-- Balance needed here or everyone leaves thinking effects are banned
-- They aren't. Genuine bridges are everywhere in our codebase - grids, editors, charts, event streams we don't own
-- What separates an effect that survives review: whether the author could name the thing outside the graph
-- So ask it of your own code before pushing - what non-reactive thing is this driving? Can't name it, and you've written a computed
-- Two habits: one effect per side effect, and a named class field rather than buried in the constructor
+Ideally also you would have one effect per side effect And it's often better to have this as a named property on the class rather than something buried in the constructor. This helps Make it clear why the effect is needed, and what it does.
 -->
 
 ---
@@ -362,6 +361,7 @@ eyebrow: 'Footgun'
 heading: 'An effect stops tracking the moment it goes async'
 clicks: 1
 ---
+
 <p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">The team loads and the grid renders. Then somebody changes the format - what happens?</p>
 <div style="display:grid;grid-template-columns:1.3fr 0.7fr;gap:40px;align-items:start;">
 <div>
@@ -397,13 +397,25 @@ readonly #render = effect(() => {
 <p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:34px 0 0;max-width:1660px;">Tracking covers the synchronous run only. Everything read after the <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">await</code> is invisible to the graph.</p>
 
 <!--
-- Team loads, grid renders, all fine. Change the format and nothing happens
-- teamId is read synchronously, so it's tracked. After the await we're outside the reactive consumer - Angular stopped watching when the sync run finished
-- So format is read, used, and never registered. On screen, in the render call, not in the graph
-- Panel: one of two dependencies made it. **Worse than none** - it still fires on team change, so the wiring looks right and demos fine
-- Found later by somebody changing the format, watching nothing happen, and hunting a render-path bug that doesn't exist
-- Fix: get the async work out of the effect. resource splits it - params is tracked, the loader is not. The effect goes fully synchronous and both reads count
-- Cancellation free: resource abandons superseded requests. The async effect lets both land and renders whichever finishes last
+Okay, so Now moving on to some examples where you're using an effect but things can go subtly wrong. 
+
+In this example we have an effect that Updates a third-party library, in this case a grid. but it is using the async keyword and an await in its function body. One thing that may not be immediately obvious is that effects stop tracking the moment it goes async. 
+
+So in this example as it stands We have the team ID being read, which is a dependency, and that dependency is registered because nothing asynchronous has happened at this point yet. 
+
+We then wait for users to load and we render them in the grid. But notice that format here is also a signal, and that signal read is not tracked because it comes after the await. 
+
+This can lead to unexpected results because any time the format changes the grid is not going to get re-rendered. 
+
+--- change slide
+
+So, the fix of course is to get rid of async await from the effect. However, this also gives us the opportunity to start leveraging some of Angular's other reactive primitives, and in this case, we can use a resource which is perfect for handling asynchronous code in an effect.
+
+So let's look at what has changed here. We have created a user's resource and we pass the team id to params, Which if you remember from the list earlier, is one of the reactive functions. So any time team id changes, the loader function will get called - no effect needed for this.
+
+Now, the effect can simply call the resource's value signal, and even though there is some asynchronous work going on, we write our code in a completely synchronous way. So not only does this avoid the async bug, but it also makes our code cleaner, simpler to maintain and understand. 
+
+There are also a few improvements here. So for example, if Team ID changes multiple times in quick succession, Resource takes care of cancellation, so we're not going to have race conditions. It will always be the latest value wins. But not only that, now if we change format We don't need to refetch the users either, so we have reduced network calls as well.
 -->
 
 ---
@@ -412,6 +424,7 @@ eyebrow: 'Cleanup'
 heading: 'Cleanup is not teardown. It is undo the previous run'
 clicks: 1
 ---
+
 <p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">This polls an order. The id changes three times - how many intervals are running?</p>
 <div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:44px;align-items:center;">
 <div>
@@ -440,13 +453,15 @@ readonly poll = effect((onCleanup) => {
 <p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:34px 0 0;max-width:1660px;"><code style="font-family:'JetBrains Mono',monospace;font-size:25px;">onCleanup</code> runs before <em>every</em> rerun, not just on destroy. Nothing errors - the app just does more work, forever.</p>
 
 <!--
-- Keyed on an order id. Every change reruns and starts an interval. Three changes = three intervals, two polling an order nobody's looking at
-- From outside, this failure looks like: fine. Nothing throws, screen is correct, newest interval has the right order
-- You've signed up for permanent background work that grows every time somebody clicks around. Surfaces weeks later as a perf complaint or a server bill
-- Fix is one parameter: take onCleanup, hold the handle, clear it
-- The key word isn't destroy, it's **rerun**. Runs before every rerun, then once on destroy. Not teardown - undo the previous run
-- Everything started in an effect belongs here: intervals, subscriptions, listeners, in-flight requests
-- DOM listeners: one AbortController, pass its signal to every addEventListener, abort in cleanup, whole set goes at once
+Cleanup is another important aspect of writing effects. Particularly when your effect does something like setting timeouts or intervals, making requests or setting up event listeners. 
+
+In this very simple example, we can see here that we have an effect that performs a check every five seconds. However, we are tracking order ID here, so any time this changes we will register a new interval. 
+
+If the order ID changes three times, we now have three intervals running and two of them are checking stale information. 
+
+--- change slide
+
+So any time you're doing something like this, just be sure to accept the cleanup function as an argument and tear down anything you need. And this not only runs whenever a component is destroyed, it also runs any time the effect re-evaluates.
 -->
 
 ---
@@ -454,17 +469,15 @@ layout: section
 number: '02'
 transition: fade
 ---
+
 ## Dependencies
 
 <p class="lead" style="margin-top:40px">The set is observed, not declared. That is where stale comes from.</p>
 
 <!--
-- The stale family. Every bug in it is one sentence: something changed, and nobody was listening
-- Hold this first - a dependency set is **observed, not declared**. You never write down what a computed depends on. Angular watches what you actually read during the run, and that's the set. For that run only
-- Two consequences we keep returning to: a read behind a condition only counts on runs that reach it; a read outside a reactive context - or after an await - isn't a dependency at all
-- If asked whether an if can hide a dependency: no. The list is rebuilt from scratch every run, but the condition itself is a tracked read, so flipping it recomputes and picks up the new branch. Self-correcting
-- It goes wrong when the condition isn't a signal at all - nothing then re-triggers the read
-- Nobody writes the set down, nothing checks it, the compiler can't help. Hence stale, and hence code that looks like working software until it isn't
+So we've touched a little bit on dependencies so far, but we're going to dive in a little bit deeper into them.
+
+Signal dependencies are all determined at runtime, so this can let issues slip through very easily. There's no compile time checking, and equally additional dependencies are easy to add, without noticing the impact they might have.
 -->
 
 ---
@@ -473,6 +486,7 @@ eyebrow: 'Two failure modes'
 heading: 'A dependency set can be wrong in both directions'
 clicks: 2
 ---
+
 <p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">Too narrow and a real change never reruns the work. Too wide and unrelated changes rerun expensive things - here, a sort toggle that fires a network request.</p>
 
 ````md magic-move
@@ -515,16 +529,23 @@ readonly rows = resource({
 <p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:26px 0 0;max-width:1660px;">The read is the dependency, and the request is compared by <em>reference</em>. Split the signals - or feed <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">params</code> a <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">computed</code> with an <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">equal</code> when you cannot.</p>
 
 <!--
-- Both directions turn up about equally, both written with exactly the right intention
-- Too narrow = the stale case: the read goes through a helper or sits in untracked, and tracking gets skipped
-- Too wide = this. One state object: team id, page, sort column. Sorting is client-side, but params reads the whole object, so changing the sort fires a request. Nobody wrote that on purpose - it's what the code says
-- Obvious fix: pull out the two fields the request needs
-- **It changes nothing.** params still calls this.state(), so it still depends on the whole signal, so sortBy still reruns it. And now it returns a fresh object literal each run
-- Nothing diffs that. Angular compares request to previous **by reference**, so a new object is never equal - same refetch rate as before
-- That's the version to recognise: it looks like a fix, it isn't, and it's the one you'll write
-- The read is the dependency. So the real fix: separate signals, params touching only what the request is made of. sortBy never invalidates params because params never read it
-- If state genuinely can't be split (a store, a parent owns it): a computed in front with a custom equal on the fields you care about. Returning true keeps the old value without bumping the version, so nothing downstream hears
-- Mercy: params returning a primitive makes the reference check a value check, and none of this applies
+Dependencies in a signal graph can be wrong in Two ways. 
+
+Dependencies may not update often enough, or they may update too often. This can either lead to stale data being presented to a user, Or updating too often, potentially leading to performance degradation or additional server requests that are completely unnecessary. 
+
+So let's take a look at this example. We have a state signal that contains the team ID, page and the sort by direction. And we have a rose resource which any time the state changes will fetch the rows.
+
+So here we have a prime example of something that might call the server more often than necessary. If we look at what is being passed to the load rows function, We can see that the sort by direction is never used. So if the sort by direction is changed, this would make a request that It is completely unnecessary. 
+
+--- Change slide. 
+
+The initial thing you might think to do is let's change params so that it only returns the team ID and the page, dropping the sort by direction. 
+
+However, this also will still cause the request to be made anytime sort by changes, because in the params function. We are still Tracking the state object in full. So while it looks better, it is no different In terms of how it behaves. 
+
+--- Change slide. 
+
+So the correct solution for this would be to split these up into multiple signals. Or you could potentially create a params computed that accepts inequality function, As by default they are compared by reference.
 -->
 
 ---
@@ -533,6 +554,7 @@ eyebrow: 'Escape hatch'
 heading: 'A dependency can arrive in code you did not write'
 clicks: 2
 ---
+
 <p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 24px;max-width:1660px;">Call a method from inside an effect and every signal <em>it</em> reads becomes your dependency too - including the ones added later.</p>
 
 ````md magic-move
@@ -578,15 +600,21 @@ send(page: string) {
 <p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:24px 0 0;max-width:1660px;">Nothing in the effect changed. Wrap the call, not just the read - you are declaring that this effect reacts to <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">page()</code> and to nothing the callee happens to touch.</p>
 
 <!--
-- The untracked case to leave with - the one you can't see coming from your own file
-- Left: effect reads the page, calls a service to record it, service does an HTTP post. Nothing reactive. Works for months
-- Then somebody adds a recently-viewed list to the service - read, append, write back. Reasonable change, by somebody who's never opened your component
-- Your effect now loops, with not one character changed. The call runs inside your effect's reactive context, so the read of recent is a read inside your effect, so recent is your dependency. The next line writes it
-- Runs, writes, invalidates itself, runs again. Infinite loop, caused by a file you've never touched
-- Notice what the fix is **not** - not a change to the service. Wrap the call
-- untracked there is a design statement: this effect reacts to the page, not to whatever its callees happen to touch. Almost always what you meant
-- Rule: when an effect calls something you don't own, wrap it. Not because it reads signals today - because it might tomorrow, and you won't be the one adding them
-- Two asides: update doesn't track (reads the value directly), so a service using update wouldn't have caused this. And if your **own** effect loops, that's different - read-state-write-state is derived state in disguise, and the fix is a computed
+Another area where bugs can very easily creep in, is effects that call another function or method in our code base. Here we have an effect that any time a page changes we send some analytics. 
+
+This works absolutely fine, and there is nothing wrong with this code At the moment. However, in this scenario, the analytics service is in a completely separate file and has no real connection to the effect that calls it. So if six months down the line someone comes along and updates the analytics service and introduces a signal read, This can have Unexpected consequences. 
+
+--- Change slide. 
+
+Now someone has added a recent signal that takes the current value and spreads it and updates it. While Normally I would rather the update function on the signal was used instead. What we have here is a case where Ping now has introduced an infinite loop. 
+
+If we look at the chain of events here, any time page gets updated, analytics are sent, the recent signal is updated but we're doing a signal read here as well and because we are still within the effect this is now tracked. As recent is both being read and set within the same method here, we now have gotten ourselves into a bad situation. 
+
+Again, This is something that if the change was made in isolation would look fine and there's no compile time safety that would detect this. This is purely something that you're going to have to discover at runtime. 
+
+--- Change slide. 
+
+An easy solution to this is any time you are calling an external function or method within an effect where you do not have control of what signals are being read or written to should be wrapped in the untracked function, which prevents effect from adding any more dependencies.
 -->
 
 ---
@@ -594,6 +622,7 @@ layout: content
 eyebrow: 'The invisible dependency'
 heading: 'Non-reactive reads inside reactive code'
 ---
+
 <p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 32px;max-width:1600px;">A <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">computed</code> can only track signals. Read anything else and you have taken a snapshot: correct once, then frozen.</p>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;">
 <div>
@@ -626,12 +655,11 @@ readonly rows = computed(() =>
 <p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:36px 0 0;max-width:1600px;">Same shape: a service getter, storage, the current time, the URL, the DOM. None of them notify.</p>
 
 <!--
-- Highest-volume single bug in our whole review history
-- Symptom looks like i18n, not signals: change language, pipes update, and the rest stays in the old language - those strings were snapshotted into a computed and frozen since
-- Five separate findings were the same instance
-- Translation is just where we hit it. The rule underneath: **if the source can't notify you, don't read it in derived state**
-- Two ways out: bring it into the graph as a signal, or push the read down to render where it's re-evaluated anyway
-- The list isn't exhaustive - imperative getters, storage, current time, current URL, DOM contents. None can tell you they changed
+This kind of bug was the most common detected one in our code base. 
+
+So if we take a look here, we have our computed rows which takes in items and maps over it. But we're doing a translation on the label. The issue is that If a language were to change, our UI would not get re-rendered because we're taking a snapshot for the label rather than having any kind of Reactive dependency. . 
+
+While this is a very specific example, the pattern applies to a lot of different places. This could be function calls, getters. Storage reads, Reading something like the current time, Or a URL parameter - All of these things are not reactive and therefore won't update when you might expect - even though we're using a reactive feature like computed.
 -->
 
 ---
@@ -639,14 +667,15 @@ layout: section
 number: '03'
 transition: fade
 ---
+
 ## Timing
 
 <p class="lead" style="margin-top:40px">When your code runs relative to inputs and to render.</p>
 
 <!--
-- The chapter people find most surprising: every example is correct read on its own, and wrong because of *when* it runs
-- No logic error to find in any of it
-- It's about where your code sits in the sequence - relative to inputs being set, and to the DOM being there
+Timing is an interesting topic because the code in these examples generally look correct and it's not always obvious what is causing the problem. 
+
+There are no logic errors and there are no compile time errors. Things just don't quite work as you might anticipate.
 -->
 
 ---
@@ -655,6 +684,7 @@ eyebrow: 'Lifecycle'
 heading: 'The constructor sees defaults, not inputs'
 clicks: 2
 ---
+
 <p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">The parent binds <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">mode</code> to <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">'flat'</code>, then later switches it to <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">'tree'</code>. What does this check see?</p>
 <div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:40px;align-items:start;">
 <div>
@@ -700,36 +730,44 @@ readonly #observe = effect((onCleanup) => {
 <p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:30px 0 0;max-width:1660px;">It hides well, because the default is usually the common case. And an input is not set once - a hook that runs at startup only catches the first value.</p>
 
 <!--
-- We've shipped this more than once. Both times a careful reviewer caught it, because nothing looks wrong
-- Just ordering: Angular constructs the class, then sets template-bound inputs. At constructor time the signal is still on its default
-- So the check sees 'tree', the parent's 'flat' never arrives, and that answer is kept forever
-- Second-order damage in this one: the guard existed to skip observers for cheap layouts. It never fired once, so every instance paid for machinery the comment above it promised to skip
-- Another: test fixtures seeded from an input in the constructor, rendering empty in every case that mattered
-- The obvious fix is ngOnInit, and it's only half right. **It runs once.** Inputs are set by then, so it finally sees 'flat' - but when the user switches to 'tree', nothing runs
-- Watch the panel on that step. You've swapped "always saw the default" for "only saw the first real value". **The bug gets rarer, which is worse, not better**
-- The effect is asked again every time the answer can change. And it starts something non-reactive, so it cleans up - onCleanup tears down the old observer before the new one starts
-- If asked whether lifecycle hooks are going away: no. ngOnInit isn't deprecated, style guide still covers it. What's replaced is hooks that existed to **observe change** - ngOnChanges, view queries, DOM timing. One-time imperative setup with no reactive dependency is still fine
-- Takeaway: a decision that depends on an input doesn't belong in the constructor, and probably not in a once-only hook either
+So we've had pull requests do this exact thing multiple times. Luckily they have been caught in the code reviews, but it's something to be aware of. 
+
+In this example we have an input and in our constructor we are checking whether it's a tree and if it is we start observing. 
+
+There are a few issues here. First, Angular doesn't set inputs by the time the constructor runs, so mode will always be tree.
+
+--- Change slide. 
+
+Great, so let's move this check to the NG on init lifecycle hook. That does resolve the problem with the initial value being read incorrectly. But we still do Not handle the case where mode changes after the component is initialized. 
+
+--- Change slide. 
+
+So, this is a good use case of an effect. And here we also have an onCleanup function which allows us to tear down the observation that starts whenever mode is set to a tree.
 -->
+
 ---
 layout: content
 eyebrow: 'Migration'
 heading: 'Every ngOnChanges has a signals shape'
 ---
+
 <p style="font-size:30px;color:#8A97A8;line-height:1.4;margin:0 0 36px;max-width:1600px;">A surviving <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">ngOnChanges</code> is almost always one of four things. Three of them are not lifecycle at all.</p>
 <div class="compare" style="grid-template-columns:0.9fr 0.7fr 1fr;margin-bottom:36px;"> <div class="head">WHAT IT DOES</div> <div class="head teal">BECOMES</div> <div class="head">WHY</div> <div class="row-label">Recomputes from one input</div> <div><code style="font-family:'JetBrains Mono',monospace;">computed</code></div> <div>It was never a change handler, it was a formula</div> <div class="row-label">Recomputes from several</div> <div><code style="font-family:'JetBrains Mono',monospace;">computed</code></div> <div>Read them all; the dependency set builds itself</div> <div class="row-label">Resets local state on change</div> <div><code style="font-family:'JetBrains Mono',monospace;">linkedSignal</code></div> <div>Derived, but the user can still overwrite it</div> <div class="row-label last">Drives something non-reactive</div> <div class="last"><code style="font-family:'JetBrains Mono',monospace;">effect</code></div> <div class="last">The only one that is genuinely a side effect</div> </div>
 <p style="font-size:29px;color:#C9D4E2;line-height:1.45;margin:0 0 18px;max-width:1600px;">There is no equivalent for <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">firstChange</code>. If the first run has to differ, that is initialisation - and it belongs somewhere that runs once.</p>
 <p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:0;max-width:1600px;"><code style="font-family:'JetBrains Mono',monospace;font-size:26px;">ng generate @angular/core:signals</code> converts inputs, outputs and queries for you. It does not touch <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">ngOnChanges</code>, so this table is the part you do by hand.</p>
 
 <!--
-- Worth a slide because of where we found it: ~140 ngOnChanges implementations, and **39 in files that already use input()**
-- Not people who haven't caught up - people who converted inputs and couldn't see what ngOnChanges becomes. Fair: the schematic converts inputs, outputs and queries, then leaves it alone
-- Nearly every one is one of four:
-- From one input → never a change handler, a formula. **computed**
-- From several inputs → still **computed**. Read them all, and the dependency set assembles from the reads
-- Resets local state on input change → derived, but writable. **linkedSignal**
-- Drives something outside the graph → genuinely lifecycle. **effect**
-- firstChange is the trip-up. No equivalent, and deliberately: if the first run must differ, that's initialisation, and initialisation belongs somewhere that runs once - not inside something that reruns
+Some of you may have considered using ngion changes in the previous example, and there still are 140 usages in our code base, 39 of which are in files using the new signal inputs. 
+
+Ideally we should try and move away from ng on changes and move to more reactive primitives. 
+
+If you have something that recomputes From one or more inputs, use a computed. 
+
+If you're reselling some local state, but the user can still override it, reach for linkedsignal
+
+And if you're driving something non-reactive, reach for an effect. 
+
+There is no equivalent for first change in these reactive primitives, but if you're reaching for that, it's probably something that belongs somewhere that runs once, for example, ng on init.
 -->
 
 ---
@@ -738,6 +776,7 @@ eyebrow: 'Render phases'
 heading: 'DOM work belongs to a render phase'
 clicks: 1
 ---
+
 <p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">Scroll the pane back to the top whenever the selection changes. When does this run, and is the element there yet?</p>
 <div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:40px;align-items:start;">
 <div>
@@ -772,14 +811,19 @@ readonly #scroll = afterRenderEffect({
 <p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:30px 0 0;max-width:1660px;">Signal queries are lazy, so reading one is never the problem - the element <em>existing</em> is. Prefer <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">viewChild.required</code>, which throws <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">NG0951</code> rather than handing you nothing.</p>
 
 <!--
-- Be precise about why the first version is wrong. I checked the framework source, and the reason isn't the one people give
-- The list on the right is one change detection pass, and a component effect runs **inside** it - at step 2
-- So the element is only guaranteed present if it's plain in this template. Anything created at step 3 or 4 - behind an if, or inside a child - does not exist yet on the pass where it first appears
-- Other half: even when it exists, you're writing mid-change-detection, not at a point scheduled for DOM work. afterRenderEffect gives you that point, and write means write - no reading layout back
-- **Correction to something you may have heard, possibly from me:** it is not that view queries haven't resolved. Signal queries are lazy - reading one materialises results there - so viewChild in an effect finds the element if it exists. The failure is existence, not query timing
-- viewChild.required gives NG0951 rather than silence. Good reason to prefer required
-- Raw requestAnimationFrame is worse than either - outside Angular's render coordination entirely, back to guessing
-- The bottom case nobody predicts: effect tracks anchor and content, both settle, you position the overlay - then a deferred block swaps placeholder for real content and your measured height is wrong. No dependency changed, nothing reran, overlay sits in the wrong place. Observe the size of what you measured, or track whatever signals the swap
+So the DOM itself is a non-reactive api - So occasionally we do need to perform some kind of effect to update the UI whenever signals change.
+
+You might initially go to use an effect for this kind of behaviour.
+ 
+But there are A few issues with using effect. An effect may fire too early, for example if an element is initially hidden due to an if or for block that may not have refreshed by the time the effect fires. A similar situation can happen if you're targeting child components. 
+
+But Angular provides us with a utility specifically for interacting with the DOM On signals. 
+
+--- Change slide. 
+
+After render effect ensures that it gets run after everything in the view is refreshed, but more importantly it gives us control over when to run the code. 
+
+You can see here that we are using the right phase because we are performing an update to the DOM. Batching things in the correct phase can give us some great Performance benefits.
 -->
 
 ---
@@ -787,15 +831,22 @@ layout: content
 eyebrow: 'Render phases'
 heading: 'Pick the phase, do not take the default'
 ---
+
 <div class="compare" style="grid-template-columns:0.5fr 1fr 1fr;margin-bottom:40px;"> <div class="head">PHASE</div> <div class="head teal">FOR</div> <div class="head">CONSTRAINT</div> <div class="row-label"><code style="font-family:'JetBrains Mono',monospace;">earlyRead</code></div> <div>Measuring, before anything writes</div> <div>Never write here. Prefer <code style="font-family:'JetBrains Mono',monospace;">read</code> if it can wait</div> <div class="row-label"><code style="font-family:'JetBrains Mono',monospace;">write</code></div> <div>Mutating the DOM</div> <div>Never read layout here</div> <div class="row-label"><code style="font-family:'JetBrains Mono',monospace;">mixedReadWrite</code></div> <div>The default, and the reason to be explicit</div> <div>Only when unavoidable</div> <div class="row-label last"><code style="font-family:'JetBrains Mono',monospace;">read</code></div> <div class="last">Inspecting after all writes</div> <div class="last">Never write here</div> </div>
 <p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:0 0 20px;max-width:1600px;">A read after a write in the same phase forces layout. The phases run in a fixed order, so splitting them is usually a two-line change.</p>
 
 <!--
-- The default is the trap. A plain callback instead of a phase object lands in mixedReadWrite - and it works, which is why nobody revisits it - and costs a forced synchronous layout every run
-- Angular's guidance: read and write first. earlyRead only when you must measure before something writes. mixedReadWrite only when the work can't be split at all
-- The four always run in that order, so once named, the data flows down the list
-- Separate catch, nothing to do with phases: **a measurement is a number, not a subscription**. You get the height at that moment, that's all
-- Element resizes with no signal changing - content loads, a font arrives, the window is dragged - and you never hear about it. That's a resize observer, torn down when the component goes
+There are four phases available to you.
+
+The first is early read. This is when you want to measure some DOM elements before anything writes - Ideally you would use the read phase where possible, you would only use the early read if you're trying to measure the DOM before you make any updates to it. 
+
+The next is the write phase, where you can perform some dumb manipulation. Never read in this phase. 
+
+mixed read-write is the default and you typically want to avoid it wherever possible. You should ideally use one or more of the other phases. 
+
+And lastly we have the read phase. This is where you can read DOM sizes after all updates have taken place. 
+
+This helps us ensure we don't accidentally cause some expensive reflow. Which if you're not familiar with is when we perform a read after a write - And this causes the browser to have to recompute all of the sizes on the page right away. And this can cause significant slowdown on a page.
 -->
 
 ---
@@ -804,6 +855,7 @@ eyebrow: 'Forced reflow'
 heading: 'Read everything, then write everything'
 clicks: 1
 ---
+
 <p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">A read after a write forces layout there and then. Interleave them in a loop and you pay on every iteration.</p>
 <div style="display:grid;grid-template-columns:1.2fr 0.8fr;gap:40px;align-items:start;">
 <div>
@@ -839,13 +891,21 @@ afterNextRender({
 <p style="font-size:27px;color:#5E6B7D;line-height:1.45;margin:28px 0 0;max-width:1660px;">Calls that force layout: <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">offsetHeight</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">clientWidth</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">scrollTop</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">getBoundingClientRect()</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">getComputedStyle()</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">scrollIntoView()</code>, even <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">focus()</code>.</p>
 
 <!--
-- The phase table made concrete. The cost isn't the read - you need that number - it's entirely the ordering. Batching is the whole fix, and the panel is the size of it: 200 forced layouts down to one
-- Two details, both better than people assume
-- **Order is fixed by the framework.** Your four functions go into fixed positions - earlyRead, write, mixed, read - and Angular walks the positions in order. Key order is irrelevant; writing them in firing order is courtesy to the next reader
-- **Batching is global, not per callback.** Outer loop is the phase, inner loop is every registered sequence - so every earlyRead in the application runs before any write. You're batching against everything else that registered. That's really why the phases exist
-- Value threading: whatever a phase returns goes to the next phase that exists. earlyRead returns the heights, write receives them. Skipped phases pass it through
-- Where the code lives decides the stakes. An unbatched read on a settings page costs nothing measurable. The same line per-row is one forced reflow per instance, and a few hundred rows is the difference between smooth and visibly janky
-- One more: if a resize observer already handed you the box, use its number. Asking the DOM again costs exactly what the first question did
+Here we have an example where we're iterating through every row, collecting the row's height, and then updating it, increasing the size by eight pixels. 
+
+If there are 200 rows, this forces the browser to relay out everything 200 times. This is very inefficient and can noticeably slow down your page. 
+
+There are lots of properties and methods in the browser that would cause force layout, and I've listed some of them here. 
+
+--- Change slide. 
+
+A better way to deal with this would be to use the f phases that we previously touched on, and we can use multiple phases. 
+
+So here we have an early read phase which goes through every row and collects the height. This value is returned and gets passed to the write function. Now, the write function can simply iterate overall of the rows and update their height. 
+
+This has now changed the scenario from two hundred forced layouts on a page down to one. 
+
+So this is an important one to bear in mind when you're working with the DOM.
 -->
 
 ---
@@ -853,13 +913,13 @@ layout: section
 number: '04'
 transition: fade
 ---
+
 ## Purity and cost
 
 <p class="lead" style="margin-top:40px">Derived state is read often, and at unpredictable times.</p>
 
 <!--
-- Chapter four. Everything here is correct the first time it runs
-- Which is exactly why it survives review and reaches production - the first render looks right, and the bill arrives later. On the second change, under load, or on the slowest machine in the building
+This next section covers things that can slip through reviews and often render correctly at first, but on subsequent changes or under load can begin to reveal their flaws.
 -->
 
 ---
@@ -868,6 +928,7 @@ eyebrow: 'Purity'
 heading: 'A computed has no way to clean up after itself'
 clicks: 1
 ---
+
 <p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">This builds a worker out of derived state. The config changes twice - how many are running?</p>
 <div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:40px;align-items:start;">
 <div>
@@ -899,14 +960,19 @@ readonly #worker = effect((onCleanup) => {
 <p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:30px 0 0;max-width:1660px;">A <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">computed</code> takes exactly two options, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">equal</code> and <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">debugName</code> - there is no teardown hook. If it needs disposing, it needs an owner. Sockets, observers, subscriptions, timers, all the same shape.</p>
 
 <!--
-- Invisible until the source changes twice. That's why it survives review
-- First evaluation builds the worker, fine. Config changes, it builds another - and the first is still running, with nobody holding a reference to stop it. Change it twice and the panel is three workers, two of them abandoned
-- There's no hook you could have used: computed takes exactly two options, equal and debugName
-- Under load: memory climbing and CPU you can't account for, and you'll look in completely the wrong place
-- The author pushed back when we filed it, and the pushback is fair - purity is about mutating state outside the graph, and constructing an object mutates nothing. True as far as it goes
-- The answer: the problem isn't the allocation, it's the **lifetime**. A computed has no lifecycle to hang it on. Build plain objects all day; build something that needs stopping and you've made the computed responsible for something it can't do
-- Then it splits the jobs: the computed still derives - it builds the url out of two signals - and the effect owns the worker. Being an effect it has onCleanup, so the old worker is terminated before the new one starts, and goes on destroy
-- Same for anything with an off switch: sockets, resize observers, subscriptions, intervals. If you'd write code to dispose of it, it isn't derived state
+We previously discussed trying to use a computed instead of an effect where possible, but there are occasions where Where an effect is still preferable, even though it might not seem obvious. 
+
+In this case, we are creating a worker whenever some dependent signals change. However, a computed has no teardown capability. 
+
+As such, every time these signals change, a new worker is created and the old ones never stop. 
+
+This works and will not throw an error. So it can be very easy to have this slip through and slowly accumulate memory behind the scenes. Things like this could go unnoticed for quite a while. 
+
+--- Change slide. 
+
+Instead, this is a good case where you might want to use an effect And the cleanup function provided to terminate the worker any time it Needs reinstantiated. 
+
+The same applies to similar things like sockets or resize observers or mutation observers. Anything that might need disposed cannot live in a computed
 -->
 
 ---
@@ -915,6 +981,7 @@ eyebrow: 'Identity'
 heading: 'Reference equality is the notification boundary'
 clicks: 2
 ---
+
 <p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 20px;max-width:1660px;">One binding, unchanged throughout. What changes is what it costs the grid.</p>
 
 ```html
@@ -960,16 +1027,21 @@ protected readonly visibleRows = computed(
 </div>
 
 <!--
-- Start with the binding - the part that doesn't change, and the part that pays
-- A method in a template runs on **every check** of that view. Not when rows change - every check. So a resource resolving elsewhere in the component, a click handler, anything marking the view dirty, and the filter runs and hands the grid a brand new array
-- The grid can't know the contents are identical: signals compare with Object.is, and two arrays are never the same object. So it rebuilds. Every check. For a value nobody changed
-- A computed improves two things at once - recomputes only when rows changes, and returns the same reference in between, so the grid sees no change and does nothing
-- The bit to land: moving this to a computed **isn't tidying up. The caching is the entire feature**
-- Third step is a real case, not a flourish. Refetch returns the same data as new objects → new identity → computed reruns → grid rebuilds with nothing visibly changed
-- A custom equal says what counts as different. Here, the ids. Comparator returns true → old value restored, version not bumped, nothing downstream notified
-- The comparator has to cover everything downstream renders. Ids alone would be wrong here - edit a row's name, the id is unchanged, equal returns true, and the grid keeps showing the old text. That is a stale bug you wrote on purpose, so compare a revision field too
-- And it must be cheaper than the work it prevents. Ids and a rev to avoid rebuilding a grid is a good trade; deep-comparing a thousand objects to avoid a cheap map isn't
-- And it's rare: **16 uses against 8,000 computeds**. Reach for it after measuring
+So let's take a look at this grid example where we're passing the visible rows in via an input. 
+
+Currently, this is using a getter, which is inefficient in itself because the getter gets called and performs filtering on every change detection cycle, whereas really it should only get recalled whenever the rows change. 
+
+--- Change slide. 
+
+Quite often this is enough, but Let's say for example we were pulling the server frequently to update the rows. In most cases, it returned the identical results every time. But computers work based on referential equality, not the values within it. 
+
+So one feature that Angular does provide us to assist with this is a equality function. And we can provide this to a computer to tell it exactly how we want it to compare values to prevent it from updating more often than necessary. 
+
+--- Change slide. 
+
+So here we've added our own comparator function where we check if the length is different, we know rows have most certainly changed. And in this case we're also checking whether the IDs and revisions have changed. 
+
+Now only when those exact properties have changed will the computed essentially be marked as changed. You shouldn't need to reach for this often, but it's good to be aware of its existence, when performance really matters.
 -->
 
 ---
@@ -978,6 +1050,7 @@ eyebrow: 'Templates'
 heading: 'Templates call. Computeds cache.'
 clicks: 1
 ---
+
 <p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 22px;max-width:1660px;">The work does not go away. It moves out of the view and into something that caches it.</p>
 
 ````md magic-move
@@ -1016,6 +1089,11 @@ readonly rowViews = computed(() =>
 ````
 
 <!--
+One other thing to consider when working with templates is method calls from a template and how we could optimize them.
+
+Here we have a for loop that calls a build URL method and a format next run method. Both of these rerun any time the rows get re-rendered. 
+
+
 - The word to notice is "unrelated"
 - A method call in a binding runs on every check. So a resource resolving in a completely different corner of this component marks the view dirty, and your date formatting runs again for every visible row
 - The rows didn't ask for that work. Something else did, and the rows paid for it
