@@ -63,7 +63,7 @@ transition: fade
 <!--
 So we'll start off with some of the more basic things and then we'll work into more complicated scenarios. 
 
-So we'll start off with the right state and this is where the largest group of findings were. So even though this is simple in terms of code complexity, it's also the most common place where we can improve.
+So we'll start off with derived state and this is where the largest group of findings were. So even though this is simple in terms of code complexity, it's also the most common place where we can improve.
 -->
 
 ---
@@ -133,7 +133,7 @@ So I suspect most people will immediately notice that this is something that cou
 
 So first of all the visible signal is writable, which means that any part of this component could make changes to it. And that could result in stale or incorrect data, Or it getting overridden unexpectedly, which is an avenue for bugs Which doesn't need to be there. 
 
-With agents writing The code these days, it may just see a visible signal that is writable and it will make some changes directly to it rather than looking at the bigger picture. So changing this to your computer eliminates thus potential source of bugs.
+With agents writing The code these days, it may just see a visible signal that is writable and it will make some changes directly to it rather than looking at the bigger picture. So changing this to a computed eliminates this potential source of bugs.
 
 --- change slide
 
@@ -191,7 +191,7 @@ There's also opportunity to improve similar situations in RxJS code. So here we 
 
 --- change slide
 
-Of course one optimization here would be to change this to use pipe and use a map or a filter operator Instead.
+Of course one optimization here would be to change this to use pipe and use a map operator Instead.
 
 --- change slide
 
@@ -296,7 +296,7 @@ Next is another slightly more complicated example, And I'd like you to think abo
 
 So when we enter a Celsius value, Fahrenheit should be updated, and vice versa. 
 
-Currently we have a Celsius signal and we have a Fahrenheit length signal. So as it stands, any time I change the Celsius value, the Fahrenheit length signal will rerun and get recomputed. 
+Currently we have a Celsius signal and we have a Fahrenheit linked signal. So as it stands, any time I change the Celsius value, the Fahrenheit linked signal will rerun and get recomputed. 
 
 However, if I was to currently type in the Fahrenheit input, Celsius wouldn't update. 
 
@@ -533,13 +533,13 @@ Dependencies in a signal graph can be wrong in Two ways.
 
 Dependencies may not update often enough, or they may update too often. This can either lead to stale data being presented to a user, Or updating too often, potentially leading to performance degradation or additional server requests that are completely unnecessary. 
 
-So let's take a look at this example. We have a state signal that contains the team ID, page and the sort by direction. And we have a rose resource which any time the state changes will fetch the rows.
+So let's take a look at this example. We have a state signal that contains the team ID, page and the sort by field. And we have a rows resource which any time the state changes will fetch the rows.
 
-So here we have a prime example of something that might call the server more often than necessary. If we look at what is being passed to the load rows function, We can see that the sort by direction is never used. So if the sort by direction is changed, this would make a request that It is completely unnecessary. 
+So here we have a prime example of something that might call the server more often than necessary. If we look at what is being passed to the load rows function, We can see that sort by is never used. So if sort by is changed, this would make a request that It is completely unnecessary. 
 
 --- Change slide. 
 
-The initial thing you might think to do is let's change params so that it only returns the team ID and the page, dropping the sort by direction. 
+The initial thing you might think to do is let's change params so that it only returns the team ID and the page, dropping sort by. 
 
 However, this also will still cause the request to be made anytime sort by changes, because in the params function. We are still Tracking the state object in full. So while it looks better, it is no different In terms of how it behaves. 
 
@@ -734,7 +734,7 @@ So we've had pull requests do this exact thing multiple times. Luckily they have
 
 In this example we have an input and in our constructor we are checking whether it's a tree and if it is we start observing. 
 
-There are a few issues here. First, Angular doesn't set inputs by the time the constructor runs, so mode will always be tree.
+There are a few issues here. First, Angular doesn't set inputs by the time the constructor runs, so mode will always be the default, which is tree.
 
 --- Change slide. 
 
@@ -763,7 +763,7 @@ Ideally we should try and move away from ng on changes and move to more reactive
 
 If you have something that recomputes From one or more inputs, use a computed. 
 
-If you're reselling some local state, but the user can still override it, reach for linkedsignal
+If you're resetting some local state, but the user can still override it, reach for linkedsignal
 
 And if you're driving something non-reactive, reach for an effect. 
 
@@ -823,7 +823,7 @@ But Angular provides us with a utility specifically for interacting with the DOM
 
 After render effect ensures that it gets run after everything in the view is refreshed, but more importantly it gives us control over when to run the code. 
 
-You can see here that we are using the right phase because we are performing an update to the DOM. Batching things in the correct phase can give us some great Performance benefits.
+You can see here that we are using the write phase because we are performing an update to the DOM. Batching things in the correct phase can give us some great Performance benefits.
 -->
 
 ---
@@ -840,7 +840,7 @@ There are four phases available to you.
 
 The first is early read. This is when you want to measure some DOM elements before anything writes - Ideally you would use the read phase where possible, you would only use the early read if you're trying to measure the DOM before you make any updates to it. 
 
-The next is the write phase, where you can perform some dumb manipulation. Never read in this phase. 
+The next is the write phase, where you can perform DOM manipulation. Never read in this phase. 
 
 mixed read-write is the default and you typically want to avoid it wherever possible. You should ideally use one or more of the other phases. 
 
@@ -899,7 +899,7 @@ There are lots of properties and methods in the browser that would cause force l
 
 --- Change slide. 
 
-A better way to deal with this would be to use the f phases that we previously touched on, and we can use multiple phases. 
+A better way to deal with this would be to use the phases that we previously touched on, and we can use multiple phases. 
 
 So here we have an early read phase which goes through every row and collects the height. This value is returned and gets passed to the write function. Now, the write function can simply iterate overall of the rows and update their height. 
 
@@ -1029,13 +1029,13 @@ protected readonly visibleRows = computed(
 <!--
 So let's take a look at this grid example where we're passing the visible rows in via an input. 
 
-Currently, this is using a getter, which is inefficient in itself because the getter gets called and performs filtering on every change detection cycle, whereas really it should only get recalled whenever the rows change. 
+Currently, this is using a method, which is inefficient in itself because the method gets called and performs filtering on every change detection cycle, whereas really it should only get recalled whenever the rows change. 
 
 --- Change slide. 
 
-Quite often this is enough, but Let's say for example we were pulling the server frequently to update the rows. In most cases, it returned the identical results every time. But computers work based on referential equality, not the values within it. 
+Quite often this is enough, but Let's say for example we were polling the server frequently to update the rows. In most cases, it returned the identical results every time. But computeds work based on referential equality, not the values within it. 
 
-So one feature that Angular does provide us to assist with this is a equality function. And we can provide this to a computer to tell it exactly how we want it to compare values to prevent it from updating more often than necessary. 
+So one feature that Angular does provide us to assist with this is a equality function. And we can provide this to a computed to tell it exactly how we want it to compare values to prevent it from updating more often than necessary. 
 
 --- Change slide. 
 
@@ -1104,11 +1104,11 @@ Angular provides us with three resource types that we can use in our code to Hel
 
 --- Change slide. 
 
-The first is HTTP resource. This allows us to simply pass a function That returns a URL. We can also call signals within this function and they are tracked, so any time that signal changes, we re-perform the request. The great thing is what you get for free is access to the value as a signal. We also get access to the loading state and the error state and the status. We get a reload function that we can call manually if we want to perform a manual reload. It automatically handles and prevents release conditions and cancels supersede requests. 
+The first is HTTP resource. This allows us to simply pass a function That returns a URL. We can also call signals within this function and they are tracked, so any time that signal changes, we re-perform the request. The great thing is what you get for free is access to the value as a signal. We also get access to the loading state and the error state and the status. We get a reload function that we can call manually if we want to perform a manual reload. It automatically prevents race conditions and cancels superseded requests. 
 
 So as you can see, not only is our code much simpler and easier to understand, but we also eliminate several different categories of issues.
 
-The other two Utilities are Rx Resource, Which essentially does the same thing but gives you back an observable pipeline instead of a signal one. And the last one is resource, which is is essentially the same as Act P resource, only rather than returning a string, you would actually perform the request yourself in there. 
+The other two Utilities are Rx Resource, Which essentially does the same thing but lets you use an observable to load the data, while still giving you signals back. And the last one is resource, which is is essentially the same as HTTP resource, only rather than returning a string, you would actually perform the request yourself in there. 
 
 One thing to note is that you want to avoid doing post requests in an HTTP resource, It's intended to be only used for fetching data. 
 
