@@ -146,60 +146,6 @@ Secondly, the way Angular updates things is effects run after all of the signals
 
 ---
 layout: content
-eyebrow: 'The same shape, older API'
-heading: 'You already refuse to write this in RxJS'
-clicks: 2
----
-
-<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 24px;max-width:1660px;">Writing into a subject from inside a subscribe is the same bug with a different import. It migrates to the same place.</p>
-<div style="max-width:1180px;">
-
-````md magic-move
-```ts
-// AVOID
-readonly rows$ = new BehaviorSubject<Row[]>([]);
-readonly visible$ = new BehaviorSubject<Row[]>([]);
-
-readonly #sync = this.rows$.subscribe((rows) => {
-  this.visible$.next(rows.filter((r) => r.enabled));
-});
-```
-
-```ts
-// BETTER
-readonly rows$ = new BehaviorSubject<Row[]>([]);
-
-readonly visible$ = this.rows$.pipe(
-  map((rows) => rows.filter((r) => r.enabled)),
-);
-```
-
-```ts
-// PREFER
-// no subscription, and no async pipe in the template
-readonly rows = signal<Row[]>([]);
-
-readonly visible = computed(() =>
-  this.rows().filter((r) => r.enabled),
-);
-```
-````
-</div>
-
-<!--
-There's also opportunity to improve similar situations in RxJS code. So here we have the exact same scenario, but instead we're using a subscribe on the observable To perform the filtering and you would be using an async pipe in the template to read it. 
-
---- change slide
-
-Of course one optimization here would be to change this to use pipe and use a map operator Instead.
-
---- change slide
-
-But switching this to signals removes the subscription and there's no async pipe needed in the template and we also don't have to deal with the initial null state of an observable, whereas you might have before had to handle this with like an if block.
--->
-
----
-layout: content
 eyebrow: 'Derived, and writable'
 heading: 'When the user can override the derived value'
 clicks: 1
@@ -257,7 +203,7 @@ So now we remove the signal and the effect. And we use a link signal which has a
 layout: content
 eyebrow: 'Lesser known'
 heading: 'A linkedSignal can write back to its source'
-clicks: 1
+clicks: 2
 ---
 
 <p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 26px;max-width:1660px;">Both boxes are bound. Somebody types 212 into Fahrenheit - what happens to Celsius?</p>
@@ -276,6 +222,19 @@ const tempF = linkedSignal(
 ```
 
 ```ts
+// AVOID
+const tempC = linkedSignal(
+  () => ((tempF() - 32) * 5) / 9,
+);
+
+const tempF = linkedSignal(
+  () => (tempC() * 9) / 5 + 32,
+);
+
+// each one reads the other: a cycle
+```
+
+```ts
 const tempC = signal(0);
 
 const tempF = linkedSignal(
@@ -288,7 +247,7 @@ const tempF = linkedSignal(
 ````
 
 </div>
-<div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:34px 36px;"> <div style="font-size:24px;color:#8A97A8;margin-bottom:12px;">Celsius</div> <div style="background:#0A0D12;border:1px solid #4A5568;border-radius:8px;padding:0 20px;height:62px;display:flex;align-items:center;font-family:'JetBrains Mono',monospace;font-size:28px;color:#E8ECF2;"><span class="swap"><span v-click.hide="1" style="color:#FF7A6B;">0</span><span v-click="1" style="color:#2FD8B4;">100</span></span></div> <div style="font-size:24px;color:#8A97A8;margin:26px 0 12px;">Fahrenheit</div> <div style="background:#0A0D12;border:1px solid #2FD8B4;border-radius:8px;padding:0 20px;height:62px;display:flex;align-items:center;font-family:'JetBrains Mono',monospace;font-size:28px;color:#E8ECF2;">212</div> <div style="font-size:25px;line-height:1.4;margin-top:24px;"><span class="swap"><span v-click.hide="1" style="color:#FF7A6B;">Celsius never moved. Next write to it and the 212 is gone.</span><span v-click="1" style="color:#2FD8B4;">Celsius took the write. Fahrenheit came back through the computation.</span></span></div> </div>
+<div style="background:#12171F;border:1px solid #4A5568;border-radius:14px;padding:34px 36px;"> <div style="font-size:24px;color:#8A97A8;margin-bottom:12px;">Celsius</div> <div style="background:#0A0D12;border:1px solid #4A5568;border-radius:8px;padding:0 20px;height:62px;display:flex;align-items:center;font-family:'JetBrains Mono',monospace;font-size:28px;color:#E8ECF2;"><span class="swap"><span v-click.hide="1" style="color:#FF7A6B;">0</span><span v-click="[1,2]" style="color:#FF7A6B;">?</span><span v-click="2" style="color:#2FD8B4;">100</span></span></div> <div style="font-size:24px;color:#8A97A8;margin:26px 0 12px;">Fahrenheit</div> <div style="background:#0A0D12;border:1px solid #2FD8B4;border-radius:8px;padding:0 20px;height:62px;display:flex;align-items:center;font-family:'JetBrains Mono',monospace;font-size:28px;color:#E8ECF2;">212</div> <div style="font-size:25px;line-height:1.4;margin-top:24px;"><span class="swap"><span v-click.hide="1" style="color:#FF7A6B;">Celsius never moved. Next write to it and the 212 is gone.</span><span v-click="[1,2]" style="color:#FF7A6B;">Throws on first read: <code style="font-family:'JetBrains Mono',monospace;font-size:22px;">Detected cycle in computations</code>.</span><span v-click="2" style="color:#2FD8B4;">Celsius took the write. Fahrenheit came back through the computation.</span></span></div> </div>
 </div>
 
 <!--
@@ -300,7 +259,11 @@ Currently we have a Celsius signal and we have a Fahrenheit linked signal. So as
 
 However, if I was to currently type in the Fahrenheit input, Celsius wouldn't update. 
 
-Your initial gut feeling might be to change Celsius also to a link signal, but doing that would introduce a circular dependency. 
+Your initial gut feeling might be to change Celsius also to a link signal.
+
+--- change slide
+
+But doing that introduces a circular dependency. Celsius reads Fahrenheit, Fahrenheit reads Celsius, and the first time either one is read Angular throws a cycle error. So this is not the answer.
 
 Luckily, with Angular 22, linked Signal comes with a new option. 
 
@@ -1062,7 +1025,7 @@ Moving on to dealing with asynchronous state. And this is where a lot of issues 
 layout: content
 eyebrow: 'Resources'
 heading: 'Signal-driven fetches belong in a resource'
-clicks: 1
+clicks: 3
 ---
 
 <p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 24px;max-width:1660px;">Fetch a team's members whenever the team changes. This is what we write by hand.</p>
@@ -1088,6 +1051,25 @@ readonly users = httpResource<User[]>(
   () => `/api/teams/${this.teamId()}/users`,
 );
 ```
+
+```ts
+// rxResource: same signals out, an Observable in
+readonly users = rxResource({
+  params: () => this.teamId(),
+  stream: ({ params: id }) =>
+    this.http.get<User[]>(`/api/teams/${id}/users`),
+});
+```
+
+```ts
+// resource: same signals out, a Promise in
+readonly users = resource({
+  params: () => this.teamId(),
+  loader: ({ params: id, abortSignal }) =>
+    fetch(`/api/teams/${id}/users`, { signal: abortSignal })
+      .then((r) => r.json() as Promise<User[]>),
+});
+```
 ````
 
 </div>
@@ -1108,7 +1090,13 @@ The first is HTTP resource. This allows us to simply pass a function That return
 
 So as you can see, not only is our code much simpler and easier to understand, but we also eliminate several different categories of issues.
 
-The other two Utilities are Rx Resource, Which essentially does the same thing but lets you use an observable to load the data, while still giving you signals back. And the last one is resource, which is is essentially the same as HTTP resource, only rather than returning a string, you would actually perform the request yourself in there. 
+--- Change slide. 
+
+The other two Utilities are Rx Resource, Which essentially does the same thing but lets you use an observable to load the data, while still giving you signals back.
+
+--- Change slide. 
+
+And the last one is resource, which is is essentially the same as HTTP resource, only rather than returning a string, you would actually perform the request yourself in there. 
 
 One thing to note is that you want to avoid doing post requests in an HTTP resource, It's intended to be only used for fetching data. 
 
