@@ -127,6 +127,8 @@ readonly visible = computed(() =>
 </div>
 
 <!--
+StackBlitz demo: [05-effect-to-computed](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/05-effect-to-computed?file=src%2Fapp.ts)
+
 Okay, so here we have an example where we have a rows input and a visible signal, and essentially we have an effect that updates any time the rows change and populates the visible signal with the enabled rows. 
 
 So I suspect most people will immediately notice that this is something that could be changed to use a computed. But I do just want to go over some of the reasons why, because there is slightly more to it than what meets the eye. 
@@ -186,6 +188,8 @@ prev() { this.page.update((p) => p - 1); }
 </div>
 
 <!--
+StackBlitz demo: [06-linked-signal-pagination](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/06-linked-signal-pagination?file=src%2Fapp.ts)
+
 Okay, so here is a Slightly different example. In this case it would be a pagination scenario. So we need to store the current page, we need to be able to move to the next and previous pages, and we also need to be able to reset back to the first page any time a filter changes. 
 
 So, yet again, we have a signal that's writable, and we have an effect performing an update. 
@@ -251,6 +255,8 @@ const tempF = linkedSignal(
 </div>
 
 <!--
+StackBlitz demo: [07-linked-signal-write-back](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/07-linked-signal-write-back?file=src%2Fapp.ts)
+
 Next is another slightly more complicated example, And I'd like you to think about how we could handle this kind of scenario. We have two input fields, and changing one should automatically update the other. 
 
 So when we enter a Celsius value, Fahrenheit should be updated, and vice versa. 
@@ -360,6 +366,8 @@ readonly #render = effect(() => {
 <p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:34px 0 0;max-width:1660px;">Tracking covers the synchronous run only. Everything read after the <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">await</code> is invisible to the graph.</p>
 
 <!--
+StackBlitz demo: [10-async-effect](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/10-async-effect?file=src%2Fapp.ts)
+
 Okay, so Now moving on to some examples where you're using an effect but things can go subtly wrong. 
 
 In this example we have an effect that Updates a third-party library, in this case a grid. but it is using the async keyword and an await in its function body. One thing that may not be immediately obvious is that effects stop tracking the moment it goes async. 
@@ -416,6 +424,8 @@ readonly poll = effect((onCleanup) => {
 <p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:34px 0 0;max-width:1660px;"><code style="font-family:'JetBrains Mono',monospace;font-size:25px;">onCleanup</code> runs before <em>every</em> rerun, not just on destroy. Nothing errors - the app just does more work, forever.</p>
 
 <!--
+StackBlitz demo: [11-effect-cleanup](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/11-effect-cleanup?file=src%2Fapp.ts)
+
 Cleanup is another important aspect of writing effects. Particularly when your effect does something like setting timeouts or intervals, making requests or setting up event listeners. 
 
 In this very simple example, we can see here that we have an effect that performs a check every five seconds. However, we are tracking order ID here, so any time this changes we will register a new interval. 
@@ -492,6 +502,8 @@ readonly rows = resource({
 <p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:26px 0 0;max-width:1660px;">The read is the dependency, and the request is compared by <em>reference</em>. Split the signals - or feed <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">params</code> a <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">computed</code> with an <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">equal</code> when you cannot.</p>
 
 <!--
+StackBlitz demo: [13-dependency-set](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/13-dependency-set?file=src%2Fapp.ts)
+
 Dependencies in a signal graph can be wrong in Two ways. 
 
 Dependencies may not update often enough, or they may update too often. This can either lead to stale data being presented to a user, Or updating too often, potentially leading to performance degradation or additional server requests that are completely unnecessary. 
@@ -563,6 +575,8 @@ send(page: string) {
 <p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:24px 0 0;max-width:1660px;">Nothing in the effect changed. Wrap the call, not just the read - you are declaring that this effect reacts to <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">page()</code> and to nothing the callee happens to touch.</p>
 
 <!--
+StackBlitz demo: [14-hidden-dependency](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/14-hidden-dependency?file=src%2Fapp.ts)
+
 Another area where bugs can very easily creep in, is effects that call another function or method in our code base. Here we have an effect that any time a page changes we send some analytics. 
 
 This works absolutely fine, and there is nothing wrong with this code At the moment. However, in this scenario, the analytics service is in a completely separate file and has no real connection to the effect that calls it. So if six months down the line someone comes along and updates the analytics service and introduces a signal read, This can have Unexpected consequences. 
@@ -618,6 +632,8 @@ readonly rows = computed(() =>
 <p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:36px 0 0;max-width:1600px;">Same shape: a service getter, storage, the current time, the URL, the DOM. None of them notify.</p>
 
 <!--
+StackBlitz demo: [15-non-reactive-reads](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/15-non-reactive-reads?file=src%2Fapp.ts)
+
 This kind of bug was the most common detected one in our code base. 
 
 So if we take a look here, we have our computed rows which takes in items and maps over it. But we're doing a translation on the label. The issue is that If a language were to change, our UI would not get re-rendered because we're taking a snapshot for the label rather than having any kind of Reactive dependency. . 
@@ -693,6 +709,8 @@ readonly #observe = effect((onCleanup) => {
 <p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:30px 0 0;max-width:1660px;">It hides well, because the default is usually the common case. And an input is not set once - a hook that runs at startup only catches the first value.</p>
 
 <!--
+StackBlitz demo: [17-constructor-defaults](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/17-constructor-defaults?file=src%2Fapp.ts)
+
 So we've had pull requests do this exact thing multiple times. Luckily they have been caught in the code reviews, but it's something to be aware of. 
 
 In this example we have an input and in our constructor we are checking whether it's a tree and if it is we start observing. 
@@ -774,6 +792,8 @@ readonly #scroll = afterRenderEffect({
 <p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:30px 0 0;max-width:1660px;">Signal queries are lazy, so reading one is never the problem - the element <em>existing</em> is. Prefer <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">viewChild.required</code>, which throws <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">NG0951</code> rather than handing you nothing.</p>
 
 <!--
+StackBlitz demo: [19-render-phase](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/19-render-phase?file=src%2Fapp.ts)
+
 So the DOM itself is a non-reactive api - So occasionally we do need to perform some kind of effect to update the UI whenever signals change.
 
 You might initially go to use an effect for this kind of behaviour.
@@ -854,6 +874,8 @@ afterNextRender({
 <p style="font-size:27px;color:#5E6B7D;line-height:1.45;margin:28px 0 0;max-width:1660px;">Calls that force layout: <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">offsetHeight</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">clientWidth</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">scrollTop</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">getBoundingClientRect()</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">getComputedStyle()</code>, <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">scrollIntoView()</code>, even <code style="font-family:'JetBrains Mono',monospace;font-size:24px;">focus()</code>.</p>
 
 <!--
+StackBlitz demo: [21-read-then-write](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/21-read-then-write?file=src%2Fapp.ts)
+
 Here we have an example where we're iterating through every row, collecting the row's height, and then updating it, increasing the size by eight pixels. 
 
 If there are 200 rows, this forces the browser to relay out everything 200 times. This is very inefficient and can noticeably slow down your page. 
@@ -923,6 +945,8 @@ readonly #worker = effect((onCleanup) => {
 <p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:30px 0 0;max-width:1660px;">A <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">computed</code> takes exactly two options, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">equal</code> and <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">debugName</code> - there is no teardown hook. If it needs disposing, it needs an owner. Sockets, observers, subscriptions, timers, all the same shape.</p>
 
 <!--
+StackBlitz demo: [23-computed-cleanup](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/23-computed-cleanup?file=src%2Fapp.ts)
+
 We previously discussed trying to use a computed instead of an effect where possible, but there are occasions where Where an effect is still preferable, even though it might not seem obvious. 
 
 In this case, we are creating a worker whenever some dependent signals change. However, a computed has no teardown capability. 
@@ -990,6 +1014,8 @@ protected readonly visibleRows = computed(
 </div>
 
 <!--
+StackBlitz demo: [24-reference-equality](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/24-reference-equality?file=src%2Fapp.ts)
+
 So let's take a look at this grid example where we're passing the visible rows in via an input. 
 
 Currently, this is using a method, which is inefficient in itself because the method gets called and performs filtering on every change detection cycle, whereas really it should only get recalled whenever the rows change. 
@@ -1078,6 +1104,8 @@ readonly users = resource({
 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin:30px 0 0;font-size:25px;line-height:1.4;color:#C9D4E2;"> <div style="border-top:2px solid #2FD8B4;padding-top:14px;"><code style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#2FD8B4;">httpResource</code><br>an HTTP GET</div> <div style="border-top:2px solid #4A5568;padding-top:14px;"><code style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#8A97A8;">rxResource</code><br>an observable pipeline you already have</div> <div style="border-top:2px solid #4A5568;padding-top:14px;"><code style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#8A97A8;">resource</code><br>a promise, or a stream you own</div> </div>
 
 <!--
+StackBlitz demo: [26-resources](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/26-resources?file=src%2Fapp.ts)
+
 This is a similar example to earlier when we touched on avoiding async await in an effect. But typically when we're making requests, there are other things we also want to consider that we didnt touch on.
 
 The first being a loading flag, so that we can show a loading spinner in the UI. Nothing actually cancels the request if another one fires before it finishes. And we're not handling any errors anywhere. 
@@ -1191,6 +1219,8 @@ readonly users = resource({
 <p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:18px 0 0;max-width:1660px;">With two resources behind one screen, the aggregate <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">error</code> and the retry both have to name both - and a resource lives only as long as its injector.</p>
 
 <!--
+StackBlitz demo: [28-failed-request](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/28-failed-request?file=src%2Fapp.ts)
+
 This one was filed five separate times, and every time it looked like good defensive code in the diff. Somebody added a catch so the page wouldn't blow up.
 
 But because the promise no longer rejects, the resource never reaches its error state. So our template takes the hasValue branch and renders an empty list. The request failed, and the user is told the team has no members.
@@ -1240,6 +1270,8 @@ readonly user = toSignal(this.user$, { initialValue: GUEST });
 <p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:20px 0 0;max-width:1660px;">And <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">toObservable</code> is an <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">effect</code> feeding a <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">ReplaySubject</code> - so a signal, out to an observable and back is an effect writing a signal, with extra steps.</p>
 
 <!--
+StackBlitz demo: [29-to-signal](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/29-to-signal?file=src%2Fapp.ts)
+
 This is actually the biggest number in the whole research. We have close to 1,500 toSignal calls in our code base, and around 1,370 of them look like this where it returns a value or undefined.
 
 That means the signal is undefined for at least one tick. So in a template we fall into the empty branch and show something like "not signed in" or an empty list before the real value arrives.
@@ -1322,6 +1354,8 @@ service.items().pop();
 <p style="font-size:28px;color:#5E6B7D;line-height:1.45;margin:30px 0 0;max-width:1660px;">The signal protects the reference, not the contents. Nothing reruns, because from the graph's point of view nothing changed.</p>
 
 <!--
+StackBlitz demo: [32-readonly-arrays](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/32-readonly-arrays?file=src%2Fapp.ts)
+
 In most of the examples so far, the signal changed and something wasn't listening. In this one, the signal never changes at all, but the data inside it does.
 
 So here a consumer pops an item off the array it was given. But a signal hands out a reference, not a copy, so that's the exact same array sitting inside the signal.
@@ -1435,6 +1469,8 @@ readonly signupForm = form(this.signup, (p) => {
 </div>
 
 <!--
+StackBlitz demo: [37-signal-form-schema](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/37-signal-form-schema?file=src%2Fapp.ts)
+
 So validation rules go in the schema, which is the second argument to form. Rather than attaching validators to controls one at a time, you describe in one place what has to be true about the data.
 
 This schema function gives you what's called a schema path, which is essentially just Another object that has the same structure as your data, and it essentially is a path to each property in your object. So it gives us a type safe way to reference these fields and then we can just use these validator functions to apply rules to them. 
@@ -1486,6 +1522,8 @@ readonly prefsForm = form(this.prefs, (p) => {
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-top:30px;" v-click="2"> <div style="background:#0F131A;border:1px solid #4A5568;border-radius:14px;padding:26px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#5E6B7D;margin-bottom:14px;">REACTIVE FORMS</div> <div style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#8A97A8;">listen → inspect → mutate → recalculate</div> </div> <div style="background:#0A0D12;border:1px solid #2FD8B4;border-radius:14px;padding:26px 32px;"> <div style="font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:0.12em;color:#2FD8B4;margin-bottom:14px;">SIGNAL FORMS</div> <div style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#E8ECF2;">describe the relationship</div> </div> </div>
 
 <!--
+StackBlitz demo: [38-conditional-validation](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/38-conditional-validation?file=src%2Fapp.ts)
+
 Here's an example of where the new forms API starts to shine. When the checkbox is on, email is required, and when it's off, it isn't.
 
 Today we'd typically subscribe to valueChanges, use startWith for the initial value and takeUntilDestroyed for cleanup, and then add or remove the validator and update the validity ourselves. That's four steps of bookkeeping done by hand.
@@ -1552,6 +1590,8 @@ export class CustomInput implements FormValueControl<string> {
 </style>
 
 <!--
+StackBlitz demo: [39-custom-control](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/39-custom-control?file=src%2Fapp.ts)
+
 If you've ever had to write a custom form control, you will know very well about how Much boiler pit is required to integrate it. 
 
 With ControlValueAccessor, we need a provider with a forwardRef, a private copy of the value, two stored callbacks, and the interface methods to wire it all together. Very verbose. 
