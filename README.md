@@ -1,6 +1,6 @@
 # Angular Signals workshop
 
-Slides for "Angular Signals: patterns we reach for, pitfalls we keep shipping", built with [Slidev](https://sli.dev).
+Slides for "Angular Signals: the pitfalls we keep shipping, and the newer patterns and APIs we should be reaching for", built with [Slidev](https://sli.dev).
 
 ## Running the slides
 

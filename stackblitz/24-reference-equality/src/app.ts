@@ -1,43 +1,61 @@
 /**
  * Slide 24: Reference equality is the notification boundary
  *
- * STEP 1 is live. To move through the steps, comment out the live STEP block
- * and uncomment the next one (select the lines, then Cmd+/ or Ctrl+/).
+ * STEP 1 is live. To see the next step, comment out the STEP 1 block
+ * and uncomment the STEP 2 block (select the lines, then Cmd+/ or Ctrl+/).
  *
+ * The "server" is polled every 10 seconds and usually returns the same rows.
  * The grid counts how often its rows input changes (a "rebuild").
- *   STEP 1: a method returns a new array on every check, so an unrelated
- *           change rebuilds the grid.
- *   STEP 2: a computed keeps the same array, but a refetch with identical
- *           data still rebuilds.
- *   STEP 3: a custom equal keeps the old array when ids and revs match.
+ *   STEP 1: every poll makes new Row objects, so the grid rebuilds every 10s
+ *           even though nothing changed.
+ *   STEP 2: a custom equal keeps the old array when the ids match, so the
+ *           grid only rebuilds when you click "Add a row on the server".
  */
-import { Component, computed, effect, input, signal } from '@angular/core';
+import { Component, computed, effect, inject, Injectable, input, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { delay, Observable, of, switchMap, tap, timer } from 'rxjs';
 
 interface Row {
   id: number;
-  rev: number;
   name: string;
   active: boolean;
 }
 
-const DATA: Row[] = [
-  { id: 1, rev: 1, name: 'Ada', active: true },
-  { id: 2, rev: 1, name: 'Grace', active: false },
-  { id: 3, rev: 1, name: 'Linus', active: true },
-];
+/** Fake server. Every response is a fresh copy, like a real HTTP response. */
+@Injectable({ providedIn: 'root' })
+export class Api {
+  readonly polls = signal(0);
+  #data: Row[] = [
+    { id: 1, name: 'Ada', active: true },
+    { id: 2, name: 'Grace', active: false },
+    { id: 3, name: 'Linus', active: true },
+  ];
+
+  rows(): Observable<Row[]> {
+    return of(structuredClone(this.#data)).pipe(
+      delay(200),
+      tap(() => this.polls.update((n) => n + 1)),
+    );
+  }
+
+  addRow() {
+    const id = this.#data.length + 1;
+    this.#data = [...this.#data, { id, name: `User ${id}`, active: true }];
+  }
+}
 
 @Component({
-  selector: 'data-grid',
+  selector: 'app-grid',
   template: `
     <div class="card">
       <div class="bad">Grid rebuilds: {{ rebuilds() }}</div>
       @for (r of rows(); track r.id) {
-        <div>{{ r.name }} (rev {{ r.rev }})</div>
+        <div>{{ r.name }}</div>
       }
     </div>
   `,
 })
-export class DataGrid {
+export class Grid {
   readonly rows = input.required<Row[]>();
   readonly rebuilds = signal(0);
 
@@ -49,59 +67,43 @@ export class DataGrid {
 
 @Component({
   selector: 'app-root',
-  imports: [DataGrid],
+  imports: [Grid],
   template: `
     <h1>Reference equality</h1>
-    <p class="hint">Try each button and watch the rebuild count.</p>
+    <p class="hint">Wait for a few polls, then add a row on the server and wait for the next one.</p>
     <div class="row">
-      <button (click)="clicks.set(clicks() + 1)">Unrelated change ({{ clicks() }})</button>
-      <button (click)="refetch()">Refetch (same data, new objects)</button>
-      <button (click)="edit()">Edit Ada (rev + 1)</button>
+      <span>Polls: <code>{{ api.polls() }}</code></span>
+      <button (click)="api.addRow()">Add a row on the server</button>
     </div>
-    <data-grid [rows]="visibleRows()" />
+    <app-grid [rows]="visibleRows()" />
   `,
 })
 export class App {
-  readonly clicks = signal(0);
-  readonly rows = signal<Row[]>(structuredClone(DATA));
+  readonly api = inject(Api);
 
-  refetch() {
-    this.rows.set(structuredClone(this.rows()));
-  }
-
-  edit() {
-    this.rows.update((rows) => rows.map((r) => (r.id === 1 ? { ...r, rev: r.rev + 1 } : r)));
-  }
+  // poll every 10s - most responses are identical
+  readonly rows = toSignal(
+    timer(0, 10_000).pipe(switchMap(() => this.api.rows())),
+    { initialValue: [] },
+  );
 
   // ---------- STEP 1 (live) ----------
-  // a method: runs on every check of this view
-  protected visibleRows(): Row[] {
-    return this.rows().filter((r) => r.active);
-  }
+  protected readonly visibleRows = computed(() =>
+    this.rows().filter((r) => r.active),
+  );
 
-  // new array every check, so the grid rebuilds
-  // even when nothing changed
+  // new Row objects every poll, so the grid rebuilds
+  // every 10s even when nothing changed
   // ---------- end STEP 1 ----------
 
   // ---------- STEP 2 ----------
-  // // a computed: runs when rows() changes
-  // protected readonly visibleRows = computed(() =>
-  //   this.rows().filter((r) => r.active),
-  // );
-  //
-  // // same array until rows() changes,
-  // // so the grid does nothing in between
-  // ---------- end STEP 2 ----------
-
-  // ---------- STEP 3 ----------
-  // // a refetch makes new Row objects with the same ids
   // protected readonly visibleRows = computed(
   //   () => this.rows().filter((r) => r.active),
   //   {
   //     equal: (a, b) =>
   //       a.length === b.length &&
-  //       a.every((r, i) => r.id === b[i].id && r.rev === b[i].rev),
+  //       a.every((r, i) => r.id === b[i].id),
   //   },
-  // );   // equal -> old value kept, grid still does nothing
-  // ---------- end STEP 3 ----------
+  // );   // equal -> old value kept, grid does nothing
+  // ---------- end STEP 2 ----------
 }

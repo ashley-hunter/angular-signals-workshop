@@ -1,31 +1,31 @@
 ---
 theme: default
 title: Angular Signals
-info: Signals in practice - the patterns we reach for, and the pitfalls we keep
-  shipping.
+info: Signals in practice - the pitfalls we keep shipping, and the newer patterns
+  and APIs we should be reaching for.
 canvasWidth: 1920
 colorSchema: dark
 highlighter: shiki
 transition: slide-left
 mdc: true
 layout: cover
-eyebrow: 'Workshop'
+eyebrow: 'Presentation'
 ---
 
 # Angular Signals
 
-The patterns we reach for, and the pitfalls we keep shipping.
+The pitfalls we keep shipping, and the newer patterns and APIs we should be reaching for.
 
 <!--
 Hi everyone, so today we're going to take a little bit of a deep dive into Angular signals. 
 
 I'm sure most of you are very familiar with signals at this stage, signals themselves are nothing new here and adoption is not our problem. The code base is already overwhelmingly signal based. 
 
-But what does keep happening is a small set of mistakes That keep occurring, or certain patterns that have better or newer alternatives that we should start adopting more widely.  we're going to cover some of those things here.
+But what does keep happening is a small set of mistakes that keep occurring, or certain patterns that have better or newer alternatives that we should start adopting more widely. We're going to cover some of those things here.
 
 Please feel free to stop me at any point to ask questions etc...
 
-Its a bit hard to make this more interactive when not there with you in person, but all of the examples are available on stackblitz for you to try out in the browser.
+It's a bit hard to make this more interactive when I'm not there with you in person, but all of the examples are available on stackblitz for you to try out in the browser.
 
 https://github.com/ashley-hunter/angular-signals-workshop
 -->
@@ -45,15 +45,15 @@ So I have taken some time to analyze thousands of pull requests and go through o
 
 Typically the issues fall into three categories. 
 
-The first being stale, which is where a value may have been updated but the ui has not updated to reflect that. 
+The first being stale, which is where a value may have been updated but the UI has not updated to reflect that. 
 
 Next is Wasteful, which is the opposite essentially, where we are performing updates more frequently than necessary, or perhaps making network requests unnecessarily. 
 
-And the last most common category is where errors occur but are maybe not handled in the best way - Sometimes making it unobvious to users, Or perhaps we can handle it better ourselves in the code.
+And the last most common category is where errors occur but are maybe not handled in the best way - sometimes making it unobvious to users, or perhaps we can handle it better ourselves in the code.
 
 There were a few others such as race conditions and things like that as well, but they weren't quite as prevalent. 
 
-We have made updates to things like our Claude rules to try and prevent these issues from happening. However, sometimes Claude is more familiar with older patterns, or if it sees code written a certain way in our code base, it may replicate that, letting these things slip through, so Hopefully after today you might be a little bit more familiar with a few of these things and catch them whenever you're reviewing your own code or other people's code yourself.
+We have made updates to things like our Claude rules to try and prevent these issues from happening. However, sometimes Claude is more familiar with older patterns, or if it sees code written a certain way in our code base, it may replicate that, letting these things slip through, so hopefully after today you might be a little bit more familiar with a few of these things and catch them whenever you're reviewing your own code or other people's code yourself.
 -->
 
 ---
@@ -91,9 +91,9 @@ heading: 'When to use each primitive'
 <p style="font-size:29px;color:#8A97A8;line-height:1.45;margin:32px 0 0;max-width:1600px;">Most of us stop at the middle card. The one on the right is where our largest cluster of findings comes from.</p>
 
 <!--
-So Angular gives us multiple primitives to use when working with signals. Signal and computed I'm sure we're all very familiar with. Linked Signal is a fairly recent addition and I'm going to cover it and how to use it in this talk Because this is something we don't use enough. 
+So Angular gives us multiple primitives to use when working with signals. Signal and computed I'm sure we're all very familiar with. Linked Signal is a fairly recent addition and I'm going to cover it and how to use it in this talk because this is something we don't use enough. 
 
-And lastly, we have effect. It's not really a reactive primitive, but it is, of course, part of the reactive system, and it's something you need to be careful with it's absolutely fine to use in the right place, but we'll go over some of the caveats around it as well.
+And lastly, we have effect. It's not really a reactive primitive, but it is, of course, part of the reactive system, and it's something you need to be careful with. It's absolutely fine to use in the right place, but we'll go over some of the caveats around it as well.
 -->
 
 ---
@@ -139,17 +139,17 @@ Okay, so here we have an example where we have a rows input and a visible signal
 
 So I suspect most people will immediately notice that this is something that could be changed to use a computed. But I do just want to go over some of the reasons why, because there is slightly more to it than what meets the eye. 
 
-So first of all the visible signal is writable, which means that any part of this component could make changes to it. And that could result in stale or incorrect data, Or it getting overridden unexpectedly, which is an avenue for bugs Which doesn't need to be there. 
+So first of all the visible signal is writable, which means that any part of this component could make changes to it. And that could result in stale or incorrect data, or it getting overridden unexpectedly, which is an avenue for bugs which doesn't need to be there. 
 
-With agents writing The code these days, it may just see a visible signal that is writable and it will make some changes directly to it rather than looking at the bigger picture. So changing this to a computed eliminates this potential source of bugs.
+With agents writing the code these days, it may just see a visible signal that is writable and it will make some changes directly to it rather than looking at the bigger picture. So changing this to a computed eliminates this potential source of bugs.
 
 --- change slide
 
-Secondly, there are some performance aspects to it. Now, this is a very simple case, so it's very unlikely to have a noticeable impact on the page performance, But on a heavy page with more logic performance might be something to consider. 
+Secondly, there are some performance aspects to it. Now, this is a very simple case, so it's very unlikely to have a noticeable impact on the page performance, But on a heavy page with more logic, performance might be something to consider. 
 
 So the first thing is that the effect reruns every time rows changes, even if nothing is listening to the visible value. So for example, let's say the thing in the UI rendering the visible rows is conditionally shown with an @if - In our current state, that effect is going to rerun even though it's not being rendered in the UI. So completely unnecessary logic running. 
 
-Secondly, the way Angular updates things is effects run after all of the signals have stabilized, So rows gets updated in one change detection pass and then effect runs and we are modifying a signal which would need a second change detection pass. If we were to switch to computed, both of these issues go away. We only need one change detection pass and it would only update the computed whenever something is actually listening to it.
+Secondly, the way Angular updates things is effects run after all of the signals have stabilized, So rows gets updated in one change detection pass and then the effect runs and we are modifying a signal which would need a second change detection pass. If we were to switch to computed, both of these issues go away. We only need one change detection pass and it would only update the computed whenever something is actually listening to it.
 -->
 
 ---
@@ -196,17 +196,17 @@ prev() { this.page.update((p) => p - 1); }
 <!--
 StackBlitz demo: [06-linked-signal-pagination](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/06-linked-signal-pagination?file=src%2Fapp.ts)
 
-Okay, so here is a Slightly different example. In this case it would be a pagination scenario. So we need to store the current page, we need to be able to move to the next and previous pages, and we also need to be able to reset back to the first page any time a filter changes. 
+Okay, so here is a slightly different example. In this case it would be a pagination scenario. So we need to store the current page, we need to be able to move to the next and previous pages, and we also need to be able to reset back to the first page any time a filter changes. 
 
 So, yet again, we have a signal that's writable, and we have an effect performing an update. 
 
-We can't use a computed here because while we do want to react whenever a Dependency changes we can't write to your computed.
+We can't use a computed here because while we do want to react whenever a dependency changes, we can't write to a computed.
 
-Fortunately, recently Angular has come up with an alternative here, which is essentially a linked signal, which if you're not familiar with is Essentially a writable computed. 
+Fortunately, recently Angular has come up with an alternative here, which is a linked signal, which, if you're not familiar with it, is essentially a writable computed. 
 
--- change slide
+--- change slide
 
-So now we remove the signal and the effect. And we use a link signal which has a function which gets run anytime any of its dependencies change and returns the appropriate value. In this case, anytime filter changes we are returning a value of 1, so that handles our reset and our next and previous methods stay as they are, as we still allow updates, and those updates don't re-trigger the Computation function.
+So now we remove the signal and the effect. And we use a linked signal which has a function which gets run anytime any of its dependencies change and returns the appropriate value. In this case, anytime filter changes we are returning a value of 1, so that handles our reset and our next and previous methods stay as they are, as we still allow updates, and those updates don't re-trigger the computation function.
 -->
 
 ---
@@ -263,7 +263,7 @@ const tempF = linkedSignal(
 <!--
 StackBlitz demo: [07-linked-signal-write-back](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/07-linked-signal-write-back?file=src%2Fapp.ts)
 
-Next is another slightly more complicated example, And I'd like you to think about how we could handle this kind of scenario. We have two input fields, and changing one should automatically update the other. 
+Next is another slightly more complicated example, and I'd like you to think about how we could handle this kind of scenario. We have two input fields, and changing one should automatically update the other. 
 
 So when we enter a Celsius value, Fahrenheit should be updated, and vice versa. 
 
@@ -271,17 +271,17 @@ Currently we have a Celsius signal and we have a Fahrenheit linked signal. So as
 
 However, if I was to currently type in the Fahrenheit input, Celsius wouldn't update. 
 
-Your initial gut feeling might be to change Celsius also to a link signal.
+Your initial gut feeling might be to change Celsius also to a linked signal.
 
 --- change slide
 
 But doing that introduces a circular dependency. Celsius reads Fahrenheit, Fahrenheit reads Celsius, and the first time either one is read Angular throws a cycle error. So this is not the answer.
 
-Luckily, with Angular 22, linked Signal comes with a new option. 
+Luckily, with Angular 22, linked signal comes with a new option. 
 
 --- change slide
 
-Which is a set function on a link signal. This is an untracked function that gets called whenever a linked signal gets set, And allows us to update the source. By this one simple change, now both fields stay in sync, With no risk of them getting out of date Or showing stale data.
+Which is a set function on a linked signal. This is an untracked function that gets called whenever a linked signal gets set, and allows us to update the source. With this one simple change, both fields now stay in sync, with no risk of them getting out of date or showing stale data.
 -->
 
 ---
@@ -295,7 +295,7 @@ heading: 'Not every callback you pass Angular is tracked'
 <p style="font-size:28px;color:#C9D4E2;line-height:1.45;margin:26px 0 0;max-width:1660px;">The <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">resource</code> row is the one to keep: <code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#2FD8B4;">params</code> decides <em>when</em> to fetch, <code style="font-family:'JetBrains Mono',monospace;font-size:25px;color:#FF7A6B;">loader</code> only decides <em>how</em>. A signal read in the loader will never cause a refetch. And nothing after an <code style="font-family:'JetBrains Mono',monospace;font-size:25px;">await</code> is tracked anywhere.</p>
 
 <!--
-I will not go into too much detail on this, but just something to be aware of whenever you're using any of Angular's signal functions. Some of the functions you pass are tracked, meaning that they rerun automatically whenever any dependencies change, Others are not tracked, so it's just good to have some awareness to ensure that things are updating when you expect and also things aren't running more often than you expect. 
+I will not go into too much detail on this, but just something to be aware of whenever you're using any of Angular's signal functions. Some of the functions you pass are tracked, meaning that they rerun automatically whenever any dependencies change. Others are not tracked, so it's just good to have some awareness to ensure that things are updating when you expect and also things aren't running more often than you expect. 
 
 So the green functions are tracked and the red ones are not tracked.
 -->
@@ -321,13 +321,11 @@ heading: 'What an effect is actually for'
 <!--
 In the previous slides, we've kind of discussed how to avoid using effect, but I don't want to insinuate that effect should never be used. There are absolutely valid reasons to use effect, it's just we want to make sure you're using them in the right place. 
 
-Quite often with dealing with third party libraries that may not be using signals, we might need to use effects to bridge that gap of connecting the reactive world to the non-reactive world. 
+Quite often when dealing with third party libraries that may not be using signals, we might need to use effects to bridge that gap of connecting the reactive world to the non-reactive world. 
 
-Also when storing Data, for example, in local storage or a URL, that is also another potential use case for using an effect, or also things like logging etc..
+Also when storing data, for example, in local storage or a URL, that is also another potential use case for using an effect, or also things like logging etc.
 
-But the key thing to ask yourself any time you're using an effect is what is the non-reactive thing this effect is driving? If you can't answer that question, you're probably using an effect when you don't need to. 
-
-Ideally also you would have one effect per side effect And it's often better to have this as a named property on the class rather than something buried in the constructor. This helps Make it clear why the effect is needed, and what it does.
+But the key thing to ask yourself any time you're using an effect is what is the non-reactive thing this effect is driving? If you can't answer that question, you're probably using an effect when you don't need to.
 -->
 
 ---
@@ -374,11 +372,11 @@ readonly #render = effect(() => {
 <!--
 StackBlitz demo: [10-async-effect](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/10-async-effect?file=src%2Fapp.ts)
 
-Okay, so Now moving on to some examples where you're using an effect but things can go subtly wrong. 
+Okay, so now moving on to some examples where you're using an effect but things can go subtly wrong. 
 
-In this example we have an effect that Updates a third-party library, in this case a grid. but it is using the async keyword and an await in its function body. One thing that may not be immediately obvious is that effects stop tracking the moment it goes async. 
+In this example we have an effect that Updates a third-party library, in this case a grid. But it is using the async keyword and an await in its function body. One thing that may not be immediately obvious is that effects stop tracking the moment they go async. 
 
-So in this example as it stands We have the team ID being read, which is a dependency, and that dependency is registered because nothing asynchronous has happened at this point yet. 
+So in this example as it stands we have the team ID being read, which is a dependency, and that dependency is registered because nothing asynchronous has happened at this point yet. 
 
 We then wait for users to load and we render them in the grid. But notice that format here is also a signal, and that signal read is not tracked because it comes after the await. 
 
@@ -388,11 +386,11 @@ This can lead to unexpected results because any time the format changes the grid
 
 So, the fix of course is to get rid of async await from the effect. However, this also gives us the opportunity to start leveraging some of Angular's other reactive primitives, and in this case, we can use a resource which is perfect for handling asynchronous code in an effect.
 
-So let's look at what has changed here. We have created a user's resource and we pass the team id to params, Which if you remember from the list earlier, is one of the reactive functions. So any time team id changes, the loader function will get called - no effect needed for this.
+So let's look at what has changed here. We have created a users resource and we pass the team id to params, which, if you remember from the list earlier,, is one of the reactive functions. So any time team id changes, the loader function will get called - no effect needed for this.
 
 Now, the effect can simply call the resource's value signal, and even though there is some asynchronous work going on, we write our code in a completely synchronous way. So not only does this avoid the async bug, but it also makes our code cleaner, simpler to maintain and understand. 
 
-There are also a few improvements here. So for example, if Team ID changes multiple times in quick succession, Resource takes care of cancellation, so we're not going to have race conditions. It will always be the latest value wins. But not only that, now if we change format We don't need to refetch the users either, so we have reduced network calls as well.
+There are also a few improvements here. So for example, if Team ID changes multiple times in quick succession, resource takes care of cancellation, so we're not going to have race conditions. It will always be the latest value that wins. But not only that, now if we change format we don't need to refetch the users either, so we have reduced network calls as well.
 -->
 
 ---
@@ -432,7 +430,7 @@ readonly poll = effect((onCleanup) => {
 <!--
 StackBlitz demo: [11-effect-cleanup](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/11-effect-cleanup?file=src%2Fapp.ts)
 
-Cleanup is another important aspect of writing effects. Particularly when your effect does something like setting timeouts or intervals, making requests or setting up event listeners. 
+Cleanup is another important aspect of writing effects, particularly when your effect does something like setting timeouts or intervals, making requests or setting up event listeners. 
 
 In this very simple example, we can see here that we have an effect that performs a check every five seconds. However, we are tracking order ID here, so any time this changes we will register a new interval. 
 
@@ -454,7 +452,7 @@ transition: fade
 <p class="lead" style="margin-top:40px">The set is observed, not declared. That is where stale comes from.</p>
 
 <!--
-So we've touched a little bit on dependencies so far, but we're going to dive in a little bit deeper into them.
+So we've touched a little bit on dependencies so far, but we're going to dive a little bit deeper into them.
 
 Signal dependencies are all determined at runtime, so this can let issues slip through very easily. There's no compile time checking, and equally additional dependencies are easy to add, without noticing the impact they might have.
 -->
@@ -510,23 +508,23 @@ readonly rows = resource({
 <!--
 StackBlitz demo: [13-dependency-set](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/13-dependency-set?file=src%2Fapp.ts)
 
-Dependencies in a signal graph can be wrong in Two ways. 
+Dependencies in a signal graph can be wrong in two ways. 
 
-Dependencies may not update often enough, or they may update too often. This can either lead to stale data being presented to a user, Or updating too often, potentially leading to performance degradation or additional server requests that are completely unnecessary. 
+Dependencies may not update often enough, or they may update too often. This can either lead to stale data being presented to a user, or updating too often, potentially leading to performance degradation or additional server requests that are completely unnecessary. 
 
 So let's take a look at this example. We have a state signal that contains the team ID, page and the sort by field. And we have a rows resource which any time the state changes will fetch the rows.
 
-So here we have a prime example of something that might call the server more often than necessary. If we look at what is being passed to the load rows function, We can see that sort by is never used. So if sort by is changed, this would make a request that It is completely unnecessary. 
+So here we have a prime example of something that might call the server more often than necessary. If we look at what is being passed to the load rows function, we can see that sort by is never used. So if sort by is changed, this would make a request that is completely unnecessary. 
 
 --- Change slide. 
 
 The initial thing you might think to do is let's change params so that it only returns the team ID and the page, dropping sort by. 
 
-However, this also will still cause the request to be made anytime sort by changes, because in the params function. We are still Tracking the state object in full. So while it looks better, it is no different In terms of how it behaves. 
+However, this also will still cause the request to be made anytime sort by changes, because in the params function we are still tracking the state object in full. So while it looks better, it is no different in terms of how it behaves. 
 
 --- Change slide. 
 
-So the correct solution for this would be to split these up into multiple signals. Or you could potentially create a params computed that accepts inequality function, As by default they are compared by reference.
+So the correct solution for this would be to split these up into multiple signals. Or you could potentially create a params computed that accepts an equality function, as by default they are compared by reference.
 -->
 
 ---
@@ -583,21 +581,21 @@ send(page: string) {
 <!--
 StackBlitz demo: [14-hidden-dependency](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/14-hidden-dependency?file=src%2Fapp.ts)
 
-Another area where bugs can very easily creep in, is effects that call another function or method in our code base. Here we have an effect that any time a page changes we send some analytics. 
+Another area where bugs can very easily creep in, is effects that call another function or method in our code base. Here we have an effect where any time a page changes we send some analytics. 
 
-This works absolutely fine, and there is nothing wrong with this code At the moment. However, in this scenario, the analytics service is in a completely separate file and has no real connection to the effect that calls it. So if six months down the line someone comes along and updates the analytics service and introduces a signal read, This can have Unexpected consequences. 
+This works absolutely fine, and there is nothing wrong with this code at the moment. However, in this scenario, the analytics service is in a completely separate file and has no real connection to the effect that calls it. So if six months down the line someone comes along and updates the analytics service and introduces a signal read, this can have unexpected consequences. 
 
 --- Change slide. 
 
-Now someone has added a recent signal that takes the current value and spreads it and updates it. While Normally I would rather the update function on the signal was used instead. What we have here is a case where Ping now has introduced an infinite loop. 
+Now someone has added a recent signal that takes the current value and spreads it and updates it. While normally I would rather the update function on the signal was used instead, what we have here is a case where ping now has introduced an infinite loop. 
 
 If we look at the chain of events here, any time page gets updated, analytics are sent, the recent signal is updated but we're doing a signal read here as well and because we are still within the effect this is now tracked. As recent is both being read and set within the same method here, we now have gotten ourselves into a bad situation. 
 
-Again, This is something that if the change was made in isolation would look fine and there's no compile time safety that would detect this. This is purely something that you're going to have to discover at runtime. 
+Again, this is something that if the change was made in isolation would look fine and there's no compile time safety that would detect this. This is purely something that you're going to have to discover at runtime. 
 
 --- Change slide. 
 
-An easy solution to this is any time you are calling an external function or method within an effect where you do not have control of what signals are being read or written to should be wrapped in the untracked function, which prevents effect from adding any more dependencies.
+An easy solution to this is that any time you are calling an external function or method within an effect where you do not have control of what signals are being read or written to, it should be wrapped in the untracked function, which prevents the effect from adding any more dependencies.
 -->
 
 ---
@@ -640,11 +638,11 @@ readonly rows = computed(() =>
 <!--
 StackBlitz demo: [15-non-reactive-reads](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/15-non-reactive-reads?file=src%2Fapp.ts)
 
-This kind of bug was the most common detected one in our code base. 
+This kind of bug was the most commonly detected one in our code base. 
 
-So if we take a look here, we have our computed rows which takes in items and maps over it. But we're doing a translation on the label. The issue is that If a language were to change, our UI would not get re-rendered because we're taking a snapshot for the label rather than having any kind of Reactive dependency. . 
+So if we take a look here, we have our computed rows which takes in items and maps over them. But we're doing a translation on the label. The issue is that if a language were to change, our UI would not get re-rendered because we're taking a snapshot for the label rather than having any kind of reactive dependency. 
 
-While this is a very specific example, the pattern applies to a lot of different places. This could be function calls, getters. Storage reads, Reading something like the current time, Or a URL parameter - All of these things are not reactive and therefore won't update when you might expect - even though we're using a reactive feature like computed.
+While this is a very specific example, the pattern applies to a lot of different places. This could be function calls, getters, storage reads, reading something like the current time, or a URL parameter - all of these things are not reactive and therefore won't update when you might expect - even though we're using a reactive feature like computed.
 -->
 
 ---
@@ -658,7 +656,7 @@ transition: fade
 <p class="lead" style="margin-top:40px">When your code runs relative to inputs and to render.</p>
 
 <!--
-Timing is an interesting topic because the code in these examples generally look correct and it's not always obvious what is causing the problem. 
+Timing is an interesting topic because the code in these examples generally looks correct and it's not always obvious what is causing the problem. 
 
 There are no logic errors and there are no compile time errors. Things just don't quite work as you might anticipate.
 -->
@@ -725,7 +723,7 @@ There are a few issues here. First, Angular doesn't set inputs by the time the c
 
 --- Change slide. 
 
-Great, so let's move this check to the NG on init lifecycle hook. That does resolve the problem with the initial value being read incorrectly. But we still do Not handle the case where mode changes after the component is initialized. 
+Great, so let's move this check to the ngOnInit lifecycle hook. That does resolve the problem with the initial value being read incorrectly. But we still do not handle the case where mode changes after the component is initialized. 
 
 --- Change slide. 
 
@@ -744,17 +742,17 @@ heading: 'Every ngOnChanges has a signals shape'
 <p style="font-size:29px;color:#5E6B7D;line-height:1.45;margin:0;max-width:1600px;"><code style="font-family:'JetBrains Mono',monospace;font-size:26px;">ng generate @angular/core:signals</code> converts inputs, outputs and queries for you. It does not touch <code style="font-family:'JetBrains Mono',monospace;font-size:26px;">ngOnChanges</code>, so this table is the part you do by hand.</p>
 
 <!--
-Some of you may have considered using ngion changes in the previous example, and there still are 140 usages in our code base, 39 of which are in files using the new signal inputs. 
+Some of you may have considered using ngOnChanges in the previous example, and there still are 140 usages in our code base, 39 of which are in files using the new signal inputs. 
 
-Ideally we should try and move away from ng on changes and move to more reactive primitives. 
+Ideally we should try and move away from ngOnChanges and move to more reactive primitives. 
 
-If you have something that recomputes From one or more inputs, use a computed. 
+If you have something that recomputes from one or more inputs, use a computed. 
 
-If you're resetting some local state, but the user can still override it, reach for linkedsignal
+If you're resetting some local state, but the user can still override it, reach for linkedSignal.
 
 And if you're driving something non-reactive, reach for an effect. 
 
-There is no equivalent for first change in these reactive primitives, but if you're reaching for that, it's probably something that belongs somewhere that runs once, for example, ng on init.
+There is no equivalent for first change in these reactive primitives, but if you're reaching for that, it's probably something that belongs somewhere that runs once, for example, ngOnInit.
 -->
 
 ---
@@ -800,19 +798,19 @@ readonly #scroll = afterRenderEffect({
 <!--
 StackBlitz demo: [19-render-phase](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/19-render-phase?file=src%2Fapp.ts)
 
-So the DOM itself is a non-reactive api - So occasionally we do need to perform some kind of effect to update the UI whenever signals change.
+So the DOM itself is a non-reactive API, so occasionally we do need to perform some kind of effect to update the UI whenever signals change.
 
 You might initially go to use an effect for this kind of behaviour.
  
-But there are A few issues with using effect. An effect may fire too early, for example if an element is initially hidden due to an if or for block that may not have refreshed by the time the effect fires. A similar situation can happen if you're targeting child components. 
+But there are a few issues with using effect. An effect may fire too early, for example if an element is initially hidden due to an if or for block that may not have refreshed by the time the effect fires. A similar situation can happen if you're targeting child components. 
 
-But Angular provides us with a utility specifically for interacting with the DOM On signals. 
+But Angular provides us with a utility specifically for interacting with the DOM based on signals. 
 
 --- Change slide. 
 
-After render effect ensures that it gets run after everything in the view is refreshed, but more importantly it gives us control over when to run the code. 
+afterRenderEffect ensures that it gets run after everything in the view is refreshed, but more importantly it gives us control over when to run the code. 
 
-You can see here that we are using the write phase because we are performing an update to the DOM. Batching things in the correct phase can give us some great Performance benefits.
+You can see here that we are using the write phase because we are performing an update to the DOM. Batching things in the correct phase can give us some great performance benefits.
 -->
 
 ---
@@ -827,15 +825,15 @@ heading: 'Pick the phase, do not take the default'
 <!--
 There are four phases available to you.
 
-The first is early read. This is when you want to measure some DOM elements before anything writes - Ideally you would use the read phase where possible, you would only use the early read if you're trying to measure the DOM before you make any updates to it. 
+The first is early read. This is when you want to measure some DOM elements before anything writes - ideally you would use the read phase where possible, you would only use the early read if you're trying to measure the DOM before you make any updates to it. 
 
 The next is the write phase, where you can perform DOM manipulation. Never read in this phase. 
 
-mixed read-write is the default and you typically want to avoid it wherever possible. You should ideally use one or more of the other phases. 
+Mixed read-write is the default and you typically want to avoid it wherever possible. You should ideally use one or more of the other phases. 
 
 And lastly we have the read phase. This is where you can read DOM sizes after all updates have taken place. 
 
-This helps us ensure we don't accidentally cause some expensive reflow. Which if you're not familiar with is when we perform a read after a write - And this causes the browser to have to recompute all of the sizes on the page right away. And this can cause significant slowdown on a page.
+This helps us ensure we don't accidentally cause some expensive reflow, which, if you're not familiar with it, is when we perform a read after a write - and this causes the browser to have to recompute all of the sizes on the page right away. And this can cause significant slowdown on a page.
 -->
 
 ---
@@ -884,15 +882,15 @@ StackBlitz demo: [21-read-then-write](https://stackblitz.com/github/ashley-hunte
 
 Here we have an example where we're iterating through every row, collecting the row's height, and then updating it, increasing the size by eight pixels. 
 
-If there are 200 rows, this forces the browser to relay out everything 200 times. This is very inefficient and can noticeably slow down your page. 
+If there are 200 rows, this forces the browser to re-lay out everything 200 times. This is very inefficient and can noticeably slow down your page. 
 
-There are lots of properties and methods in the browser that would cause force layout, and I've listed some of them here. 
+There are lots of properties and methods in the browser that would cause a forced layout, and I've listed some of them here. 
 
 --- Change slide. 
 
 A better way to deal with this would be to use the phases that we previously touched on, and we can use multiple phases. 
 
-So here we have an early read phase which goes through every row and collects the height. This value is returned and gets passed to the write function. Now, the write function can simply iterate overall of the rows and update their height. 
+So here we have an early read phase which goes through every row and collects the height. This value is returned and gets passed to the write function. Now, the write function can simply iterate over all of the rows and update their height. 
 
 This has now changed the scenario from two hundred forced layouts on a page down to one. 
 
@@ -953,7 +951,7 @@ readonly #worker = effect((onCleanup) => {
 <!--
 StackBlitz demo: [23-computed-cleanup](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/23-computed-cleanup?file=src%2Fapp.ts)
 
-We previously discussed trying to use a computed instead of an effect where possible, but there are occasions where Where an effect is still preferable, even though it might not seem obvious. 
+We previously discussed trying to use a computed instead of an effect where possible, but there are occasions where an effect is still preferable, even though it might not seem obvious. 
 
 In this case, we are creating a worker whenever some dependent signals change. However, a computed has no teardown capability. 
 
@@ -963,19 +961,19 @@ This works and will not throw an error. So it can be very easy to have this slip
 
 --- Change slide. 
 
-Instead, this is a good case where you might want to use an effect And the cleanup function provided to terminate the worker any time it Needs reinstantiated. 
+Instead, this is a good case where you might want to use an effect and the cleanup function provided to terminate the worker any time it needs to be reinstantiated. 
 
-The same applies to similar things like sockets or resize observers or mutation observers. Anything that might need disposed cannot live in a computed
+The same applies to similar things like sockets or resize observers or mutation observers. Anything that might need to be disposed cannot live in a computed.
 -->
 
 ---
 layout: content
 eyebrow: 'Identity'
 heading: 'Reference equality is the notification boundary'
-clicks: 2
+clicks: 1
 ---
 
-<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 20px;max-width:1660px;">One binding, unchanged throughout. What changes is what it costs the grid.</p>
+<p style="font-size:29px;color:#8A97A8;line-height:1.4;margin:0 0 20px;max-width:1660px;">The server polls every 10 seconds and usually sends back the same rows. The grid only sees a new reference.</p>
 
 ```html
 <app-grid [rows]="visibleRows()" />
@@ -985,35 +983,35 @@ clicks: 2
 
 ````md magic-move
 ```ts
-// a method: runs on every check of this view
-protected visibleRows(): Row[] {
-  return this.rows().filter((r) => r.active);
-}
+// poll every 10s - most responses are identical
+readonly rows = toSignal(
+  timer(0, 10_000).pipe(switchMap(() => this.api.rows())),
+  { initialValue: [] },
+);
 
-// new array every check, so the grid rebuilds
-// even when nothing changed
-```
-
-```ts
-// a computed: runs when rows() changes
 protected readonly visibleRows = computed(() =>
   this.rows().filter((r) => r.active),
 );
 
-// same array until rows() changes,
-// so the grid does nothing in between
+// new Row objects every poll, so the grid rebuilds
+// every 10s even when nothing changed
 ```
 
 ```ts
-// a refetch makes new Row objects with the same ids
+// poll every 10s - most responses are identical
+readonly rows = toSignal(
+  timer(0, 10_000).pipe(switchMap(() => this.api.rows())),
+  { initialValue: [] },
+);
+
 protected readonly visibleRows = computed(
   () => this.rows().filter((r) => r.active),
   {
     equal: (a, b) =>
       a.length === b.length &&
-      a.every((r, i) => r.id === b[i].id && r.rev === b[i].rev),
+      a.every((r, i) => r.id === b[i].id),
   },
-);   // equal -> old value kept, grid still does nothing
+);   // equal -> old value kept, grid does nothing
 ```
 ````
 
@@ -1022,21 +1020,15 @@ protected readonly visibleRows = computed(
 <!--
 StackBlitz demo: [24-reference-equality](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/24-reference-equality?file=src%2Fapp.ts)
 
-So let's take a look at this grid example where we're passing the visible rows in via an input. 
+So let's take a look at this grid example where we're polling the server every 10 seconds to update the rows, and passing the visible rows into the grid via an input. In most cases, the server returns identical results every time. But computeds work based on referential equality, not the values within them. So every poll creates a new array of new row objects, and the grid rebuilds even though nothing has actually changed.
 
-Currently, this is using a method, which is inefficient in itself because the method gets called and performs filtering on every change detection cycle, whereas really it should only get recalled whenever the rows change. 
-
---- Change slide. 
-
-Quite often this is enough, but Let's say for example we were polling the server frequently to update the rows. In most cases, it returned the identical results every time. But computeds work based on referential equality, not the values within it. 
-
-So one feature that Angular does provide us to assist with this is a equality function. And we can provide this to a computed to tell it exactly how we want it to compare values to prevent it from updating more often than necessary. 
+So one feature that Angular does provide us to assist with this is an equality function. And we can provide this to a computed to tell it exactly how we want it to compare values to prevent it from updating more often than necessary.
 
 --- Change slide. 
 
-So here we've added our own comparator function where we check if the length is different, we know rows have most certainly changed. And in this case we're also checking whether the IDs and revisions have changed. 
+So here we've added our own comparator function where, if the length is different, we know the rows have most certainly changed. And in this case we're also checking whether the IDs have changed. 
 
-Now only when those exact properties have changed will the computed essentially be marked as changed. You shouldn't need to reach for this often, but it's good to be aware of its existence, when performance really matters.
+Now only when the IDs have changed will the computed essentially be marked as changed. You shouldn't need to reach for this often, but it's good to be aware of its existence, when performance really matters.
 -->
 
 ---
@@ -1050,7 +1042,7 @@ transition: fade
 <p class="lead" style="margin-top:40px">Loading, empty, error, and the difference between them.</p>
 
 <!--
-Moving on to dealing with asynchronous state. And this is where a lot of issues become user visible, And pretty much every finding here was something that we have shipped or came very close to shipping - These were things that looked completely fine on screen but there was a real issue hiding behind the scenes.
+Moving on to dealing with asynchronous state. And this is where a lot of issues become user-visible, and pretty much every finding here was something that we have shipped or came very close to shipping. These were things that looked completely fine on screen but there was a real issue hiding behind the scenes.
 -->
 
 ---
@@ -1112,27 +1104,27 @@ readonly users = resource({
 <!--
 StackBlitz demo: [26-resources](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/26-resources?file=src%2Fapp.ts)
 
-This is a similar example to earlier when we touched on avoiding async await in an effect. But typically when we're making requests, there are other things we also want to consider that we didnt touch on.
+This is a similar example to earlier when we touched on avoiding async await in an effect. But typically when we're making requests, there are other things we also want to consider that we didn't touch on.
 
 The first being a loading flag, so that we can show a loading spinner in the UI. Nothing actually cancels the request if another one fires before it finishes. And we're not handling any errors anywhere. 
 
-Angular provides us with three resource types that we can use in our code to Help address all of these issues for us with minimal code.   
+Angular provides us with three resource types that we can use in our code to help address all of these issues for us with minimal code.   
 
 --- Change slide. 
 
-The first is HTTP resource. This allows us to simply pass a function That returns a URL. We can also call signals within this function and they are tracked, so any time that signal changes, we re-perform the request. The great thing is what you get for free is access to the value as a signal. We also get access to the loading state and the error state and the status. We get a reload function that we can call manually if we want to perform a manual reload. It automatically prevents race conditions and cancels superseded requests. 
+The first is HTTP resource. This allows us to simply pass a function that returns a URL. We can also call signals within this function and they are tracked, so any time that signal changes, we re-perform the request. The great thing is what you get for free is access to the value as a signal. We also get access to the loading state and the error state and the status. We get a reload function that we can call manually if we want to perform a manual reload. It automatically prevents race conditions and cancels superseded requests. 
 
 So as you can see, not only is our code much simpler and easier to understand, but we also eliminate several different categories of issues.
 
 --- Change slide. 
 
-The other two Utilities are Rx Resource, Which essentially does the same thing but lets you use an observable to load the data, while still giving you signals back.
+The other two utilities are rxResource, which essentially does the same thing but lets you use an observable to load the data, while still giving you signals back.
 
 --- Change slide. 
 
-And the last one is resource, which is is essentially the same as HTTP resource, only rather than returning a string, you would actually perform the request yourself in there. 
+And the last one is resource, which is essentially the same as HTTP resource, only rather than returning a string, you would actually perform the request yourself in there. 
 
-One thing to note is that you want to avoid doing post requests in an HTTP resource, It's intended to be only used for fetching data. 
+One thing to note is that you want to avoid doing POST requests in an HTTP resource. It's intended to be only used for fetching data. 
 
 
 Just keep that function to the few signals the request actually needs, otherwise every unrelated change becomes a refetch. And keep resources for reads only, because they reissue the request on every parameter change, and you don't want a delete being sent again.
@@ -1282,7 +1274,7 @@ This is actually the biggest number in the whole research. We have close to 1,50
 
 That means the signal is undefined for at least one tick. So in a template we fall into the empty branch and show something like "not signed in" or an empty list before the real value arrives.
 
-Usually it's only a frame, so nobody notices. But It's something to keep in mind where our UI might flicker or show stale data temporarily. 
+Usually it's only a frame, so nobody notices. But it's something to keep in mind where our UI might flicker or show stale data temporarily. 
 
 --- Change slide.
 
@@ -1290,7 +1282,7 @@ So the first option is requireSync. If your observable emits as soon as you subs
 
 --- Change slide.
 
-The second is an initial value, for sources that can't emit straight away. That way the starting state is something you safely show, rather than undefined.
+The second is an initial value, for sources that can't emit straight away. That way the starting state is something you can safely show, rather than undefined.
 
 Keeping undefined is also fine if it actually means something to you, like showing a skeleton. The bug is just not picking any of these.
 -->
@@ -1318,9 +1310,9 @@ heading: 'Template-only state is not public API'
 <p style="font-size:30px;color:#C9D4E2;line-height:1.45;margin:0 0 20px;max-width:1600px;">A signal anything can reach is an invitation, and your invariant now has two owners. <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">protected</code> closes that door; <code style="font-family:'JetBrains Mono',monospace;font-size:27px;">readonly</code> only stops reassignment.</p>
 
 <!--
-So Angular templates can read protected members, And I believe they recently added support for private members - im not sure if that is availble to use yet. Your template isn't an external consumer, so it doesn't need a public API.
+So Angular templates can read protected members, and I believe they recently added support for private members - I'm not sure if that is available to use yet. Your template isn't an external consumer, so it doesn't need a public API.
 
-For signals in particular, mark them as read-only. You typically never want to override a signal with a brand new signal, as that completely removes It from the reactive graph. 
+For signals in particular, mark them as read-only. You typically never want to override a signal with a brand new signal, as that completely removes it from the reactive graph. 
 
 For anything that's genuinely internal, our rule is to use a hash private field, which is enforced at runtime as well.
 -->
@@ -1479,9 +1471,9 @@ StackBlitz demo: [37-signal-form-schema](https://stackblitz.com/github/ashley-hu
 
 So validation rules go in the schema, which is the second argument to form. Rather than attaching validators to controls one at a time, you describe in one place what has to be true about the data.
 
-This schema function gives you what's called a schema path, which is essentially just Another object that has the same structure as your data, and it essentially is a path to each property in your object. So it gives us a type safe way to reference these fields and then we can just use these validator functions to apply rules to them. 
+This schema function gives you what's called a schema path, which is essentially just another object that has the same structure as your data, and it essentially is a path to each property in your object. So it gives us a type-safe way to reference these fields and then we can just use these validator functions to apply rules to them. 
 
-One nice change because every rule can carry its own message, the template doesn't need to know which rules were applied. One loop over the field's errors can render any field in the form, rather than an if block for every error type on every field like we often write today.
+One nice change: because every rule can carry its own message, the template doesn't need to know which rules were applied. One loop over the field's errors can render any field in the form, rather than an if block for every error type on every field like we often write today.
 
 And if you need something custom, there's also validate for your own rules, and validateHttp for checks that need to hit a server.
 -->
@@ -1598,7 +1590,7 @@ export class CustomInput implements FormValueControl<string> {
 <!--
 StackBlitz demo: [39-custom-control](https://stackblitz.com/github/ashley-hunter/angular-signals-workshop/tree/main/stackblitz/39-custom-control?file=src%2Fapp.ts)
 
-If you've ever had to write a custom form control, you will know very well about how Much boiler pit is required to integrate it. 
+If you've ever had to write a custom form control, you will know very well how much boilerplate is required to integrate it. 
 
 With ControlValueAccessor, we need a provider with a forwardRef, a private copy of the value, two stored callbacks, and the interface methods to wire it all together. Very verbose. 
 
@@ -1676,7 +1668,7 @@ heading: 'Symptom, and what to reach for'
 <!--
 So this is essentially the whole talk compressed down into things you can look out for in a diff, with the symptom on the left and what to reach for on the right.
 
-I won't read them all out, but Hopefully this gives you a little bit of an insight into the most common source of bugs and issues around signals and perhaps some More modern approaches that we can take in our code going forward.
+I won't read them all out, but hopefully this gives you a little bit of an insight into the most common sources of bugs and issues around signals and perhaps some more modern approaches that we can take in our code going forward.
 -->
 
 ---
